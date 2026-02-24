@@ -1,6 +1,6 @@
 # StoryLine — Obsidian Plugin for Writers
 
-**Version 1.0.0** · By Jan Sandström
+**Version 1.1.0** · By Jan Sandström
 
 StoryLine transforms your Obsidian vault into a complete book planning and writing tool. Organize scenes, build characters, manage locations, track plotlines, and monitor your progress — all inside Obsidian.
 
@@ -44,15 +44,17 @@ Chronological scene timeline with visual markers for intensity, status, and dura
 
 ### Plotlines View
 
-Track which plotlines (tags) appear across your scenes. A matrix view that makes it easy to spot gaps, clusters, and pacing issues in your story threads.
+Track plotlines across your scenes with two view modes: a transit-style **subway map** (default) and a classic **list view**. The subway map uses flat SVG lanes with gradient connectors between shared scenes, act dividers, and scene labels with tag pills. Drag to pan large stories. Assign per-tag colors directly from the plotline header using the palette button or right-click context menu.
 
-![Plotlines View](screenshots/05.Plotlines.jpg)
+![Plotlines — Subway Map](screenshots/05.Plotlines-subway.jpg)
+
+![Plotlines — List View](screenshots/05.Plotlines.jpg)
 
 ---
 
 ### Characters View
 
-Rich character profiles with collapsible sections: basic info, physical traits, personality, backstory, relationships, character arc, and custom fields. Includes a force-directed relationship map and a story graph showing how characters connect to scenes, locations, and props.
+Rich character profiles with collapsible sections: basic info, physical traits, personality, backstory, relationships, character arc, and custom fields. **Portrait images** — click to add a character image (import from computer or choose from vault). Portraits display on overview cards (64×64 px) and in the detail editor (96×96 px). Includes a force-directed relationship map and a story graph showing how characters connect to scenes, locations, and props.
 
 ![Characters — Profile](screenshots/06.Characters.jpg)
 
@@ -66,7 +68,7 @@ Rich character profiles with collapsible sections: basic info, physical traits, 
 
 ### Locations View
 
-Hierarchical worldbuilding with worlds as top-level containers and locations nested underneath. Each location has fields for atmosphere, significance, and narrative role.
+Hierarchical worldbuilding with worlds as top-level containers and locations nested underneath. Each location has fields for atmosphere, significance, and narrative role. **Portrait images** — add images to worlds and locations; thumbnails appear in the tree view and larger portraits in the detail editor.
 
 ![Locations — Overview](screenshots/10.Locations.jpg)
 
@@ -110,7 +112,9 @@ Four export formats: Markdown, JSON, CSV, and PDF (via HTML). Export either an o
 - **Plot Hole Detection** — Automated validation across six categories.
 - **Pacing Analysis** — Bar charts and histograms for scene length and distribution.
 - **Writing Sprint** — Built-in countdown timer for focused writing sessions.
-- **Color Coding** — Color by status, POV, emotion, act, or tag. Custom tag colors. Dark/light mode aware.
+- **Color Coding** — Color by status, POV, emotion, act, or tag. **16 built-in color schemes** (4 Catppuccin + 12 mood-based palettes) or custom. Per-tag overrides from Plotlines view or Settings. Dark/light mode aware.
+- **Plotline Subway Map** — Transit-style SVG visualization with gradient connectors, act dividers, scene labels, and drag-to-pan.
+- **Portrait Images** — Add images to characters and locations. Import from computer or choose from vault.
 - **Undo / Redo** — `Ctrl+Z` / `Ctrl+Shift+Z` with a 50-action stack.
 
 ---

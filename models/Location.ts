@@ -20,6 +20,8 @@
 interface LocationBase {
     /** Vault-relative path of the .md file */
     filePath: string;
+    /** Vault-relative path to an image */
+    image?: string;
     /** Created date */
     created?: string;
     /** Modified date */
@@ -229,12 +231,12 @@ export const LOCATION_TYPES: string[] = [
 
 /** Frontmatter keys for World */
 export const WORLD_FIELD_KEYS: (keyof StoryWorld)[] = [
-    'name', 'description', 'geography', 'culture', 'politics',
+    'name', 'image', 'description', 'geography', 'culture', 'politics',
     'magicTechnology', 'beliefs', 'economy', 'history',
 ];
 
 /** Frontmatter keys for Location */
 export const LOCATION_FIELD_KEYS: (keyof StoryLocation)[] = [
-    'name', 'locationType', 'world', 'parent', 'description',
+    'name', 'image', 'locationType', 'world', 'parent', 'description',
     'atmosphere', 'significance', 'inhabitants', 'connectedLocations', 'mapNotes',
 ];

@@ -4,6 +4,7 @@ import * as obsidian from 'obsidian';
 import { openConfirmModal } from './ConfirmModal';
 import { SceneManager } from '../services/SceneManager';
 import type SceneCardsPlugin from '../main';
+import { resolveTagColor } from '../settings';
 import { LocationManager } from '../services/LocationManager';
 import type { SnapshotManager, SceneSnapshot } from '../services/SnapshotManager';
 import { LinkScanner, LinkScanResult } from '../services/LinkScanner';
@@ -83,32 +84,124 @@ export class InspectorComponent {
         });
         closeBtn.addEventListener('click', () => this.hide());
 
-        // Sequence + Title
-        const titleSection = this.container.createDiv('inspector-title-section');
-        if (scene.sequence !== undefined) {
-            const act = scene.act !== undefined ? String(scene.act).padStart(2, '0') : '??';
-            const seq = String(scene.sequence).padStart(2, '0');
-            titleSection.createDiv({ cls: 'inspector-seq', text: `${act}-${seq}` });
-        }
-        if (scene.chronologicalOrder !== undefined && scene.chronologicalOrder !== scene.sequence) {
-            const chronoSeq = String(scene.chronologicalOrder).padStart(2, '0');
-            const chronoBadge = titleSection.createDiv({ cls: 'inspector-chrono-seq', text: `C${chronoSeq}` });
-            chronoBadge.setAttribute('title', `Chronological order: ${chronoSeq}`);
-        }
-        // Timeline mode badge (shown for non-linear scenes)
-        const mode = scene.timeline_mode || 'linear';
-        if (mode !== 'linear') {
-            const modeBadge = titleSection.createDiv({ cls: `inspector-timeline-mode-badge timeline-mode-${mode}` });
-            const modeIcon = modeBadge.createSpan();
-            obsidian.setIcon(modeIcon, TIMELINE_MODE_ICONS[mode] || 'clock');
-            modeBadge.createSpan({ text: ` ${TIMELINE_MODE_LABELS[mode]}` });
-            if (scene.timeline_strand) {
-                modeBadge.createSpan({ cls: 'inspector-strand-label', text: ` (${scene.timeline_strand})` });
-            }
-        }
-        titleSection.createEl('h4', { text: scene.title || 'Untitled' });
+        // ── Shared input style helper ──
+        const styleInput = (el: HTMLElement) => {
+            el.style.width = '100%';
+            el.style.marginTop = '4px';
+            el.style.padding = '4px 8px';
+            el.style.border = '1px solid var(--background-modifier-border)';
+            el.style.borderRadius = '4px';
+            el.style.background = 'var(--background-primary)';
+            el.style.color = 'var(--text-normal)';
+            el.style.font = 'inherit';
+            el.style.fontSize = '13px';
+            el.style.boxSizing = 'border-box';
+        };
+        const styleSelect = (el: HTMLSelectElement) => {
+            el.style.width = '100%';
+            el.style.marginTop = '4px';
+            el.style.padding = '4px 8px';
+            el.style.border = '1px solid var(--background-modifier-border)';
+            el.style.borderRadius = '4px';
+            el.style.background = 'var(--background-primary)';
+            el.style.color = 'var(--text-normal)';
+            el.style.fontSize = '13px';
+            el.style.boxSizing = 'border-box';
+        };
 
-        // Status dropdown (custom with Lucide icons)
+        // ── Title (editable) ──
+        const titleSection = this.container.createDiv('inspector-title-section');
+        const titleInput = titleSection.createEl('input', {
+            cls: 'inspector-title-input',
+            attr: { type: 'text', placeholder: 'Scene title…' },
+        });
+        titleInput.value = scene.title || '';
+        titleInput.style.width = '100%';
+        titleInput.style.fontSize = '16px';
+        titleInput.style.fontWeight = '600';
+        titleInput.style.padding = '4px 8px';
+        titleInput.style.border = '1px solid var(--background-modifier-border)';
+        titleInput.style.borderRadius = '4px';
+        titleInput.style.background = 'var(--background-primary)';
+        titleInput.style.color = 'var(--text-normal)';
+        titleInput.style.boxSizing = 'border-box';
+        titleInput.addEventListener('change', async () => {
+            const val = titleInput.value.trim();
+            if (val && val !== scene.title) {
+                // Rename the file to match the new title
+                const oldPath = scene.filePath;
+                const dir = oldPath.substring(0, oldPath.lastIndexOf('/'));
+                const newPath = `${dir}/${val}.md`;
+                const file = this.plugin.app.vault.getAbstractFileByPath(oldPath);
+                if (file) {
+                    await this.plugin.app.fileManager.renameFile(file, newPath);
+                }
+                await this.sceneManager.updateScene(newPath, { title: val } as any);
+                scene.title = val;
+                scene.filePath = newPath;
+            }
+        });
+
+        // ── Act / Chapter / Sequence row ──
+        const acRow = this.container.createDiv('inspector-section');
+        acRow.style.display = 'grid';
+        acRow.style.gridTemplateColumns = '1fr 1fr 1fr';
+        acRow.style.gap = '8px';
+
+        // Act
+        const actGroup = acRow.createDiv();
+        actGroup.createSpan({ cls: 'inspector-label', text: 'Act' });
+        const actSelect = actGroup.createEl('select');
+        styleSelect(actSelect);
+        actSelect.createEl('option', { text: '—', value: '' });
+        for (let i = 1; i <= 5; i++) {
+            const opt = actSelect.createEl('option', { text: String(i), value: String(i) });
+            if (scene.act !== undefined && Number(scene.act) === i) opt.selected = true;
+        }
+        actSelect.addEventListener('change', async () => {
+            const val = actSelect.value ? Number(actSelect.value) : undefined;
+            await this.sceneManager.updateScene(scene.filePath, { act: val } as any);
+            scene.act = val;
+        });
+
+        // Chapter
+        const chGroup = acRow.createDiv();
+        chGroup.createSpan({ cls: 'inspector-label', text: 'Chapter' });
+        const chInput = chGroup.createEl('input', { attr: { type: 'text', placeholder: '#' } });
+        styleInput(chInput);
+        chInput.value = scene.chapter !== undefined ? String(scene.chapter) : '';
+        chInput.addEventListener('change', async () => {
+            const raw = chInput.value.trim();
+            const val: number | string | undefined = raw ? (Number(raw) || raw) : undefined;
+            await this.sceneManager.updateScene(scene.filePath, { chapter: val } as any);
+            scene.chapter = val;
+        });
+
+        // Sequence
+        const seqGroup = acRow.createDiv();
+        seqGroup.createSpan({ cls: 'inspector-label', text: 'Sequence' });
+        const seqInput = seqGroup.createEl('input', { attr: { type: 'number', placeholder: '#' } });
+        styleInput(seqInput);
+        seqInput.value = scene.sequence !== undefined ? String(scene.sequence) : '';
+        seqInput.addEventListener('change', async () => {
+            const val = seqInput.value.trim() ? Number(seqInput.value) : undefined;
+            await this.sceneManager.updateScene(scene.filePath, { sequence: val } as any);
+            scene.sequence = val;
+        });
+
+        // ── Chronological Order ──
+        const chronoSection = this.container.createDiv('inspector-section');
+        chronoSection.createSpan({ cls: 'inspector-label', text: 'Chronological Order: ' });
+        const chronoInput = chronoSection.createEl('input', { attr: { type: 'number', placeholder: 'Same as sequence if blank' } });
+        styleInput(chronoInput);
+        chronoInput.value = scene.chronologicalOrder !== undefined ? String(scene.chronologicalOrder) : '';
+        chronoInput.addEventListener('change', async () => {
+            const val = chronoInput.value.trim() ? Number(chronoInput.value) : undefined;
+            await this.sceneManager.updateScene(scene.filePath, { chronologicalOrder: val } as any);
+            scene.chronologicalOrder = val;
+        });
+
+        // ── Status dropdown (custom with Lucide icons) ──
         const statusSection = this.container.createDiv('inspector-section');
         statusSection.createSpan({ cls: 'inspector-label', text: 'Status: ' });
         
@@ -128,8 +221,8 @@ export class InspectorComponent {
         const statusMenu = statusDropdown.createDiv('inspector-status-menu');
         statusMenu.style.display = 'none';
 
-        const statuses: SceneStatus[] = ['idea', 'outlined', 'draft', 'written', 'revised', 'final'];
-        statuses.forEach(s => {
+        const statusValues: SceneStatus[] = ['idea', 'outlined', 'draft', 'written', 'revised', 'final'];
+        statusValues.forEach(s => {
             const cfg = STATUS_CONFIG[s];
             const item = statusMenu.createDiv({
                 cls: `inspector-status-item ${s === currentStatus ? 'active' : ''}`
@@ -161,34 +254,103 @@ export class InspectorComponent {
             setTimeout(() => document.addEventListener('click', closeMenu), 0);
         });
 
-        // Word count
-        const wcSection = this.container.createDiv('inspector-section');
-        const wc = scene.wordcount || 0;
-        const target = scene.target_wordcount || this.plugin.settings.defaultTargetWordCount;
-        wcSection.createSpan({ cls: 'inspector-label', text: 'Words: ' });
-        wcSection.createSpan({ text: `${wc}` });
-        if (target) {
-            wcSection.createSpan({ cls: 'inspector-target', text: ` / ~${target} target` });
+        // ── POV (editable dropdown) ──
+        const povSection = this.container.createDiv('inspector-section');
+        povSection.createSpan({ cls: 'inspector-label', text: 'POV: ' });
+        const povSelect = povSection.createEl('select');
+        styleSelect(povSelect);
+        povSelect.createEl('option', { text: 'None', value: '' });
+        const allCharNames = this.sceneManager.getAllCharacters();
+        const charSet = new Set<string>();
+        for (const c of allCharNames) {
+            const key = c.toLowerCase();
+            if (!charSet.has(key)) { charSet.add(key); const opt = povSelect.createEl('option', { text: c, value: c }); if (scene.pov === c) opt.selected = true; }
         }
-
-        // POV
-        if (scene.pov) {
-            const povSection = this.container.createDiv('inspector-section');
-            povSection.createSpan({ cls: 'inspector-label', text: 'POV: ' });
-            povSection.createSpan({ text: scene.pov });
+        // Add current POV if not in list
+        if (scene.pov && !charSet.has(scene.pov.toLowerCase())) {
+            const opt = povSelect.createEl('option', { text: scene.pov, value: scene.pov });
+            opt.selected = true;
         }
+        povSelect.addEventListener('change', async () => {
+            const val = povSelect.value || undefined;
+            await this.sceneManager.updateScene(scene.filePath, { pov: val } as any);
+            scene.pov = val;
+        });
 
-        // Location (editable dropdown)
+        // ── Characters (editable chip list) ──
+        const charSection = this.container.createDiv('inspector-section');
+        charSection.createSpan({ cls: 'inspector-label', text: 'Characters:' });
+        const charChips = charSection.createDiv('inspector-chip-list');
+        charChips.style.display = 'flex';
+        charChips.style.flexWrap = 'wrap';
+        charChips.style.gap = '4px';
+        charChips.style.marginTop = '4px';
+
+        const renderCharChips = () => {
+            charChips.empty();
+            (scene.characters || []).forEach((c, idx) => {
+                const chip = charChips.createSpan({ cls: 'inspector-chip', text: c });
+                chip.style.padding = '2px 8px';
+                chip.style.borderRadius = '10px';
+                chip.style.fontSize = '12px';
+                chip.style.background = 'var(--background-modifier-border)';
+                chip.style.display = 'inline-flex';
+                chip.style.alignItems = 'center';
+                chip.style.gap = '4px';
+                if (c === scene.pov) {
+                    chip.createSpan({ cls: 'inspector-pov-badge', text: ' (POV)' });
+                    chip.style.background = 'var(--interactive-accent)';
+                    chip.style.color = 'var(--text-on-accent)';
+                }
+                const removeBtn = chip.createSpan({ text: '×', cls: 'inspector-chip-remove' });
+                removeBtn.style.cursor = 'pointer';
+                removeBtn.style.marginLeft = '2px';
+                removeBtn.addEventListener('click', async () => {
+                    const updated = (scene.characters || []).filter((_, i) => i !== idx);
+                    await this.sceneManager.updateScene(scene.filePath, { characters: updated } as any);
+                    scene.characters = updated;
+                    renderCharChips();
+                });
+            });
+            // Add button
+            const addChip = charChips.createSpan({ cls: 'inspector-chip inspector-chip-add', text: '+' });
+            addChip.style.padding = '2px 8px';
+            addChip.style.borderRadius = '10px';
+            addChip.style.fontSize = '12px';
+            addChip.style.background = 'var(--background-modifier-border)';
+            addChip.style.cursor = 'pointer';
+            addChip.style.opacity = '0.7';
+            addChip.addEventListener('click', () => {
+                const input = charSection.createEl('input', { attr: { type: 'text', placeholder: 'Character name…' } });
+                styleInput(input);
+                input.focus();
+                const commitAdd = async () => {
+                    const val = input.value.trim();
+                    if (val && !(scene.characters || []).includes(val)) {
+                        const updated = [...(scene.characters || []), val];
+                        await this.sceneManager.updateScene(scene.filePath, { characters: updated } as any);
+                        scene.characters = updated;
+                    }
+                    input.remove();
+                    renderCharChips();
+                };
+                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') { input.remove(); } });
+                input.addEventListener('blur', commitAdd);
+            });
+        };
+        renderCharChips();
+
+        // ── Location (editable dropdown) ──
         const locSection = this.container.createDiv('inspector-section');
         locSection.createSpan({ cls: 'inspector-label', text: 'Location: ' });
         const locSelect = locSection.createEl('select', { cls: 'inspector-location-select' });
+        styleSelect(locSelect);
         locSelect.createEl('option', { text: 'None', value: '' });
         const locationNames = this.getLocationNames();
         for (const name of locationNames) {
             const opt = locSelect.createEl('option', { text: name, value: name });
             if (scene.location === name) opt.selected = true;
         }
-        // If scene has a location not in the list, add it
         if (scene.location && !locationNames.includes(scene.location)) {
             const opt = locSelect.createEl('option', { text: scene.location, value: scene.location });
             opt.selected = true;
@@ -199,47 +361,154 @@ export class InspectorComponent {
             scene.location = newLoc;
         });
 
-        // Timeline
-        if (scene.timeline) {
-            const timeSection = this.container.createDiv('inspector-section');
-            timeSection.createSpan({ cls: 'inspector-label', text: 'Time: ' });
-            timeSection.createSpan({ text: scene.timeline });
-        }
+        // ── Timeline Mode / Strand ──
+        const tmRow = this.container.createDiv('inspector-section');
+        tmRow.style.display = 'grid';
+        tmRow.style.gridTemplateColumns = '1fr 1fr';
+        tmRow.style.gap = '8px';
 
-        // Characters
-        if (scene.characters?.length) {
-            const charSection = this.container.createDiv('inspector-section');
-            charSection.createSpan({ cls: 'inspector-label', text: 'Characters:' });
-            const charList = charSection.createEl('ul', { cls: 'inspector-list' });
-            scene.characters.forEach(c => {
-                const li = charList.createEl('li');
-                li.createSpan({ text: c });
-                if (c === scene.pov) {
-                    li.createSpan({ cls: 'inspector-pov-badge', text: ' (POV)' });
-                }
+        const tmGroup = tmRow.createDiv();
+        tmGroup.createSpan({ cls: 'inspector-label', text: 'Timeline Mode' });
+        const tmSelect = tmGroup.createEl('select');
+        styleSelect(tmSelect);
+        for (const m of TIMELINE_MODES) {
+            const opt = tmSelect.createEl('option', { text: TIMELINE_MODE_LABELS[m], value: m });
+            if ((scene.timeline_mode || 'linear') === m) opt.selected = true;
+        }
+        tmSelect.addEventListener('change', async () => {
+            const val = tmSelect.value as TimelineMode;
+            await this.sceneManager.updateScene(scene.filePath, { timeline_mode: val } as any);
+            scene.timeline_mode = val;
+        });
+
+        const strandGroup = tmRow.createDiv();
+        strandGroup.createSpan({ cls: 'inspector-label', text: 'Strand' });
+        const strandInput = strandGroup.createEl('input', { attr: { type: 'text', placeholder: 'e.g. "1943", "outer"' } });
+        styleInput(strandInput);
+        strandInput.value = scene.timeline_strand || '';
+        strandInput.addEventListener('change', async () => {
+            const val = strandInput.value.trim() || undefined;
+            await this.sceneManager.updateScene(scene.filePath, { timeline_strand: val } as any);
+            scene.timeline_strand = val;
+        });
+
+        // ── Story Date / Time ──
+        const dtRow = this.container.createDiv('inspector-section');
+        dtRow.style.display = 'grid';
+        dtRow.style.gridTemplateColumns = '1fr 1fr';
+        dtRow.style.gap = '8px';
+
+        const dateGroup = dtRow.createDiv();
+        dateGroup.createSpan({ cls: 'inspector-label', text: 'Story Date' });
+        const dateInput = dateGroup.createEl('input', { attr: { type: 'text', placeholder: 'e.g. 2026-02-17, Day 3' } });
+        styleInput(dateInput);
+        dateInput.value = scene.storyDate || scene.timeline || '';
+        dateInput.addEventListener('change', async () => {
+            const val = dateInput.value.trim() || undefined;
+            await this.sceneManager.updateScene(scene.filePath, { storyDate: val } as any);
+            scene.storyDate = val;
+        });
+
+        const timeGroup = dtRow.createDiv();
+        timeGroup.createSpan({ cls: 'inspector-label', text: 'Story Time' });
+        const timeInput = timeGroup.createEl('input', { attr: { type: 'text', placeholder: 'e.g. morning, 14:00' } });
+        styleInput(timeInput);
+        timeInput.value = scene.storyTime || '';
+        timeInput.addEventListener('change', async () => {
+            const val = timeInput.value.trim() || undefined;
+            await this.sceneManager.updateScene(scene.filePath, { storyTime: val } as any);
+            scene.storyTime = val;
+        });
+
+        // ── Word count + Target ──
+        const wcRow = this.container.createDiv('inspector-section');
+        wcRow.style.display = 'grid';
+        wcRow.style.gridTemplateColumns = '1fr 1fr';
+        wcRow.style.gap = '8px';
+
+        const wcGroup = wcRow.createDiv();
+        wcGroup.createSpan({ cls: 'inspector-label', text: 'Words' });
+        const wcDisplay = wcGroup.createDiv();
+        wcDisplay.style.marginTop = '4px';
+        wcDisplay.style.fontSize = '13px';
+        wcDisplay.textContent = String(scene.wordcount || 0);
+
+        const targetGroup = wcRow.createDiv();
+        targetGroup.createSpan({ cls: 'inspector-label', text: 'Target' });
+        const targetInput = targetGroup.createEl('input', { attr: { type: 'number', placeholder: String(this.plugin.settings.defaultTargetWordCount || '') } });
+        styleInput(targetInput);
+        targetInput.value = scene.target_wordcount ? String(scene.target_wordcount) : '';
+        targetInput.addEventListener('change', async () => {
+            const val = targetInput.value.trim() ? Number(targetInput.value) : undefined;
+            await this.sceneManager.updateScene(scene.filePath, { target_wordcount: val } as any);
+            scene.target_wordcount = val;
+        });
+
+        // ── Tags / Plotlines (editable chip list) ──
+        const tagSection = this.container.createDiv('inspector-section');
+        tagSection.createSpan({ cls: 'inspector-label', text: 'Plotlines / Tags:' });
+        const tagChips = tagSection.createDiv('inspector-chip-list');
+        tagChips.style.display = 'flex';
+        tagChips.style.flexWrap = 'wrap';
+        tagChips.style.gap = '4px';
+        tagChips.style.marginTop = '4px';
+
+        const tagColors = this.plugin.settings.tagColors || {};
+        const scheme = this.plugin.settings.colorScheme;
+        const allTagsSorted = this.sceneManager.getAllTags().sort();
+        const renderTagChips = () => {
+            tagChips.empty();
+            (scene.tags || []).forEach((t, idx) => {
+                const chip = tagChips.createSpan({ cls: 'inspector-chip', text: t });
+                chip.style.padding = '2px 8px';
+                chip.style.borderRadius = '10px';
+                chip.style.fontSize = '12px';
+                chip.style.display = 'inline-flex';
+                chip.style.alignItems = 'center';
+                chip.style.gap = '4px';
+                const chipColor = resolveTagColor(t, Math.max(0, allTagsSorted.indexOf(t)), scheme, tagColors);
+                chip.style.background = chipColor;
+                chip.style.color = '#fff';
+                const removeBtn = chip.createSpan({ text: '×', cls: 'inspector-chip-remove' });
+                removeBtn.style.cursor = 'pointer';
+                removeBtn.style.marginLeft = '2px';
+                removeBtn.addEventListener('click', async () => {
+                    const updated = (scene.tags || []).filter((_, i) => i !== idx);
+                    await this.sceneManager.updateScene(scene.filePath, { tags: updated } as any);
+                    scene.tags = updated;
+                    renderTagChips();
+                });
             });
-        }
-
-        // Detected in text (LinkScanner results)
-        this.renderDetectedLinks(scene);
-
-        // Plotlines/Tags
-        if (scene.tags?.length) {
-            const tagSection = this.container.createDiv('inspector-section');
-            tagSection.createSpan({ cls: 'inspector-label', text: 'Plotlines / Tags:' });
-            const tagList = tagSection.createEl('ul', { cls: 'inspector-list' });
-            const tagColors = this.plugin.settings.tagColors || {};
-            scene.tags.forEach(t => {
-                const li = tagList.createEl('li');
-                if (tagColors[t]) {
-                    const swatch = li.createSpan({ cls: 'inspector-tag-swatch' });
-                    swatch.style.backgroundColor = tagColors[t];
-                }
-                li.appendText(t);
+            // Add button
+            const addChip = tagChips.createSpan({ cls: 'inspector-chip inspector-chip-add', text: '+' });
+            addChip.style.padding = '2px 8px';
+            addChip.style.borderRadius = '10px';
+            addChip.style.fontSize = '12px';
+            addChip.style.background = 'var(--background-modifier-border)';
+            addChip.style.cursor = 'pointer';
+            addChip.style.opacity = '0.7';
+            addChip.addEventListener('click', () => {
+                const input = tagSection.createEl('input', { attr: { type: 'text', placeholder: 'plotline/main, theme/hope…' } });
+                styleInput(input);
+                input.focus();
+                const commitAdd = async () => {
+                    const raw = input.value.trim();
+                    if (raw) {
+                        const newTags = raw.split(',').map(t => t.trim()).filter(Boolean);
+                        const updated = [...(scene.tags || []), ...newTags.filter(t => !(scene.tags || []).includes(t))];
+                        await this.sceneManager.updateScene(scene.filePath, { tags: updated } as any);
+                        scene.tags = updated;
+                    }
+                    input.remove();
+                    renderTagChips();
+                };
+                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') { input.remove(); } });
+                input.addEventListener('blur', commitAdd);
             });
-        }
+        };
+        renderTagChips();
 
-        // Description (body text)
+        // ── Description (body text — read-only preview) ──
         if (scene.body) {
             const descSection = this.container.createDiv('inspector-section');
             descSection.createSpan({ cls: 'inspector-label', text: 'Description:' });
@@ -251,22 +520,40 @@ export class InspectorComponent {
             });
         }
 
-        // Conflict
-        if (scene.conflict) {
-            const conflictSection = this.container.createDiv('inspector-section');
-            conflictSection.createSpan({ cls: 'inspector-label', text: 'Conflict:' });
-            conflictSection.createEl('p', {
-                cls: 'inspector-conflict',
-                text: scene.conflict
-            });
-        }
+        // ── Detected in text (LinkScanner results) ──
+        this.renderDetectedLinks(scene);
 
-        // Emotion
-        if (scene.emotion) {
-            const emotionSection = this.container.createDiv('inspector-section');
-            emotionSection.createSpan({ cls: 'inspector-label', text: 'Emotion: ' });
-            emotionSection.createSpan({ text: scene.emotion });
-        }
+        // ── Conflict (editable) ──
+        const conflictSection = this.container.createDiv('inspector-section');
+        conflictSection.createSpan({ cls: 'inspector-label', text: 'Conflict:' });
+        const conflictInput = conflictSection.createEl('textarea', {
+            cls: 'inspector-conflict-input',
+            attr: { placeholder: 'What is the main conflict?', rows: '2' },
+        });
+        conflictInput.value = scene.conflict || '';
+        styleInput(conflictInput);
+        conflictInput.style.padding = '6px 8px';
+        conflictInput.style.resize = 'vertical';
+        conflictInput.addEventListener('change', async () => {
+            const val = conflictInput.value.trim() || undefined;
+            await this.sceneManager.updateScene(scene.filePath, { conflict: val } as any);
+            scene.conflict = val;
+        });
+
+        // ── Emotion (editable) ──
+        const emotionSection = this.container.createDiv('inspector-section');
+        emotionSection.createSpan({ cls: 'inspector-label', text: 'Emotion: ' });
+        const emotionInput = emotionSection.createEl('input', {
+            cls: 'inspector-emotion-input',
+            attr: { type: 'text', placeholder: 'e.g. tense, hopeful, melancholic' },
+        });
+        emotionInput.value = scene.emotion || '';
+        styleInput(emotionInput);
+        emotionInput.addEventListener('change', async () => {
+            const val = emotionInput.value.trim() || undefined;
+            await this.sceneManager.updateScene(scene.filePath, { emotion: val } as any);
+            scene.emotion = val;
+        });
 
         // Intensity slider (always shown, editable)
         const intensitySection = this.container.createDiv('inspector-section inspector-intensity');

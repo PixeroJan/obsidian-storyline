@@ -1,6 +1,314 @@
 import { App, PluginSettingTab, Setting, Modal, TextAreaComponent } from 'obsidian';
+import * as obsidian from 'obsidian';
 import { ColorCodingMode, SceneStatus, ViewType, SceneTemplate, BUILTIN_SCENE_TEMPLATES } from './models/Scene';
 import type SceneCardsPlugin from './main';
+import { HELP_VIEW_TYPE } from './constants';
+
+// ═══════════════════════════════════════════════════════
+//  COLOR PALETTES — Catppuccin + Mood-based
+// ═══════════════════════════════════════════════════════
+
+export type ColorScheme =
+    // Catppuccin
+    | 'latte' | 'frappe' | 'macchiato' | 'mocha'
+    // Mood-based
+    | 'spring' | 'morning' | 'summer' | 'dusk'
+    | 'midnight' | 'autumn' | 'ocean' | 'forest'
+    | 'sunset' | 'arctic' | 'vintage' | 'neon'
+    // Manual
+    | 'custom';
+
+export const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
+    // Catppuccin
+    latte:     'Latte',
+    frappe:    'Frappé',
+    macchiato: 'Macchiato',
+    mocha:     'Mocha',
+    // Mood
+    spring:    'Spring',
+    morning:   'Morning',
+    summer:    'Summer',
+    dusk:      'Dusk',
+    midnight:  'Midnight',
+    autumn:    'Autumn',
+    ocean:     'Ocean',
+    forest:    'Forest',
+    sunset:    'Sunset',
+    arctic:    'Arctic',
+    vintage:   'Vintage',
+    neon:      'Neon',
+    // Manual
+    custom:    'Custom',
+};
+
+/** Short mood descriptions for the settings UI */
+export const COLOR_SCHEME_HINTS: Record<ColorScheme, string> = {
+    latte:     'Pastel on light',
+    frappe:    'Soft on mid-dark',
+    macchiato: 'Muted on dark',
+    mocha:     'Pastel on darkest',
+    spring:    'Fresh & floral',
+    morning:   'Warm & golden',
+    summer:    'Vivid & bold',
+    dusk:      'Warm & moody',
+    midnight:  'Deep & mysterious',
+    autumn:    'Earthy & harvest',
+    ocean:     'Aquatic blues',
+    forest:    'Woodland greens',
+    sunset:    'Fiery & dramatic',
+    arctic:    'Icy & crisp',
+    vintage:   'Muted & nostalgic',
+    neon:      'Electric & vivid',
+    custom:    'Manual per-tag',
+};
+
+/** 14 accent colors per palette, ordered for maximum visual distinction */
+const COLOR_PALETTES: Record<Exclude<ColorScheme, 'custom'>, string[]> = {
+    // ── Catppuccin ──────────────────────────────────
+    latte: [
+        '#8839ef', '#fe640b', '#1e66f5', '#40a02b', '#e64553',
+        '#179299', '#df8e1d', '#7287fd', '#ea76cb', '#04a5e5',
+        '#d20f39', '#209fb5', '#dd7878', '#dc8a78',
+    ],
+    frappe: [
+        '#ca9ee6', '#ef9f76', '#8caaee', '#a6d189', '#e78284',
+        '#81c8be', '#e5c890', '#babbf1', '#f4b8e4', '#99d1db',
+        '#ea999c', '#85c1dc', '#eebebe', '#f2d5cf',
+    ],
+    macchiato: [
+        '#c6a0f6', '#f5a97f', '#8aadf4', '#a6da95', '#ed8796',
+        '#8bd5ca', '#eed49f', '#b7bdf8', '#f5bde6', '#91d7e3',
+        '#ee99a0', '#7dc4e4', '#f0c6c6', '#f4dbd6',
+    ],
+    mocha: [
+        '#cba6f7', '#fab387', '#89b4fa', '#a6e3a1', '#f38ba8',
+        '#94e2d5', '#f9e2af', '#b4befe', '#f5c2e7', '#89dceb',
+        '#eba0ac', '#74c7ec', '#f2cdcd', '#f5e0dc',
+    ],
+
+    // ── Mood-based ──────────────────────────────────
+
+    spring: [
+        '#e87898', // rose
+        '#d458a0', // fuchsia
+        '#b07cc8', // wisteria
+        '#7888d8', // iris
+        '#58a8e0', // cornflower
+        '#48c4a8', // mint
+        '#68c468', // clover
+        '#98c448', // lime
+        '#d4c040', // primrose
+        '#e8a848', // marigold
+        '#e87858', // coral
+        '#c868a8', // peony
+        '#58b8c8', // brook
+        '#a8a858', // moss
+    ],
+    morning: [
+        '#d89838', // sunrise
+        '#c88040', // amber
+        '#e0a870', // peach
+        '#c88080', // blush
+        '#a86898', // plum
+        '#8880b8', // lavender
+        '#6898c8', // sky
+        '#58a890', // dewdrop
+        '#80a860', // sage
+        '#c8b850', // wheat
+        '#d87840', // clay
+        '#a85840', // brick
+        '#589898', // mist
+        '#9870a8', // violet
+    ],
+    summer: [
+        '#e03058', // cherry
+        '#e86020', // flame
+        '#e8b008', // sun
+        '#40b828', // lime
+        '#08a868', // jade
+        '#08b8c0', // cyan
+        '#1880e0', // azure
+        '#4058e0', // indigo
+        '#8830d0', // violet
+        '#d028a0', // pink
+        '#c89818', // gold
+        '#e84870', // raspberry
+        '#189898', // teal
+        '#984818', // rust
+    ],
+    dusk: [
+        '#c07838', // glow
+        '#986040', // umber
+        '#886088', // mauve
+        '#6868a0', // slate
+        '#507888', // steel
+        '#588870', // sage
+        '#888850', // olive
+        '#b89838', // ochre
+        '#b06858', // terra
+        '#785888', // plum
+        '#907848', // bronze
+        '#688868', // fern
+        '#984858', // wine
+        '#b89070', // sand
+    ],
+    midnight: [
+        '#4858a8', // navy
+        '#6040a0', // indigo
+        '#384878', // deep
+        '#286868', // teal
+        '#703878', // plum
+        '#587098', // steel
+        '#784050', // wine
+        '#607088', // storm
+        '#305898', // sapphire
+        '#287878', // cyan
+        '#885888', // twilight
+        '#506878', // slate
+        '#388860', // aurora
+        '#985878', // rose
+    ],
+    autumn: [
+        '#c87020', // pumpkin
+        '#a83020', // crimson
+        '#788828', // olive
+        '#c89820', // golden
+        '#702820', // auburn
+        '#984018', // rust
+        '#689040', // sage
+        '#b08020', // bronze
+        '#901828', // cranberry
+        '#a86830', // copper
+        '#507028', // moss
+        '#984838', // clay
+        '#806028', // umber
+        '#782030', // merlot
+    ],
+    ocean: [
+        '#183870', // deep navy
+        '#e07060', // coral
+        '#188880', // teal
+        '#70c8a8', // seafoam
+        '#2870b8', // cobalt
+        '#c8b070', // sand
+        '#38b8a8', // aquamarine
+        '#5070a0', // steel
+        '#18a8c0', // turquoise
+        '#c0a898', // driftwood
+        '#085858', // abyss
+        '#3090a0', // lagoon
+        '#4888c8', // wave
+        '#d08088', // shell
+    ],
+    forest: [
+        '#2e6b3e', // pine
+        '#5b7b3b', // moss
+        '#4b9b4b', // fern
+        '#7b6b4b', // bark
+        '#9b8b7b', // mushroom
+        '#7b9b5b', // sage
+        '#2b8b5b', // emerald
+        '#6b7b3b', // olive
+        '#8b5b3b', // cedar
+        '#8ba87b', // lichen
+        '#b8883b', // amber
+        '#4b5b3b', // understory
+        '#8b3b5b', // berry
+        '#b8a04b', // golden leaf
+    ],
+    sunset: [
+        '#e86018', // blaze
+        '#c82030', // crimson
+        '#e838a0', // hot pink
+        '#d8a010', // gold
+        '#7830a8', // royal
+        '#d018a0', // magenta
+        '#e84828', // vermilion
+        '#c89018', // amber
+        '#8048c0', // violet
+        '#d82838', // scarlet
+        '#f08018', // tangerine
+        '#c85878', // rose
+        '#882878', // plum
+        '#e86838', // flame
+    ],
+    arctic: [
+        '#8ab8d8', // ice
+        '#b0c8d8', // frost
+        '#60c8a0', // aurora
+        '#90b0d8', // polar
+        '#a0a8b8', // cool gray
+        '#58a8b8', // arctic teal
+        '#b0a8c8', // snow lavender
+        '#78c0d0', // glacier
+        '#8898a8', // steel
+        '#b0c0c8', // moonstone
+        '#78c8d8', // pale cyan
+        '#88d0b8', // mint
+        '#a8b0b8', // silver
+        '#68d0b0', // jade
+    ],
+    vintage: [
+        '#c08888', // dusty rose
+        '#88a880', // sage
+        '#c0a050', // mustard
+        '#883848', // burgundy
+        '#508888', // teal
+        '#a080a0', // mauve
+        '#b8a060', // straw
+        '#687840', // olive
+        '#6878a0', // slate
+        '#a86038', // rust
+        '#885878', // plum
+        '#487858', // forest
+        '#a87850', // clay
+        '#6888a8', // denim
+    ],
+    neon: [
+        '#ff2890', // hot pink
+        '#0098ff', // electric blue
+        '#88ff28', // lime
+        '#a828ff', // purple
+        '#00e8e8', // cyan
+        '#ffe800', // yellow
+        '#ff28d8', // magenta
+        '#28ff88', // neon green
+        '#ff7800', // orange
+        '#7828ff', // violet
+        '#00d8d8', // turquoise
+        '#ff2828', // red
+        '#b8ff28', // chartreuse
+        '#28ffd8', // aqua
+    ],
+};
+
+/**
+ * Get the palette array for a given scheme.
+ * Returns undefined for 'custom'.
+ */
+export function getSchemeColors(scheme: ColorScheme): string[] | undefined {
+    if (scheme === 'custom') return undefined;
+    return COLOR_PALETTES[scheme];
+}
+
+/**
+ * Resolve the effective color for a tag.
+ * Priority: custom tagColors override > scheme auto-assignment > fallback.
+ */
+export function resolveTagColor(
+    tag: string,
+    tagIndex: number,
+    scheme: ColorScheme,
+    tagColors: Record<string, string>,
+): string {
+    // Custom override always wins
+    if (tagColors[tag]) return tagColors[tag];
+    // Scheme auto-assign
+    const palette = getSchemeColors(scheme);
+    if (palette) return palette[tagIndex % palette.length];
+    // Fallback grey
+    return '#888888';
+}
 
 /**
  * Plugin settings interface
@@ -32,11 +340,24 @@ export interface SceneCardsSettings {
     // Scene templates
     sceneTemplates: SceneTemplate[];
 
-    // Tag / plotline color assignments
+    // Tag / plotline color scheme
+    colorScheme: ColorScheme;
+
+    // Tag / plotline color assignments (custom overrides)
     tagColors: Record<string, string>;
 
     // Manual tag-type overrides (tag name lowercased → 'prop' | 'location' | 'character' | 'other')
     tagTypeOverrides: Record<string, string>;
+
+    // Manual character alias mappings (lowercased alias → canonical character name)
+    // e.g. { "sven": "Sven Andersson" } — user-defined via "Link to…" in Characters view
+    characterAliases: Record<string, string>;
+
+    // Character names to hide from the "no profile yet" list (lowercased)
+    ignoredCharacters: string[];
+
+    // Hide frontmatter (properties) in live preview / reading mode
+    hideFrontmatter: boolean;
 }
 
 /**
@@ -63,9 +384,17 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
 
     sceneTemplates: [],
 
+    colorScheme: 'mocha' as ColorScheme,
+
     tagColors: {},
 
     tagTypeOverrides: {},
+
+    characterAliases: {},
+
+    ignoredCharacters: [],
+
+    hideFrontmatter: true,
 };
 
 /**
@@ -84,6 +413,17 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         containerEl.empty();
 
         containerEl.createEl('h1', { text: 'StoryLine Settings' });
+
+        // --- Documentation link ---
+        new Setting(containerEl)
+            .setName('Documentation')
+            .setDesc('Open the full StoryLine help guide in a side pane')
+            .addButton(btn => btn
+                .setButtonText('Open Help')
+                .setCta()
+                .onClick(() => {
+                    this.plugin.openHelp();
+                }));
 
         // --- StoryLine Root ---
         containerEl.createEl('h2', { text: 'StoryLine Root' });
@@ -238,15 +578,175 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        // --- Tag / Plotline Colors ---
-        containerEl.createEl('h2', { text: 'Tag / Plotline Colors' });
-        containerEl.createEl('p', {
-            text: 'Assign colors to tags (plotlines) that persist across all views. Tags without a color use the default accent.',
+        new Setting(containerEl)
+            .setName('Hide frontmatter')
+            .setDesc('Hide the properties/frontmatter block in live preview and reading mode. Since all fields are editable from the Inspector, frontmatter can safely be hidden.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.hideFrontmatter)
+                .onChange(async (value) => {
+                    this.plugin.settings.hideFrontmatter = value;
+                    await this.plugin.saveSettings();
+                    // Apply Obsidian\'s built-in "Properties in document" setting
+                    (this.app.vault as any).setConfig?.('propertiesInDocument', value ? 'hidden' : 'visible');
+                }));
+
+        // --- Tag / Plotline Colors (collapsible) ---
+        const colorDetails = containerEl.createEl('details', { cls: 'story-line-color-section' });
+        colorDetails.createEl('summary', { text: 'Plotline Color Scheme' });
+
+        const colorBody = colorDetails.createDiv();
+        colorBody.style.padding = '8px 0';
+
+        // Compact scheme picker: grouped radio-style cards
+        const schemeContainer = colorBody.createDiv();
+
+        const SCHEME_GROUPS: { label: string; schemes: ColorScheme[] }[] = [
+            { label: 'Catppuccin', schemes: ['latte', 'frappe', 'macchiato', 'mocha'] },
+            { label: 'Moods', schemes: ['spring', 'morning', 'summer', 'dusk', 'midnight', 'autumn', 'ocean', 'forest', 'sunset', 'arctic', 'vintage', 'neon'] },
+            { label: '', schemes: ['custom'] },
+        ];
+
+        const renderSchemePicker = () => {
+            schemeContainer.empty();
+            const current = this.plugin.settings.colorScheme;
+
+            for (const group of SCHEME_GROUPS) {
+                if (group.label) {
+                    const groupLabel = schemeContainer.createDiv();
+                    groupLabel.style.fontSize = '11px';
+                    groupLabel.style.fontWeight = '600';
+                    groupLabel.style.color = 'var(--text-muted)';
+                    groupLabel.style.textTransform = 'uppercase';
+                    groupLabel.style.letterSpacing = '0.05em';
+                    groupLabel.style.marginTop = '10px';
+                    groupLabel.style.marginBottom = '6px';
+                    groupLabel.textContent = group.label;
+                }
+
+                const schemeRow = schemeContainer.createDiv();
+                schemeRow.style.display = 'flex';
+                schemeRow.style.gap = '8px';
+                schemeRow.style.flexWrap = 'wrap';
+                schemeRow.style.marginBottom = '8px';
+
+                for (const scheme of group.schemes) {
+                    const label = COLOR_SCHEME_LABELS[scheme];
+                    const hintText = COLOR_SCHEME_HINTS[scheme];
+                    const palette = getSchemeColors(scheme);
+
+                    const card = schemeRow.createDiv();
+                    card.style.cursor = 'pointer';
+                    card.style.padding = '6px 10px';
+                    card.style.borderRadius = '8px';
+                    card.style.border = scheme === current
+                        ? '2px solid var(--interactive-accent)'
+                        : '2px solid var(--background-modifier-border)';
+                    card.style.background = scheme === current
+                        ? 'var(--background-modifier-hover)'
+                        : 'transparent';
+                    card.style.minWidth = '100px';
+                    card.style.textAlign = 'center';
+                    card.style.transition = 'border-color 0.15s';
+
+                    // Label
+                    const nameEl = card.createDiv();
+                    nameEl.style.fontSize = '11px';
+                    nameEl.style.fontWeight = '600';
+                    nameEl.style.marginBottom = '4px';
+                    nameEl.textContent = label;
+
+                    // Mood hint
+                    const hint = card.createDiv();
+                    hint.style.fontSize = '9px';
+                    hint.style.color = 'var(--text-faint)';
+                    hint.style.marginBottom = '4px';
+                    hint.textContent = hintText;
+
+                    // Swatches
+                    if (palette) {
+                        const swatchRow = card.createDiv();
+                        swatchRow.style.display = 'flex';
+                        swatchRow.style.gap = '2px';
+                        swatchRow.style.justifyContent = 'center';
+                        swatchRow.style.flexWrap = 'wrap';
+                        for (let i = 0; i < Math.min(7, palette.length); i++) {
+                            const dot = swatchRow.createDiv();
+                            dot.style.width = '10px';
+                            dot.style.height = '10px';
+                            dot.style.borderRadius = '50%';
+                            dot.style.background = palette[i];
+                        }
+                    } else {
+                        const iconEl = card.createDiv();
+                        iconEl.style.display = 'flex';
+                        iconEl.style.justifyContent = 'center';
+                        obsidian.setIcon(iconEl, 'palette');
+                        iconEl.style.color = 'var(--text-muted)';
+                    }
+
+                    card.addEventListener('click', async () => {
+                        this.plugin.settings.colorScheme = scheme;
+                        await this.plugin.saveSettings();
+                        renderSchemePicker();
+                        this.plugin.refreshOpenViews();
+                    });
+                }
+            }
+        };
+
+        renderSchemePicker();
+
+        // Help text
+        const helpText = colorBody.createEl('p', {
             cls: 'setting-item-description',
         });
+        helpText.style.marginTop = '8px';
+        helpText.textContent = 'Colors are auto-assigned to plotline tags. To override a specific tag color, use the color picker in the Plotlines view.';
 
-        const tagColorListEl = containerEl.createDiv('story-line-tag-color-list');
-        this.renderTagColorList(tagColorListEl);
+        // Per-tag overrides summary (compact — only show if there ARE overrides)
+        const overrides = Object.entries(this.plugin.settings.tagColors || {});
+        if (overrides.length > 0) {
+            const overrideSection = colorBody.createDiv();
+            overrideSection.style.marginTop = '10px';
+            const overrideHeader = overrideSection.createDiv();
+            overrideHeader.style.display = 'flex';
+            overrideHeader.style.alignItems = 'center';
+            overrideHeader.style.gap = '8px';
+            overrideHeader.style.marginBottom = '6px';
+            overrideHeader.createSpan({ text: 'Custom overrides', cls: 'setting-item-name' });
+
+            const clearBtn = overrideHeader.createEl('button', { text: 'Clear all' });
+            clearBtn.style.fontSize = '11px';
+            clearBtn.style.padding = '2px 8px';
+            clearBtn.addEventListener('click', async () => {
+                this.plugin.settings.tagColors = {};
+                await this.plugin.saveSettings();
+                overrideSection.remove();
+                this.plugin.refreshOpenViews();
+            });
+
+            const chipRow = overrideSection.createDiv();
+            chipRow.style.display = 'flex';
+            chipRow.style.gap = '4px';
+            chipRow.style.flexWrap = 'wrap';
+            for (const [tag, color] of overrides) {
+                const chip = chipRow.createSpan();
+                chip.style.padding = '2px 8px';
+                chip.style.borderRadius = '10px';
+                chip.style.fontSize = '11px';
+                chip.style.background = color;
+                chip.style.color = '#fff';
+                chip.style.cursor = 'pointer';
+                chip.textContent = tag;
+                chip.setAttribute('title', `${tag}: ${color} — click to remove`);
+                chip.addEventListener('click', async () => {
+                    delete this.plugin.settings.tagColors[tag];
+                    await this.plugin.saveSettings();
+                    chip.remove();
+                    this.plugin.refreshOpenViews();
+                });
+            }
+        }
 
         // --- Scene Templates ---
         containerEl.createEl('h2', { text: 'Scene Templates' });
@@ -276,6 +776,8 @@ export class SceneCardsSettingTab extends PluginSettingTab {
     private renderTagColorList(container: HTMLElement): void {
         container.empty();
         const tagColors = this.plugin.settings.tagColors || {};
+        const scheme = this.plugin.settings.colorScheme;
+        const isCustom = scheme === 'custom';
 
         // Gather all known tags from the scene index
         let allTags: string[] = [];
@@ -295,18 +797,50 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             return;
         }
 
-        for (const tag of combinedTags) {
-            const currentColor = tagColors[tag] || '';
-            const s = new Setting(container)
-                .setName(tag)
-                .setDesc(currentColor ? `Custom: ${currentColor}` : 'Using default accent');
+        if (!isCustom) {
+            container.createEl('p', {
+                text: 'Colors are auto-assigned from the selected scheme. Use the color picker to override individual tags.',
+                cls: 'setting-item-description',
+            });
+        }
 
-            // Color picker
+        for (let ti = 0; ti < combinedTags.length; ti++) {
+            const tag = combinedTags[ti];
+            const customColor = tagColors[tag] || '';
+            const schemeColor = resolveTagColor(tag, ti, scheme, {});
+            const effectiveColor = customColor || schemeColor;
+            const isOverridden = !!customColor;
+
+            const s = new Setting(container);
+            
+            // Color swatch before the name
+            const nameEl = s.nameEl;
+            const swatch = nameEl.createSpan();
+            swatch.style.display = 'inline-block';
+            swatch.style.width = '14px';
+            swatch.style.height = '14px';
+            swatch.style.borderRadius = '4px';
+            swatch.style.background = effectiveColor;
+            swatch.style.marginRight = '8px';
+            swatch.style.verticalAlign = 'middle';
+            swatch.style.border = '1px solid var(--background-modifier-border)';
+            nameEl.createSpan({ text: tag });
+
+            if (isOverridden) {
+                s.setDesc(`Custom: ${customColor}`);
+            } else if (!isCustom) {
+                s.setDesc(`Scheme: ${schemeColor}`);
+            } else {
+                s.setDesc('No color assigned');
+            }
+
+            // Color picker for override
             s.addColorPicker(picker => {
-                picker.setValue(currentColor || '#888888');
+                picker.setValue(customColor || effectiveColor);
                 picker.onChange(async (value) => {
                     this.plugin.settings.tagColors[tag] = value;
                     s.setDesc(`Custom: ${value}`);
+                    swatch.style.background = value;
                     await this.plugin.saveSettings();
                     this.plugin.refreshOpenViews();
                 });
@@ -315,7 +849,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             // Reset button
             s.addExtraButton(btn => btn
                 .setIcon('x')
-                .setTooltip('Remove custom color')
+                .setTooltip('Remove custom override')
                 .onClick(async () => {
                     delete this.plugin.settings.tagColors[tag];
                     await this.plugin.saveSettings();

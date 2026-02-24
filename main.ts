@@ -9,6 +9,7 @@ import {
     STATS_VIEW_TYPE,
     PLOTGRID_VIEW_TYPE,
     LOCATION_VIEW_TYPE,
+    HELP_VIEW_TYPE,
 } from './constants';
 import { PlotgridView } from './views/PlotgridView';
 import type { PlotGridData } from './models/PlotGridData';
@@ -18,6 +19,7 @@ import { StorylineView } from './views/StorylineView';
 import { CharacterView } from './views/CharacterView';
 import { StatsView } from './views/StatsView';
 import { LocationView } from './views/LocationView';
+import { HelpView } from './views/HelpView';
 import { LocationManager } from './services/LocationManager';
 import { CharacterManager } from './services/CharacterManager';
 import { QuickAddModal } from './components/QuickAddModal';
@@ -107,9 +109,17 @@ export default class SceneCardsPlugin extends Plugin {
         this.registerView(LOCATION_VIEW_TYPE, (leaf) =>
             new LocationView(leaf, this, this.sceneManager)
         );
+        this.registerView(HELP_VIEW_TYPE, (leaf) =>
+            new HelpView(leaf, this)
+        );
 
         // Wait for the workspace layout to be ready, then bootstrap projects
         this.app.workspace.onLayoutReady(async () => {
+            // Apply frontmatter visibility setting
+            if (this.settings.hideFrontmatter) {
+                (this.app.vault as any).setConfig?.('propertiesInDocument', 'hidden');
+            }
+
             await this.bootstrapProjects();
             // Migrate legacy data from data.json into project frontmatter
             await this.migrateProjectDataFromSettings();
@@ -121,7 +131,7 @@ export default class SceneCardsPlugin extends Plugin {
                 if (charFolder) await this.characterManager.loadCharacters(charFolder);
             } catch { /* not set yet */ }
             // Scan scene bodies for wikilinks after entities are loaded
-            this.linkScanner.rebuildLookups();
+            this.linkScanner.rebuildLookups(this.settings.characterAliases);
             this.linkScanner.scanAll(this.sceneManager.getAllScenes());
             // Ensure a plotgrid file exists for the active project (or default location)", "oldString": "        this.app.workspace.onLayoutReady(async () => {\n            await this.bootstrapProjects();\n            // Ensure a plotgrid file exists for the active project (or default location)
             // (removed — createPlotGridIfMissing was causing race-condition overwrites)
@@ -239,6 +249,12 @@ export default class SceneCardsPlugin extends Plugin {
             },
         });
 
+        this.addCommand({
+            id: 'open-help',
+            name: 'Open Help',
+            callback: () => this.openHelp(),
+        });
+
         // Settings tab
         this.addSettingTab(new SceneCardsSettingTab(this.app, this));
 
@@ -293,6 +309,67 @@ export default class SceneCardsPlugin extends Plugin {
 
     async saveSettings(): Promise<void> {
         await this.saveData(this.settings);
+    }
+
+    /**
+     * Scan all plotgrid cells for character, location, and tag mentions.
+     * Returns a map of canonical-character-name → set of row labels where
+     * that character is mentioned, plus similar maps for locations and tags.
+     *
+     * Used by CharacterView to augment per-character scene counts with
+     * plotgrid references.
+     */
+    async scanPlotGridCells(): Promise<{
+        characters: Map<string, Set<string>>;
+        locations: Map<string, Set<string>>;
+        tags: Map<string, Set<string>>;
+    }> {
+        const characters = new Map<string, Set<string>>();
+        const locations = new Map<string, Set<string>>();
+        const tags = new Map<string, Set<string>>();
+
+        const data = await this.loadPlotGrid();
+        if (!data || !data.cells) return { characters, locations, tags };
+
+        this.linkScanner.rebuildLookups(this.settings.characterAliases);
+
+        // Build alias map for dedup
+        const aliasMap = this.characterManager.buildAliasMap(this.settings.characterAliases);
+
+        for (const [key, cell] of Object.entries(data.cells)) {
+            if (!cell?.content?.trim()) continue;
+
+            // Determine row label for context
+            const rowId = key.split('-').slice(0, 2).join('-'); // row id is first part of key
+            const row = data.rows.find(r => key.startsWith(r.id + '-'));
+            const rowLabel = row?.label || rowId;
+
+            const result = this.linkScanner.scanText(cell.content);
+
+            // Characters (deduplicated via alias map)
+            for (const name of result.characters) {
+                const canonical = aliasMap.get(name.toLowerCase()) || name;
+                const cKey = canonical.toLowerCase();
+                if (!characters.has(cKey)) characters.set(cKey, new Set());
+                characters.get(cKey)!.add(rowLabel);
+            }
+
+            // Locations (deduplicated)
+            for (const name of result.locations) {
+                const lKey = name.toLowerCase();
+                if (!locations.has(lKey)) locations.set(lKey, new Set());
+                locations.get(lKey)!.add(rowLabel);
+            }
+
+            // Tags
+            for (const tag of result.tags) {
+                const tKey = tag.toLowerCase();
+                if (!tags.has(tKey)) tags.set(tKey, new Set());
+                tags.get(tKey)!.add(rowLabel);
+            }
+        }
+
+        return { characters, locations, tags };
     }
 
     /**
@@ -355,8 +432,36 @@ export default class SceneCardsPlugin extends Plugin {
             } else {
                 folder = `${this.settings.storyLineRoot.replace(/\\/g, '/')}/Plotgrid`;
             }
-            const filePath = `${folder}/plotgrid.json`;
             const adapter = this.app.vault.adapter;
+
+            // ── Import-file mechanism ──────────────────────────────────
+            // If a plotgrid-import.json exists, adopt it: persist as the
+            // real plotgrid.json and delete the import file.  This lets
+            // external scripts (gen_plotgrid.ps1) write data without
+            // Obsidian overwriting it before the plugin can load it.
+            const importPath = `${folder}/plotgrid-import.json`;
+            if (await adapter.exists(importPath)) {
+                try {
+                    let importTxt = await adapter.read(importPath);
+                    // Strip BOM if present (PowerShell 5.1 writes UTF-8 with BOM)
+                    if (importTxt.charCodeAt(0) === 0xFEFF) importTxt = importTxt.slice(1);
+                    const imported = JSON.parse(importTxt) as PlotGridData;
+                    // Persist to plotgrid.json
+                    const filePath = `${folder}/plotgrid.json`;
+                    if (!await adapter.exists(folder)) {
+                        await this.app.vault.createFolder(folder);
+                    }
+                    await adapter.write(filePath, JSON.stringify(imported, null, 2));
+                    // Remove the import file so it isn't re-imported next time
+                    await adapter.remove(importPath);
+                    console.log('[StoryLine] loadPlotGrid: imported data from plotgrid-import.json');
+                    return imported;
+                } catch (importErr) {
+                    console.warn('[StoryLine] loadPlotGrid: failed to import plotgrid-import.json', importErr);
+                }
+            }
+
+            const filePath = `${folder}/plotgrid.json`;
             if (!await adapter.exists(filePath)) return null;
             const txt = await adapter.read(filePath);
             return JSON.parse(txt) as PlotGridData;
@@ -386,6 +491,24 @@ export default class SceneCardsPlugin extends Plugin {
         }
 
         if (leaf) {
+            workspace.revealLeaf(leaf);
+        }
+    }
+
+    /**
+     * Open the Help pane in the right split.
+     * If already open, just reveal it.
+     */
+    async openHelp(): Promise<void> {
+        const { workspace } = this.app;
+        const existing = workspace.getLeavesOfType(HELP_VIEW_TYPE);
+        if (existing.length > 0) {
+            workspace.revealLeaf(existing[0]);
+            return;
+        }
+        const leaf = workspace.getRightLeaf(false);
+        if (leaf) {
+            await leaf.setViewState({ type: HELP_VIEW_TYPE, active: true });
             workspace.revealLeaf(leaf);
         }
     }
@@ -434,7 +557,7 @@ export default class SceneCardsPlugin extends Plugin {
 
         // Re-scan wikilinks after entity data may have changed
         this.linkScanner.invalidateAll();
-        this.linkScanner.rebuildLookups();
+        this.linkScanner.rebuildLookups(this.settings.characterAliases);
         this.linkScanner.scanAll(this.sceneManager.getAllScenes());
 
         const viewTypes = [

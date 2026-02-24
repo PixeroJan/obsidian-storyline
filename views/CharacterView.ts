@@ -8,6 +8,7 @@ import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { UndoManager } from '../services/UndoManager';
 import { RelationshipMap } from '../components/RelationshipMap';
 import { StoryGraph } from '../components/StoryGraph';
+import { pickImage as pickImageModal } from '../components/ImagePicker';
 
 import type SceneCardsPlugin from '../main';
 
@@ -172,27 +173,63 @@ export class CharacterView extends ItemView {
         const sceneCharNames = this.sceneManager.getAllCharacters();
         const scenes = this.sceneManager.getAllScenes();
 
+        // Build alias map: lowered alias → canonical name
+        const aliasMap = this.characterManager.buildAliasMap(this.plugin.settings.characterAliases);
+
+        // Kick off async plotgrid scan in the background — will augment cards
+        // once resolved. We render the grid immediately and patch in plotgrid
+        // data after.
+        let plotgridCharacters: Map<string, Set<string>> | null = null;
+        if (typeof this.plugin.scanPlotGridCells === 'function') {
+            this.plugin.scanPlotGridCells().then(result => {
+                plotgridCharacters = result.characters;
+                // Re-render plotgrid badges into already-rendered cards
+                this.patchPlotGridBadges(container, plotgridCharacters, aliasMap);
+            }).catch(() => { /* non-fatal */ });
+        }
+
         // Characters with files
         if (fileCharacters.length > 0 || sceneCharNames.length > 0) {
             const grid = container.createDiv('character-overview-grid');
 
             // Render characters that have dedicated files
             for (const char of fileCharacters) {
-                this.renderOverviewCard(grid, char, scenes);
+                this.renderOverviewCard(grid, char, scenes, aliasMap);
             }
 
             // Find characters from scenes that don't have files yet
+            // A scene character is "linked" if any alias resolves to a known profile name
             const fileNames = new Set(fileCharacters.map(c => c.name.toLowerCase()));
-            const unlinked = sceneCharNames.filter(n => !fileNames.has(n.toLowerCase()));
-            if (unlinked.length > 0) {
+            const ignoredSet = new Set(this.plugin.settings.ignoredCharacters.map((n: string) => n.toLowerCase()));
+            const manualAliases = this.plugin.settings.characterAliases;
+            const unlinked = sceneCharNames.filter(n => {
+                const lower = n.toLowerCase();
+                // Ignored?
+                if (ignoredSet.has(lower)) return false;
+                // Manual alias?
+                if (manualAliases[lower]) return false;
+                // Direct match
+                if (fileNames.has(lower)) return false;
+                // Auto-alias match (nickname or first name)
+                const canonical = aliasMap.get(lower);
+                if (canonical && fileNames.has(canonical.toLowerCase())) return false;
+                return true;
+            });
+
+            // Deduplicate unlinked names: if "Micke" and "Micke Barr" both
+            // appear, merge the short (first-name-only) form into the longer
+            // full name so only "Micke Barr" is shown.
+            const deduped = this.deduplicateUnlinked(unlinked);
+
+            if (deduped.length > 0) {
                 // Divider
                 if (fileCharacters.length > 0) {
                     const divider = container.createDiv('character-unlinked-divider');
                     divider.createEl('span', { text: 'Characters from scenes (no profile yet)' });
                 }
                 const ugrid = container.createDiv('character-overview-grid');
-                for (const name of unlinked) {
-                    this.renderUnlinkedCard(ugrid, name, scenes);
+                for (const name of deduped) {
+                    this.renderUnlinkedCard(ugrid, name, scenes, aliasMap);
                 }
             }
         } else {
@@ -204,7 +241,49 @@ export class CharacterView extends ItemView {
         }
     }
 
-    private renderOverviewCard(grid: HTMLElement, char: Character, scenes: Scene[]): void {
+    /**
+     * After plotgrid scan resolves, patch "Plotgrid" badges into already-rendered cards.
+     */
+    private patchPlotGridBadges(
+        container: HTMLElement,
+        pgChars: Map<string, Set<string>>,
+        aliasMap: Map<string, string>,
+    ): void {
+        const cards = container.querySelectorAll('.character-overview-card');
+        cards.forEach(cardEl => {
+            const nameEl = cardEl.querySelector('h4');
+            if (!nameEl) return;
+            const charName = nameEl.textContent || '';
+
+            // Gather all alias keys for this character
+            const keys = new Set<string>();
+            keys.add(charName.toLowerCase());
+            for (const [alias, canonical] of aliasMap) {
+                if (canonical.toLowerCase() === charName.toLowerCase()) keys.add(alias);
+            }
+
+            // Sum plotgrid rows mentioning this character
+            let pgRows = new Set<string>();
+            for (const key of keys) {
+                const rows = pgChars.get(key);
+                if (rows) rows.forEach(r => pgRows.add(r));
+            }
+
+            if (pgRows.size > 0) {
+                // Find the stats div and append plotgrid stat
+                const statsDiv = cardEl.querySelector('.character-card-stats');
+                if (statsDiv && !statsDiv.querySelector('.character-plotgrid-badge')) {
+                    statsDiv.createSpan({ cls: 'character-stat-sep', text: '\u00b7' });
+                    const badge = statsDiv.createSpan({ cls: 'character-plotgrid-badge' });
+                    badge.textContent = `${pgRows.size} plotgrid`;
+                    badge.title = `Mentioned in plotgrid rows: ${[...pgRows].join(', ')}`;
+                    badge.style.color = 'var(--text-accent)';
+                }
+            }
+        });
+    }
+
+    private renderOverviewCard(grid: HTMLElement, char: Character, scenes: Scene[], aliasMap?: Map<string, string>): void {
         const card = grid.createDiv('character-overview-card');
 
         // Role badge
@@ -212,6 +291,17 @@ export class CharacterView extends ItemView {
             const badge = card.createDiv('character-role-badge');
             badge.textContent = char.role;
             badge.addClass(this.roleClass(char.role));
+        }
+
+        // Portrait / placeholder
+        const portrait = card.createDiv('character-card-portrait');
+        if (char.image) {
+            const imgSrc = this.app.vault.adapter.getResourcePath(char.image);
+            const img = portrait.createEl('img', { attr: { src: imgSrc, alt: char.name } });
+            img.classList.add('character-portrait-img');
+        } else {
+            const placeholder = portrait.createDiv('character-portrait-placeholder');
+            obsidian.setIcon(placeholder, 'circle-user-round');
         }
 
         // Name
@@ -223,12 +313,24 @@ export class CharacterView extends ItemView {
             card.createEl('p', { cls: 'character-card-snippet', text: snippet });
         }
 
-        // Scene stats
-        const charLower = char.name.toLowerCase();
-        const povCount = scenes.filter(s => s.pov?.toLowerCase() === charLower).length;
+        // Build the set of all lowercased names that resolve to this character
+        const charAliases = new Set<string>();
+        charAliases.add(char.name.toLowerCase());
+        if (aliasMap) {
+            for (const [alias, canonical] of aliasMap) {
+                if (canonical.toLowerCase() === char.name.toLowerCase()) {
+                    charAliases.add(alias);
+                }
+            }
+        }
+
+        // Scene stats — match against all aliases
+        const povCount = scenes.filter(s =>
+            s.pov && charAliases.has(s.pov.toLowerCase())
+        ).length;
         const presentCount = scenes.filter(s =>
-            s.characters?.some(c => c.toLowerCase() === charLower) &&
-            s.pov?.toLowerCase() !== charLower
+            s.characters?.some(c => charAliases.has(c.toLowerCase())) &&
+            !(s.pov && charAliases.has(s.pov.toLowerCase()))
         ).length;
         const total = povCount + presentCount;
 
@@ -283,26 +385,139 @@ export class CharacterView extends ItemView {
         });
     }
 
-    private renderUnlinkedCard(grid: HTMLElement, name: string, scenes: Scene[]): void {
+    private renderUnlinkedCard(grid: HTMLElement, name: string, scenes: Scene[], aliasMap?: Map<string, string>): void {
         const card = grid.createDiv('character-overview-card character-unlinked');
 
         card.createEl('h4', { text: name });
 
-        const charLower = name.toLowerCase();
-        const povCount = scenes.filter(s => s.pov?.toLowerCase() === charLower).length;
+        // Build set of all name variants that belong to this character
+        // (the canonical name + any aliases that map to it)
+        const nameAliases = new Set<string>();
+        nameAliases.add(name.toLowerCase());
+        if (aliasMap) {
+            // Find all aliases that resolve to this name
+            for (const [alias, canonical] of aliasMap) {
+                if (canonical.toLowerCase() === name.toLowerCase()) {
+                    nameAliases.add(alias);
+                }
+            }
+            // Also check if this name itself maps to something (shouldn't happen
+            // after dedup, but be safe)
+            const mapped = aliasMap.get(name.toLowerCase());
+            if (mapped) {
+                nameAliases.add(mapped.toLowerCase());
+            }
+        }
+
+        // Scene stats — count across all aliases
+        const povCount = scenes.filter(s =>
+            s.pov && nameAliases.has(s.pov.toLowerCase())
+        ).length;
         const presentCount = scenes.filter(s =>
-            s.characters?.some(c => c.toLowerCase() === charLower) &&
-            s.pov?.toLowerCase() !== charLower
+            s.characters?.some(c => nameAliases.has(c.toLowerCase())) &&
+            !(s.pov && nameAliases.has(s.pov.toLowerCase()))
         ).length;
 
         const stats = card.createDiv('character-card-stats');
         stats.createSpan({ text: `${povCount} POV \u00b7 ${povCount + presentCount} scenes` });
 
-        const createBtn = card.createEl('button', { cls: 'character-create-profile-btn', text: 'Create Profile' });
+        const btnRow = card.createDiv('character-unlinked-actions');
+
+        const createBtn = btnRow.createEl('button', { cls: 'character-create-profile-btn', text: 'Create Profile' });
         createBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             await this.createCharacterFromName(name);
         });
+
+        const linkBtn = btnRow.createEl('button', { cls: 'character-link-btn', text: 'Link to\u2026' });
+        linkBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.promptLinkCharacter(name);
+        });
+
+        const ignoreBtn = btnRow.createEl('button', { cls: 'character-ignore-btn', text: 'Ignore' });
+        ignoreBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.ignoreCharacter(name);
+        });
+    }
+
+    /**
+     * Prompt user to pick which existing character to link an alias to.
+     */
+    private promptLinkCharacter(aliasName: string): void {
+        const characters = this.characterManager.getAllCharacters();
+        if (characters.length === 0) {
+            new Notice('No character profiles to link to. Create a profile first.');
+            return;
+        }
+
+        const modal = new LinkCharacterModal(this.app, aliasName, characters, async (canonical) => {
+            this.plugin.settings.characterAliases[aliasName.toLowerCase()] = canonical;
+            await this.plugin.saveSettings();
+            // Rebuild lookups so the alias is immediately recognised
+            this.plugin.linkScanner.invalidateAll();
+            this.plugin.linkScanner.rebuildLookups(this.plugin.settings.characterAliases);
+            new Notice(`"${aliasName}" linked to ${canonical}`);
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+        modal.open();
+    }
+
+    /**
+     * Add a character name to the ignored list.
+     */
+    private async ignoreCharacter(name: string): Promise<void> {
+        const lower = name.toLowerCase();
+        if (!this.plugin.settings.ignoredCharacters.includes(lower)) {
+            this.plugin.settings.ignoredCharacters.push(lower);
+            await this.plugin.saveSettings();
+        }
+        new Notice(`"${name}" ignored`);
+        if (this.rootContainer) this.renderView(this.rootContainer);
+    }
+
+    /**
+     * Deduplicate unlinked names: when a first-name-only entry (e.g. "Micke")
+     * and a full-name entry (e.g. "Micke Barr") both appear, keep only the
+     * full name. The alias map is updated so "micke" → "Micke Barr", which
+     * lets the scene-count logic aggregate both.
+     */
+    private deduplicateUnlinked(names: string[]): string[] {
+        // Build a map: first-word (lowered) → list of full names that start with that word
+        const byFirst = new Map<string, string[]>();
+        for (const n of names) {
+            const first = n.split(/\s+/)[0]?.toLowerCase();
+            if (first) {
+                if (!byFirst.has(first)) byFirst.set(first, []);
+                byFirst.get(first)!.push(n);
+            }
+        }
+
+        const toRemove = new Set<string>(); // lowered names to drop
+
+        for (const [firstLower, group] of byFirst) {
+            if (group.length < 2) continue;
+            // Separate single-word names from multi-word names
+            const singles = group.filter(n => !n.includes(' '));
+            const fulls = group.filter(n => n.includes(' '));
+            if (singles.length > 0 && fulls.length === 1) {
+                // Exactly one full name — merge all singles into it
+                const canonical = fulls[0];
+                for (const s of singles) {
+                    toRemove.add(s.toLowerCase());
+                    // Also register in the plugin settings alias map so
+                    // LinkScanner and future renders benefit
+                    this.plugin.settings.characterAliases[s.toLowerCase()] = canonical;
+                }
+                // Persist (fire-and-forget; next reload will have it)
+                this.plugin.saveSettings();
+            }
+            // If there are multiple full names (rare), leave them alone —
+            // the user can manually link/ignore.
+        }
+
+        return names.filter(n => !toRemove.has(n.toLowerCase()));
     }
 
     // ── Relationship Map ────────────────────────────────
@@ -340,7 +555,7 @@ export class CharacterView extends ItemView {
         const characters = this.characterManager.getAllCharacters();
         const scanner = this.plugin.linkScanner;
         // Ensure scan results are up to date
-        scanner.rebuildLookups();
+        scanner.rebuildLookups(this.plugin.settings.characterAliases);
         const scanResults = scanner.scanAll(scenes);
 
         const graphContainer = container.createDiv('story-graph-container');
@@ -398,6 +613,32 @@ export class CharacterView extends ItemView {
         const openBtn = headerRight.createEl('button', { cls: 'character-open-btn', attr: { title: 'Open character file' } });
         obsidian.setIcon(openBtn, 'file-text');
         openBtn.addEventListener('click', () => this.openCharacterFile(character));
+
+        // Portrait area (detail view — larger, clickable to change)
+        const portraitArea = container.createDiv('character-detail-portrait');
+        const renderPortrait = () => {
+            portraitArea.empty();
+            if (draft.image) {
+                const imgSrc = this.app.vault.adapter.getResourcePath(draft.image);
+                const img = portraitArea.createEl('img', { attr: { src: imgSrc, alt: draft.name } });
+                img.classList.add('character-detail-portrait-img');
+            } else {
+                const ph = portraitArea.createDiv('character-detail-portrait-placeholder');
+                obsidian.setIcon(ph, 'circle-user-round');
+            }
+            const changeLabel = portraitArea.createDiv('character-portrait-change-label');
+            changeLabel.textContent = draft.image ? 'Change image' : 'Add image';
+        };
+        renderPortrait();
+        portraitArea.addEventListener('click', () => {
+            this.pickImage(draft.image).then(async (picked) => {
+                if (picked !== undefined) {
+                    draft.image = picked || undefined;
+                    await this.characterManager.saveCharacter(draft);
+                    renderPortrait();
+                }
+            });
+        });
 
         // Layout: form on left, scene panel on right
         const layout = container.createDiv('character-detail-layout');
@@ -514,16 +755,54 @@ export class CharacterView extends ItemView {
     private renderCharacterTagField(row: HTMLElement, field: CharacterFieldDef, draft: Character): void {
         const container = row.createDiv('character-tag-field');
 
-        // Current values as array
-        const currentValues: string[] = Array.isArray((draft as any)[field.key])
+        // Build alias map so we can unify name variants
+        const aliasMap = this.characterManager.buildAliasMap(this.plugin.settings.characterAliases);
+
+        // Helper: resolve a name to its canonical form
+        const resolveAlias = (n: string): string => {
+            const canonical = aliasMap.get(n.toLowerCase());
+            return canonical || n;
+        };
+
+        // Current values as array — deduplicated through the alias map
+        const rawValues: string[] = Array.isArray((draft as any)[field.key])
             ? [...(draft as any)[field.key]]
             : [];
+        // Resolve aliases and deduplicate
+        const seenCanonical = new Set<string>();
+        const currentValues: string[] = [];
+        let valuesDirty = false;
+        for (const name of rawValues) {
+            const canonical = resolveAlias(name);
+            const key = canonical.toLowerCase();
+            if (seenCanonical.has(key)) {
+                valuesDirty = true; // will need a save
+                continue;
+            }
+            seenCanonical.add(key);
+            if (canonical !== name) {
+                currentValues.push(canonical);
+                valuesDirty = true;
+            } else {
+                currentValues.push(name);
+            }
+        }
+        // If we unified any names, persist immediately
+        if (valuesDirty) {
+            (draft as any)[field.key] = [...currentValues];
+            this.scheduleSave(draft);
+        }
 
         // Get all available character names (from character files + scene references)
         const fileCharacters = this.characterManager.getAllCharacters();
         const allCharNames = fileCharacters.map(c => c.name);
         const sceneCharNames = this.sceneManager.getAllCharacters();
-        const mergedNames = new Set([...allCharNames, ...sceneCharNames]);
+        // Merge and deduplicate via alias map — keep only canonical names
+        const rawMerged = new Set([...allCharNames, ...sceneCharNames]);
+        const mergedNames = new Set<string>();
+        for (const n of rawMerged) {
+            mergedNames.add(resolveAlias(n));
+        }
         // Exclude the current character and already-selected names
         const available = Array.from(mergedNames)
             .filter(n => n !== draft.name && !currentValues.includes(n))
@@ -722,11 +1001,22 @@ export class CharacterView extends ItemView {
             { field: 'sequence', direction: 'asc' }
         );
 
-        const charLower = characterName.toLowerCase();
-        const povScenes = scenes.filter(s => s.pov?.toLowerCase() === charLower);
+        // Build alias set for this character (full name + all aliases)
+        const aliasMap = this.characterManager.buildAliasMap(this.plugin.settings.characterAliases);
+        const charAliases = new Set<string>();
+        charAliases.add(characterName.toLowerCase());
+        for (const [alias, canonical] of aliasMap) {
+            if (canonical.toLowerCase() === characterName.toLowerCase()) {
+                charAliases.add(alias);
+            }
+        }
+
+        const povScenes = scenes.filter(s =>
+            s.pov && charAliases.has(s.pov.toLowerCase())
+        );
         const presentScenes = scenes.filter(s =>
-            s.pov?.toLowerCase() !== charLower &&
-            s.characters?.some(c => c.toLowerCase() === charLower)
+            !(s.pov && charAliases.has(s.pov.toLowerCase())) &&
+            s.characters?.some(c => charAliases.has(c.toLowerCase()))
         );
         const allCharScenes = [...povScenes, ...presentScenes];
 
@@ -738,6 +1028,12 @@ export class CharacterView extends ItemView {
         this.renderStat(statGrid, String(povScenes.length), 'POV');
         this.renderStat(statGrid, String(presentScenes.length), 'Supporting');
         this.renderStat(statGrid, String(allCharScenes.length), 'Total');
+
+        // Plotgrid stat (patched async)
+        const pgStatEl = statGrid.createDiv('character-stat-item');
+        pgStatEl.style.display = 'none';
+        const pgValEl = pgStatEl.createDiv({ cls: 'character-stat-value', text: '0' });
+        const pgLblEl = pgStatEl.createDiv({ cls: 'character-stat-label', text: 'Plotgrid' });
 
         // Writing progress
         const totalScenes = allCharScenes.length;
@@ -778,7 +1074,7 @@ export class CharacterView extends ItemView {
             listSection.createEl('h4', { text: 'Scenes' });
             for (const scene of allCharScenes) {
                 const item = listSection.createDiv('character-side-scene-item');
-                const isPov = scene.pov?.toLowerCase() === charLower;
+                const isPov = scene.pov && charAliases.has(scene.pov.toLowerCase());
 
                 const act = scene.act !== undefined ? String(scene.act).padStart(2, '0') : '??';
                 const seq = scene.sequence !== undefined ? String(scene.sequence).padStart(2, '0') : '??';
@@ -799,6 +1095,38 @@ export class CharacterView extends ItemView {
 
                 item.addEventListener('click', () => this.openScene(scene));
             }
+        }
+
+        // Plotgrid cell appearances (async)
+        const pgSection = container.createDiv('character-side-scenes character-side-plotgrid');
+        pgSection.style.display = 'none';
+
+        if (typeof this.plugin.scanPlotGridCells === 'function') {
+            this.plugin.scanPlotGridCells().then(result => {
+                const pgChars = result.characters;
+                // Gather all plotgrid rows mentioning this character
+                let pgRows = new Set<string>();
+                for (const key of charAliases) {
+                    const rows = pgChars.get(key);
+                    if (rows) rows.forEach(r => pgRows.add(r));
+                }
+                if (pgRows.size > 0) {
+                    // Update the stat counter
+                    pgStatEl.style.display = '';
+                    pgValEl.textContent = String(pgRows.size);
+
+                    // Show section
+                    pgSection.style.display = '';
+                    pgSection.createEl('h4', { text: 'Plotgrid Appearances' });
+                    const sortedRows = [...pgRows].sort();
+                    for (const rowLabel of sortedRows) {
+                        const item = pgSection.createDiv('character-side-scene-item');
+                        const icon = item.createSpan({ cls: 'scene-id' });
+                        obsidian.setIcon(icon, 'grid-3x3');
+                        item.createSpan({ cls: 'scene-title', text: ` ${rowLabel}` });
+                    }
+                }
+            }).catch(() => { /* non-fatal */ });
         }
 
         // Character arc intensity curve
@@ -1212,5 +1540,57 @@ export class CharacterView extends ItemView {
             }
             menu.showAtMouseEvent(e);
         });
+    }
+
+    /**
+     * Open a modal to pick/import an image file.
+     * Returns the vault-relative path of the chosen file, empty string to clear, or undefined if cancelled.
+     */
+    private pickImage(currentImage?: string): Promise<string | undefined> {
+        const sceneFolder = this.sceneManager.getSceneFolder();
+        return pickImageModal(this.app, sceneFolder, currentImage);
+    }
+}
+/**
+ * Modal that lets the user pick an existing character profile to link an alias to.
+ */
+class LinkCharacterModal extends Modal {
+    private aliasName: string;
+    private characters: Character[];
+    private onSelect: (canonicalName: string) => void;
+
+    constructor(app: import('obsidian').App, aliasName: string, characters: Character[], onSelect: (canonicalName: string) => void) {
+        super(app);
+        this.aliasName = aliasName;
+        this.characters = characters;
+        this.onSelect = onSelect;
+    }
+
+    onOpen(): void {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.createEl('h3', { text: `Link "${this.aliasName}" to\u2026` });
+        contentEl.createEl('p', {
+            cls: 'setting-item-description',
+            text: `Choose which character "${this.aliasName}" refers to. This alias will be remembered and the name will no longer appear as a separate character.`,
+        });
+
+        const list = contentEl.createDiv('link-character-list');
+
+        for (const char of this.characters) {
+            const row = list.createDiv('link-character-row');
+            row.createSpan({ text: char.name, cls: 'link-character-name' });
+            if (char.nickname) {
+                row.createSpan({ text: ` (${char.nickname})`, cls: 'link-character-nickname' });
+            }
+            row.addEventListener('click', () => {
+                this.onSelect(char.name);
+                this.close();
+            });
+        }
+    }
+
+    onClose(): void {
+        this.contentEl.empty();
     }
 }

@@ -10,6 +10,7 @@ import { SceneManager } from '../services/SceneManager';
 import { LocationManager } from '../services/LocationManager';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { UndoManager } from '../services/UndoManager';
+import { pickImage as pickImageModal } from '../components/ImagePicker';
 
 import type SceneCardsPlugin from '../main';
 
@@ -175,7 +176,12 @@ export class LocationView extends ItemView {
         }
 
         const icon = header.createSpan('location-tree-icon');
-        obsidian.setIcon(icon, 'globe');
+        if (world.image) {
+            const imgSrc = this.app.vault.adapter.getResourcePath(world.image);
+            icon.createEl('img', { attr: { src: imgSrc, alt: world.name }, cls: 'location-tree-thumb' });
+        } else {
+            obsidian.setIcon(icon, 'globe');
+        }
 
         header.createSpan({ cls: 'location-tree-name', text: world.name });
 
@@ -221,7 +227,12 @@ export class LocationView extends ItemView {
         }
 
         const icon = header.createSpan('location-tree-icon');
-        obsidian.setIcon(icon, 'map-pin');
+        if (loc.image) {
+            const imgSrc = this.app.vault.adapter.getResourcePath(loc.image);
+            icon.createEl('img', { attr: { src: imgSrc, alt: loc.name }, cls: 'location-tree-thumb' });
+        } else {
+            obsidian.setIcon(icon, 'map-pin');
+        }
 
         header.createSpan({ cls: 'location-tree-name', text: loc.name });
 
@@ -312,6 +323,36 @@ export class LocationView extends ItemView {
         const typeLabel = container.createDiv('location-detail-type');
         obsidian.setIcon(typeLabel, isWorld ? 'globe' : 'map-pin');
         typeLabel.createSpan({ text: ` ${isWorld ? 'World' : 'Location'}` });
+
+        // Portrait area (clickable to change)
+        const portraitArea = container.createDiv('location-detail-portrait');
+        const renderPortrait = () => {
+            portraitArea.empty();
+            if (draft.image) {
+                const imgSrc = this.app.vault.adapter.getResourcePath(draft.image);
+                const img = portraitArea.createEl('img', { attr: { src: imgSrc, alt: draft.name } });
+                img.classList.add('location-detail-portrait-img');
+            } else {
+                const ph = portraitArea.createDiv('location-detail-portrait-placeholder');
+                obsidian.setIcon(ph, 'image');
+            }
+            const changeLabel = portraitArea.createDiv('location-portrait-change-label');
+            changeLabel.textContent = draft.image ? 'Change image' : 'Add image';
+        };
+        renderPortrait();
+        portraitArea.addEventListener('click', () => {
+            this.pickImage(draft.image).then(async (picked) => {
+                if (picked !== undefined) {
+                    draft.image = picked || undefined;
+                    if (draft.type === 'world') {
+                        await this.locationManager.saveWorld(draft as StoryWorld);
+                    } else {
+                        await this.locationManager.saveLocation(draft as StoryLocation);
+                    }
+                    renderPortrait();
+                }
+            });
+        });
 
         // Layout: form + side panel
         const layout = container.createDiv('location-detail-layout');
@@ -891,5 +932,14 @@ export class LocationView extends ItemView {
         if (this.rootContainer) {
             this.renderView(this.rootContainer);
         }
+    }
+
+    /**
+     * Open a modal to pick/import an image file.
+     * Returns the vault-relative path, empty string to clear, or undefined if cancelled.
+     */
+    private pickImage(currentImage?: string): Promise<string | undefined> {
+        const sceneFolder = this.sceneManager.getSceneFolder();
+        return pickImageModal(this.app, sceneFolder, currentImage);
     }
 }

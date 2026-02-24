@@ -4,12 +4,15 @@ import { CellData, ColumnMeta, RowMeta, PlotGridData } from '../models/PlotGridD
 import { openConfirmModal } from '../components/ConfirmModal';
 import { Scene, SceneStatus, STATUS_CONFIG } from '../models/Scene';
 import { SceneManager } from '../services/SceneManager';
+import { CharacterManager } from '../services/CharacterManager';
 import { InspectorComponent } from '../components/Inspector';
 import { QuickAddModal } from '../components/QuickAddModal';
+import { LinkScanner } from '../services/LinkScanner';
 import * as lucide from 'lucide';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { enableDragToPan } from '../components/DragToPan';
 import { PLOTGRID_VIEW_TYPE } from '../constants';
+import { resolveTagColor } from '../settings';
 import type SceneCardsPlugin from '../main';
 
 // Use the shared view-type constant from `constants.ts` so the ViewSwitcher
@@ -98,6 +101,7 @@ export class PlotgridView extends ItemView {
                     columns: loaded.columns || [],
                     cells: loaded.cells || {},
                     zoom: typeof loaded.zoom === 'number' ? loaded.zoom : 1,
+                    stickyHeaders: typeof loaded.stickyHeaders === 'boolean' ? loaded.stickyHeaders : true,
                 };
             } else {
                 this.data = { rows: [], columns: [], cells: {}, zoom: 1 };
@@ -218,7 +222,20 @@ export class PlotgridView extends ItemView {
             }
         } catch (e) { /* safe no-op */ }
 
-        // Add Row / Add Column buttons should sit where B/I are currently — render them on the left
+        // Sync from Scenes button
+        const syncBtn = left.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Sync from Scenes' } });
+        syncBtn.title = 'Sync from Scenes';
+        obsidian.setIcon(syncBtn, 'refresh-cw');
+        syncBtn.addEventListener('click', () => { this.openSyncModal(); });
+
+        // Separator between Sync and Add Row/Column
+        const syncSep = left.createDiv();
+        syncSep.style.width = '1px';
+        syncSep.style.height = '18px';
+        syncSep.style.background = 'var(--background-modifier-border)';
+        syncSep.style.margin = '0 4px';
+
+        // Add Row / Add Column buttons
         const addRowBtn = left.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Add Row' } });
         addRowBtn.title = 'Add Row';
         if (typeof obsidian.setIcon === 'function') {
@@ -236,6 +253,17 @@ export class PlotgridView extends ItemView {
             addColBtn.innerHTML = '<i data-lucide="columns-3" aria-hidden="true"></i>';
         }
         addColBtn.addEventListener('click', () => { this.addColumn(); });
+
+        // Sticky headers toggle
+        const stickyBtn = left.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Toggle sticky headers' } });
+        stickyBtn.title = this.data.stickyHeaders !== false ? 'Disable sticky headers' : 'Enable sticky headers';
+        obsidian.setIcon(stickyBtn, this.data.stickyHeaders !== false ? 'pin' : 'pin-off');
+        stickyBtn.addEventListener('click', () => {
+            this.data.stickyHeaders = !(this.data.stickyHeaders !== false);
+            this.scheduleSave();
+            this.renderToolbar();
+            this.renderGrid();
+        });
 
         // Formatting controls (moved to the right actions area so B/I move right)
         const fmtGroup = actions.createDiv('plot-grid-formatting-group');
@@ -506,13 +534,12 @@ export class PlotgridView extends ItemView {
             el.style.position = (this.data.stickyHeaders === false) ? 'relative' : 'sticky';
             el.style.top = '0';
             el.style.zIndex = '10';
-            el.style.background = col.bgColor || 'var(--background-secondary)';
+            el.style.background = col.headerBgColor || col.bgColor || 'var(--background-secondary)';
             el.style.display = 'flex';
             el.style.alignItems = 'center';
             el.style.justifyContent = 'center';
             el.style.border = '1px solid var(--sl-border-subtle)';
             el.style.userSelect = 'none';
-            el.style.position = 'relative';
             el.textContent = col.label;
             if (col.textColor) el.style.color = col.textColor;
             if (col.bold) el.style.fontWeight = '600';
@@ -576,7 +603,7 @@ export class PlotgridView extends ItemView {
                     const name = window.prompt('Rename column', col.label);
                     if (name !== null) { col.label = name; this.scheduleSave(); this.renderGrid(); }
                 }));
-                menu.addItem((item) => item.setTitle((this.data.stickyHeaders ? 'Disable' : 'Enable') + ' Sticky Headers').onClick(() => { this.data.stickyHeaders = !this.data.stickyHeaders; this.scheduleSave(); this.renderGrid(); }));
+                menu.addItem((item) => item.setTitle((this.data.stickyHeaders ? 'Disable' : 'Enable') + ' Sticky Headers').onClick(() => { this.data.stickyHeaders = !this.data.stickyHeaders; this.scheduleSave(); this.renderToolbar(); this.renderGrid(); }));
                 menu.addItem((item) => item.setTitle('Set Column Colour…').onClick(() => {
                     const header = this.canvasEl?.querySelectorAll('.plot-grid-col-header')[ci] as HTMLElement | undefined;
                     const els: HTMLElement[] = [];
@@ -584,6 +611,19 @@ export class PlotgridView extends ItemView {
                     const prevs = els.map(e => e.style.background);
                     const prevHeaderBg = header ? header.style.background : null;
                     this.chooseColor(this.data.columns[ci].bgColor || this.defaultBgColor(), (c) => { if (c === null) { els.forEach((e,i) => e.style.background = prevs[i]); if (header && prevHeaderBg !== null) header.style.background = prevHeaderBg; return; } this.data.columns[ci].bgColor = c || ''; this.scheduleSave(); this.renderGrid(); for (let ri=0; ri<this.data.rows.length; ri++) this.flashElement(this.getCellElement(ri, ci)); }, (preview) => { if (preview === null) { els.forEach((e,i) => e.style.background = prevs[i]); if (header && prevHeaderBg !== null) header.style.background = prevHeaderBg; } else { els.forEach(e => e.style.background = preview); if (header) header.style.background = preview; } });
+                }));
+                menu.addItem((item) => item.setTitle('Set Header Colour…').onClick(() => {
+                    const header = this.canvasEl?.querySelectorAll('.plot-grid-col-header')[ci] as HTMLElement | undefined;
+                    const prevHeaderBg = header ? header.style.background : null;
+                    this.chooseColor(this.data.columns[ci].headerBgColor || this.data.columns[ci].bgColor || this.defaultBgColor(), (c) => {
+                        if (c === null) { if (header && prevHeaderBg !== null) header.style.background = prevHeaderBg; return; }
+                        this.data.columns[ci].headerBgColor = c || '';
+                        this.scheduleSave(); this.renderGrid();
+                        if (header) this.flashElement(header);
+                    }, (preview) => {
+                        if (preview === null) { if (header && prevHeaderBg !== null) header.style.background = prevHeaderBg; }
+                        else { if (header) header.style.background = preview; }
+                    });
                 }));
                 menu.addSeparator();
                 menu.addItem((item) => item.setTitle('Insert Column Left').onClick(() => this.insertColumnAt(ci, true)));
@@ -600,13 +640,12 @@ export class PlotgridView extends ItemView {
             rowEl.style.position = (this.data.stickyHeaders === false) ? 'relative' : 'sticky';
             rowEl.style.left = '0';
             rowEl.style.zIndex = '9';
-            rowEl.style.background = row.bgColor || 'var(--background-secondary)';
+            rowEl.style.background = row.headerBgColor || row.bgColor || 'var(--background-secondary)';
             rowEl.style.display = 'flex';
             rowEl.style.alignItems = 'center';
             rowEl.style.justifyContent = 'center';
             rowEl.style.border = '1px solid var(--sl-border-subtle)';
             rowEl.style.userSelect = 'none';
-            rowEl.style.position = 'relative';
             rowEl.textContent = row.label;
             if (row.textColor) rowEl.style.color = row.textColor;
             if (row.bold) rowEl.style.fontWeight = '600';
@@ -670,7 +709,7 @@ export class PlotgridView extends ItemView {
                     const name = window.prompt('Rename row', row.label);
                     if (name !== null) { row.label = name; this.scheduleSave(); this.renderGrid(); }
                 }));
-                menu.addItem((item) => item.setTitle((this.data.stickyHeaders ? 'Disable' : 'Enable') + ' Sticky Headers').onClick(() => { this.data.stickyHeaders = !this.data.stickyHeaders; this.scheduleSave(); this.renderGrid(); }));
+                menu.addItem((item) => item.setTitle((this.data.stickyHeaders ? 'Disable' : 'Enable') + ' Sticky Headers').onClick(() => { this.data.stickyHeaders = !this.data.stickyHeaders; this.scheduleSave(); this.renderToolbar(); this.renderGrid(); }));
                 menu.addItem((item) => item.setTitle('Set Row Colour…').onClick(() => {
                     const els: HTMLElement[] = [];
                     for (let ci = 0; ci < this.data.columns.length; ci++) { const e = this.getCellElement(ri, ci); if (e) els.push(e); }
@@ -678,6 +717,19 @@ export class PlotgridView extends ItemView {
                     const header = this.canvasEl?.querySelectorAll('.plot-grid-row-header')[ri] as HTMLElement | undefined;
                     const prevHeaderBg = header ? header.style.background : null;
                     this.chooseColor(this.data.rows[ri].bgColor || this.defaultBgColor(), (c) => { if (c === null) { els.forEach((e,i) => e.style.background = prevs[i]); if (header && prevHeaderBg !== null) header.style.background = prevHeaderBg; return; } this.data.rows[ri].bgColor = c || ''; this.scheduleSave(); this.renderGrid(); for (let ci=0; ci<this.data.columns.length; ci++) this.flashElement(this.getCellElement(ri, ci)); }, (preview) => { if (preview === null) { els.forEach((e,i) => e.style.background = prevs[i]); if (header && prevHeaderBg !== null) header.style.background = prevHeaderBg; } else { els.forEach(e => e.style.background = preview); if (header) header.style.background = preview; } });
+                }));
+                menu.addItem((item) => item.setTitle('Set Header Colour…').onClick(() => {
+                    const header = this.canvasEl?.querySelectorAll('.plot-grid-row-header')[ri] as HTMLElement | undefined;
+                    const prevHeaderBg = header ? header.style.background : null;
+                    this.chooseColor(this.data.rows[ri].headerBgColor || this.data.rows[ri].bgColor || this.defaultBgColor(), (c) => {
+                        if (c === null) { if (header && prevHeaderBg !== null) header.style.background = prevHeaderBg; return; }
+                        this.data.rows[ri].headerBgColor = c || '';
+                        this.scheduleSave(); this.renderGrid();
+                        if (header) this.flashElement(header);
+                    }, (preview) => {
+                        if (preview === null) { if (header && prevHeaderBg !== null) header.style.background = prevHeaderBg; }
+                        else { if (header) header.style.background = preview; }
+                    });
                 }));
                 menu.addSeparator();
                 menu.addItem((item) => item.setTitle('Insert Row Above').onClick(() => this.insertRowAt(ri, true)));
@@ -797,16 +849,8 @@ export class PlotgridView extends ItemView {
 
                 cellEl.addEventListener('click', () => {
                     this.selectCell(cellEl);
-                    // Show inspector if cell has a linked scene
-                    if (cell.linkedSceneId && this.inspectorComponent) {
-                        const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
-                        const scene = scMgr?.getScene(cell.linkedSceneId);
-                        if (scene) {
-                            this.inspectorComponent.show(scene);
-                        }
-                    } else if (this.inspectorComponent) {
-                        this.inspectorComponent.hide();
-                    }
+                    // Always show the cell inspector panel
+                    this.showCellInspector(ri, ci, cell);
                 });
 
                 // context menu for cell
@@ -1609,6 +1653,8 @@ export class PlotgridView extends ItemView {
             // Restore wrapper focusability
             if (this.wrapperEl) this.wrapperEl.tabIndex = 0;
             cell.content = ta.value;
+            // Mark as manually edited so sync won't overwrite
+            cell.manualContent = true;
             this.scheduleSave();
             this.renderGrid();
         };
@@ -1691,6 +1737,259 @@ export class PlotgridView extends ItemView {
         const modal = new SceneLinkModal(app, onChoose);
         modal.open();
     }
+
+    // ── Sync from Scenes ────────────────────────────────────────────────
+
+    private openSyncModal() {
+        const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
+        if (!scMgr) { new Notice('Scene manager not available'); return; }
+        const scenes = scMgr.getAllScenes();
+        if (scenes.length === 0) { new Notice('No scenes found in the active project'); return; }
+
+        const view = this;
+        class SyncModal extends Modal {
+            constructor(app: any) { super(app); }
+            onOpen() {
+                const { contentEl } = this;
+                contentEl.createEl('h3', { text: 'Sync from Scenes' });
+                contentEl.createEl('p', {
+                    text: 'Auto-populate the grid with rows from scenes and columns from story data. Manual changes will be preserved.',
+                    cls: 'setting-item-description',
+                });
+
+                // Column source selector
+                const colSourceLabel = contentEl.createEl('label', { text: 'Columns from:' });
+                colSourceLabel.style.display = 'block';
+                colSourceLabel.style.marginTop = '12px';
+                colSourceLabel.style.marginBottom = '4px';
+                colSourceLabel.style.fontWeight = '600';
+
+                const colSourceSelect = contentEl.createEl('select');
+                colSourceSelect.style.width = '100%';
+                colSourceSelect.style.marginBottom = '12px';
+                colSourceSelect.createEl('option', { text: 'Characters', value: 'characters' });
+                colSourceSelect.createEl('option', { text: 'Plotlines (tags)', value: 'tags' });
+                colSourceSelect.createEl('option', { text: 'Locations', value: 'locations' });
+
+                // Row sorting info
+                const sortInfo = contentEl.createEl('p', {
+                    text: 'Rows will be ordered by Act → Chapter → Sequence.',
+                    cls: 'setting-item-description',
+                });
+                sortInfo.style.marginBottom = '12px';
+
+                // How to handle existing data
+                const modeLabel = contentEl.createEl('label', { text: 'Merge mode:' });
+                modeLabel.style.display = 'block';
+                modeLabel.style.marginBottom = '4px';
+                modeLabel.style.fontWeight = '600';
+
+                const modeSelect = contentEl.createEl('select');
+                modeSelect.style.width = '100%';
+                modeSelect.style.marginBottom = '16px';
+                modeSelect.createEl('option', { text: 'Merge — keep manual rows/columns, add missing', value: 'merge' });
+                modeSelect.createEl('option', { text: 'Replace — rebuild from scenes (manual data cleared)', value: 'replace' });
+
+                const btns = contentEl.createDiv();
+                btns.style.display = 'flex';
+                btns.style.justifyContent = 'flex-end';
+                btns.style.gap = '8px';
+
+                const cancelBtn = btns.createEl('button', { text: 'Cancel' });
+                cancelBtn.addEventListener('click', () => this.close());
+
+                const syncBtn = btns.createEl('button', { text: 'Sync', cls: 'mod-cta' });
+                syncBtn.addEventListener('click', () => {
+                    const colSource = colSourceSelect.value as 'characters' | 'tags' | 'locations';
+                    const mode = modeSelect.value as 'merge' | 'replace';
+                    view.performSync(colSource, mode);
+                    this.close();
+                });
+            }
+        }
+
+        const modal = new SyncModal(this.app);
+        modal.open();
+    }
+
+    /**
+     * Perform the actual sync: create rows from scenes, columns from the chosen
+     * dimension, and fill cells where data exists.
+     */
+    private performSync(colSource: 'characters' | 'tags' | 'locations', mode: 'merge' | 'replace') {
+        const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
+        if (!scMgr) return;
+
+        const scenes = scMgr.getAllScenes().slice().sort((a, b) => {
+            // Sort by act → chapter → sequence
+            const actA = typeof a.act === 'number' ? a.act : (a.act ? parseInt(String(a.act), 10) || 0 : 0);
+            const actB = typeof b.act === 'number' ? b.act : (b.act ? parseInt(String(b.act), 10) || 0 : 0);
+            if (actA !== actB) return actA - actB;
+            const chA = typeof a.chapter === 'number' ? a.chapter : (a.chapter ? parseInt(String(a.chapter), 10) || 0 : 0);
+            const chB = typeof b.chapter === 'number' ? b.chapter : (b.chapter ? parseInt(String(b.chapter), 10) || 0 : 0);
+            if (chA !== chB) return chA - chB;
+            const seqA = a.sequence ?? 0;
+            const seqB = b.sequence ?? 0;
+            return seqA - seqB;
+        });
+
+        // Collect unique column values from scenes
+        const colSet = new Set<string>();
+
+        // Build character alias map to deduplicate names
+        let aliasMap: Map<string, string> | null = null;
+        if (colSource === 'characters') {
+            const charMgr = this.plugin?.characterManager as CharacterManager | undefined;
+            const manualAliases = (this.plugin as any)?.settings?.characterAliases;
+            if (charMgr) {
+                aliasMap = charMgr.buildAliasMap(manualAliases);
+            }
+        }
+
+        /** Resolve a name to its canonical form via the alias map */
+        const resolve = (name: string): string => {
+            if (!aliasMap) return name;
+            return aliasMap.get(name.toLowerCase()) || name;
+        };
+
+        for (const scene of scenes) {
+            if (colSource === 'characters') {
+                for (const c of scene.characters || []) colSet.add(resolve(c));
+                if (scene.pov) colSet.add(resolve(scene.pov));
+            } else if (colSource === 'tags') {
+                for (const t of scene.tags || []) colSet.add(t);
+            } else if (colSource === 'locations') {
+                if (scene.location) colSet.add(scene.location);
+            }
+        }
+        const colValues = Array.from(colSet).sort();
+
+        if (mode === 'replace') {
+            // Full rebuild
+            this.data.rows = [];
+            this.data.columns = [];
+            this.data.cells = {};
+        }
+
+        // Build lookup of existing auto rows/columns by sourceId
+        const existingRowMap = new Map<string, RowMeta>();
+        for (const r of this.data.rows) {
+            if (r.sourceType === 'auto' && r.sourceId) existingRowMap.set(r.sourceId, r);
+        }
+        const existingColMap = new Map<string, ColumnMeta>();
+        for (const c of this.data.columns) {
+            if (c.sourceType === 'auto' && c.sourceId) existingColMap.set(c.sourceId, c);
+        }
+
+        // ── Create / update rows (one per scene) ──────────────────
+        const rowIds: Map<string, string> = new Map(); // scene filePath → row id
+        for (const scene of scenes) {
+            const existing = existingRowMap.get(scene.filePath);
+            if (existing) {
+                // Update label if scene was renamed
+                existing.label = this.formatRowLabel(scene);
+                rowIds.set(scene.filePath, existing.id);
+            } else {
+                const id = makeId('r-');
+                const label = this.formatRowLabel(scene);
+                const row: RowMeta = { id, label, height: 80, bgColor: '', sourceType: 'auto', sourceId: scene.filePath };
+                // Insert at end (sorting is handled by scene order above)
+                this.data.rows.push(row);
+                rowIds.set(scene.filePath, id);
+            }
+        }
+
+        // ── Create / update columns ────────────────────────────────
+        const colIds: Map<string, string> = new Map(); // colValue → column id
+        for (const val of colValues) {
+            const existing = existingColMap.get(val);
+            if (existing) {
+                existing.label = val;
+                colIds.set(val, existing.id);
+            } else {
+                const id = makeId('c-');
+                const col: ColumnMeta = { id, label: val, width: 160, bgColor: '', sourceType: 'auto', sourceId: val };
+                this.data.columns.push(col);
+                colIds.set(val, id);
+            }
+        }
+
+        // ── Fill cells ────────────────────────────────────────────
+        for (const scene of scenes) {
+            const rowId = rowIds.get(scene.filePath);
+            if (!rowId) continue;
+
+            let sceneColValues: string[] = [];
+            if (colSource === 'characters') {
+                sceneColValues = (scene.characters || []).map(c => resolve(c));
+                if (scene.pov) {
+                    const resolvedPov = resolve(scene.pov);
+                    if (!sceneColValues.includes(resolvedPov)) sceneColValues.push(resolvedPov);
+                }
+            } else if (colSource === 'tags') {
+                sceneColValues = [...(scene.tags || [])];
+            } else if (colSource === 'locations') {
+                sceneColValues = scene.location ? [scene.location] : [];
+            }
+
+            for (const val of sceneColValues) {
+                const colId = colIds.get(val);
+                if (!colId) continue;
+                const key = `${rowId}-${colId}`;
+                let cell = this.data.cells[key];
+                if (cell && cell.manualContent) continue; // don't overwrite manual edits
+
+                const content = this.buildCellContent(scene, colSource, val, resolve);
+                if (!cell) {
+                    cell = {
+                        id: key,
+                        content,
+                        bgColor: '',
+                        textColor: '',
+                        bold: false,
+                        italic: false,
+                        align: 'center',
+                        linkedSceneId: scene.filePath,
+                    };
+                    this.data.cells[key] = cell;
+                } else {
+                    // Update auto-generated content but keep formatting
+                    cell.content = content;
+                    cell.linkedSceneId = scene.filePath;
+                }
+            }
+        }
+
+        this.scheduleSave();
+        this.renderGrid();
+        new Notice(`Synced ${scenes.length} scenes → ${this.data.rows.length} rows, ${this.data.columns.length} columns`);
+    }
+
+    /** Format a row label from a scene */
+    private formatRowLabel(scene: Scene): string {
+        const parts: string[] = [];
+        if (scene.act) parts.push(`A${scene.act}`);
+        if (scene.chapter) parts.push(`Ch${scene.chapter}`);
+        parts.push(scene.title || 'Untitled');
+        return parts.join(' · ');
+    }
+
+    /** Build cell content: a short summary for the intersection */
+    private buildCellContent(scene: Scene, colSource: 'characters' | 'tags' | 'locations', colValue: string, resolve?: (n: string) => string): string {
+        if (colSource === 'characters') {
+            // If this character is the POV, mark it
+            const resolvedPov = scene.pov ? (resolve ? resolve(scene.pov) : scene.pov) : '';
+            if (resolvedPov && resolvedPov === colValue) return '★ POV';
+            return '✓';
+        } else if (colSource === 'tags') {
+            return '✓';
+        } else if (colSource === 'locations') {
+            return '✓';
+        }
+        return '';
+    }
+
+    // ── End sync helpers ────────────────────────────────────────────
 
     private ensureDefaults() {
         this.data.rows = this.data.rows || [];
@@ -1817,6 +2116,236 @@ export class PlotgridView extends ItemView {
 
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
+    }
+
+    // ────────────────────────────────────────────────────
+    //  Cell Inspector — shows characters, locations,
+    //  tags, and linked scene info for the selected cell
+    // ────────────────────────────────────────────────────
+
+    private showCellInspector(rowIndex: number, colIndex: number, cell: CellData): void {
+        if (!this.inspectorEl) return;
+
+        // Hide the scene-inspector if it was showing
+        if (this.inspectorComponent) this.inspectorComponent.hide();
+
+        const el = this.inspectorEl;
+        el.empty();
+        el.style.display = 'block';
+        el.addClass('story-line-inspector');
+
+        const row = this.data.rows[rowIndex];
+        const col = this.data.columns[colIndex];
+
+        // ── Header ──
+        const header = el.createDiv('inspector-header');
+        header.createEl('h3', { text: 'Cell Details' });
+        const closeBtn = header.createEl('button', { cls: 'clickable-icon inspector-close', text: '×' });
+        closeBtn.addEventListener('click', () => this.hideCellInspector());
+
+        // Row / Column label
+        const posSection = el.createDiv('inspector-section');
+        posSection.createSpan({ cls: 'inspector-label', text: 'Row: ' });
+        posSection.createSpan({ text: row?.label || `Row ${rowIndex + 1}` });
+        const colSection = el.createDiv('inspector-section');
+        colSection.createSpan({ cls: 'inspector-label', text: 'Column: ' });
+        colSection.createSpan({ text: col?.label || `Column ${colIndex + 1}` });
+
+        // ── Cell text (editable) ──
+        const textSection = el.createDiv('inspector-section');
+        textSection.createSpan({ cls: 'inspector-label', text: 'Content:' });
+        const textArea = textSection.createEl('textarea', { cls: 'inspector-cell-textarea' });
+        textArea.value = cell.content || '';
+        textArea.rows = 4;
+        textArea.style.width = '100%';
+        textArea.style.resize = 'vertical';
+        textArea.style.marginTop = '4px';
+        textArea.style.padding = '6px 8px';
+        textArea.style.border = '1px solid var(--background-modifier-border)';
+        textArea.style.borderRadius = '4px';
+        textArea.style.background = 'var(--background-primary)';
+        textArea.style.color = 'var(--text-normal)';
+        textArea.style.font = 'inherit';
+        textArea.style.fontSize = '13px';
+
+        let textSaveTimer: number | null = null;
+        textArea.addEventListener('input', () => {
+            cell.content = textArea.value;
+            cell.manualContent = true;
+            if (textSaveTimer) window.clearTimeout(textSaveTimer);
+            textSaveTimer = window.setTimeout(() => {
+                this.scheduleSave();
+                this.renderGrid();
+                // Re-scan and update the inspector sections below
+                this.updateCellInspectorScan(el, cell);
+            }, 600);
+        });
+
+        // ── Scan results container ──
+        const scanContainer = el.createDiv('inspector-scan-results');
+        this.updateCellInspectorScan(scanContainer, cell);
+
+        // ── Linked scene ──
+        const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
+        if (cell.linkedSceneId && scMgr) {
+            const scene = scMgr.getScene(cell.linkedSceneId);
+            if (scene) {
+                const sceneSection = el.createDiv('inspector-section');
+                sceneSection.createSpan({ cls: 'inspector-label', text: 'Linked Scene:' });
+                const sceneLink = sceneSection.createEl('a', {
+                    cls: 'inspector-scene-link',
+                    text: scene.title || scene.filePath.split('/').pop()?.replace('.md', '') || 'Untitled',
+                });
+                sceneLink.style.display = 'block';
+                sceneLink.style.marginTop = '4px';
+                sceneLink.style.cursor = 'pointer';
+                sceneLink.style.color = 'var(--text-accent)';
+                sceneLink.addEventListener('click', () => {
+                    const f = this.app.vault.getAbstractFileByPath(scene.filePath) as TFile | null;
+                    if (f) this.app.workspace.getLeaf('tab').openFile(f);
+                });
+
+                // Scene status
+                const statusSect = el.createDiv('inspector-section');
+                statusSect.createSpan({ cls: 'inspector-label', text: 'Status: ' });
+                const cfg = STATUS_CONFIG[scene.status || 'idea'];
+                const statusSpan = statusSect.createSpan();
+                const sIcon = statusSpan.createSpan();
+                obsidian.setIcon(sIcon, cfg.icon);
+                statusSpan.createSpan({ text: ' ' + cfg.label });
+
+                // POV
+                if (scene.pov) {
+                    const povSect = el.createDiv('inspector-section');
+                    povSect.createSpan({ cls: 'inspector-label', text: 'POV: ' });
+                    povSect.createSpan({ text: scene.pov });
+                }
+
+                // Location
+                if (scene.location) {
+                    const locSect = el.createDiv('inspector-section');
+                    locSect.createSpan({ cls: 'inspector-label', text: 'Location: ' });
+                    locSect.createSpan({ text: scene.location });
+                }
+
+                // Word count
+                const wcSect = el.createDiv('inspector-section');
+                wcSect.createSpan({ cls: 'inspector-label', text: 'Words: ' });
+                wcSect.createSpan({ text: String(scene.wordcount || 0) });
+
+                // Open scene button
+                const openBtn = el.createEl('button', { cls: 'mod-cta', text: 'Open Scene' });
+                openBtn.style.marginTop = '8px';
+                openBtn.addEventListener('click', () => this.openScene(scene));
+            }
+        }
+    }
+
+    /**
+     * Scan cell content for characters, locations, and #tags,
+     * then render the results into the given container element.
+     */
+    private updateCellInspectorScan(container: HTMLElement, cell: CellData): void {
+        container.empty();
+
+        const text = cell.content || '';
+        if (!text.trim()) return;
+
+        const scanner = this.plugin?.linkScanner as LinkScanner | undefined;
+        if (!scanner) return;
+
+        const result = scanner.scanText(text);
+
+        // ── Characters found ──
+        if (result.characters.length > 0) {
+            const section = container.createDiv('inspector-section');
+            section.createSpan({ cls: 'inspector-label', text: 'Characters:' });
+            const chipList = section.createDiv('inspector-chip-list');
+            chipList.style.display = 'flex';
+            chipList.style.flexWrap = 'wrap';
+            chipList.style.gap = '4px';
+            chipList.style.marginTop = '4px';
+            // Deduplicate via alias map
+            const aliasMap = (this.plugin?.characterManager as CharacterManager | undefined)
+                ?.buildAliasMap(this.plugin?.settings.characterAliases) ?? new Map<string, string>();
+            const seen = new Set<string>();
+            for (const name of result.characters) {
+                const canonical = aliasMap.get(name.toLowerCase()) || name;
+                const key = canonical.toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const chip = chipList.createSpan({ cls: 'inspector-chip', text: canonical });
+                chip.style.padding = '2px 10px';
+                chip.style.borderRadius = '10px';
+                chip.style.fontSize = '12px';
+                chip.style.background = 'var(--background-modifier-border)';
+                chip.style.cursor = 'pointer';
+                chip.style.color = 'var(--text-normal)';
+                chip.addEventListener('click', () => {
+                    // Try to open the character file
+                    const charMgr = this.plugin?.characterManager as CharacterManager | undefined;
+                    const char = charMgr?.getAllCharacters().find(c => c.name.toLowerCase() === key);
+                    if (char) {
+                        const f = this.app.vault.getAbstractFileByPath(char.filePath) as TFile | null;
+                        if (f) this.app.workspace.getLeaf('tab').openFile(f);
+                    }
+                });
+            }
+        }
+
+        // ── Locations found ──
+        if (result.locations.length > 0) {
+            const section = container.createDiv('inspector-section');
+            section.createSpan({ cls: 'inspector-label', text: 'Locations:' });
+            const chipList = section.createDiv('inspector-chip-list');
+            chipList.style.display = 'flex';
+            chipList.style.flexWrap = 'wrap';
+            chipList.style.gap = '4px';
+            chipList.style.marginTop = '4px';
+            // Deduplicate locations
+            const seen = new Set<string>();
+            for (const name of result.locations) {
+                const key = name.toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const chip = chipList.createSpan({ cls: 'inspector-chip', text: name });
+                chip.style.padding = '2px 10px';
+                chip.style.borderRadius = '10px';
+                chip.style.fontSize = '12px';
+                chip.style.background = 'var(--background-modifier-border)';
+                chip.style.color = 'var(--text-normal)';
+            }
+        }
+
+        // ── Tags found ──
+        if (result.tags.length > 0) {
+            const section = container.createDiv('inspector-section');
+            section.createSpan({ cls: 'inspector-label', text: 'Tags:' });
+            const tagList = section.createDiv('inspector-tag-list');
+            tagList.style.display = 'flex';
+            tagList.style.flexWrap = 'wrap';
+            tagList.style.gap = '4px';
+            tagList.style.marginTop = '4px';
+            const tagColors = this.plugin?.settings.tagColors || {};
+            const scheme = this.plugin?.settings.colorScheme || 'mocha';
+            const allTagsSorted = [...result.tags].sort();
+            for (const tag of result.tags) {
+                const chip = tagList.createSpan({ cls: 'inspector-tag-chip', text: `#${tag}` });
+                chip.style.padding = '2px 8px';
+                chip.style.borderRadius = '10px';
+                chip.style.fontSize = '12px';
+                const chipColor = resolveTagColor(tag, allTagsSorted.indexOf(tag), scheme, tagColors);
+                chip.style.background = chipColor;
+                chip.style.color = '#fff';
+            }
+        }
+    }
+
+    private hideCellInspector(): void {
+        if (this.inspectorEl) {
+            this.inspectorEl.empty();
+            this.inspectorEl.style.display = 'none';
+        }
     }
 }
 

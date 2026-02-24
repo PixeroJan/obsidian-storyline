@@ -617,9 +617,11 @@ ${body}
             }
         }
 
-        const csv = rows.map(row => row.map(cell => this.csvEscape(cell)).join(',')).join('\n');
+        const csv = rows.map(row => row.map(cell => this.csvEscape(cell)).join(',')).join('\r\n');
         const filename = `${project.title} - ${scope === 'manuscript' ? 'Manuscript' : 'Outline'} (${this.timestamp()}).csv`;
-        const filePath = await this.writeExportFile(project, filename, csv);
+        // sep=, hint for Excel locale delimiter detection
+        const csvWithBom = 'sep=,\r\n' + csv;
+        const filePath = await this.writeCsvExportFile(project, filename, csvWithBom);
         new Notice(`CSV exported → ${filePath}`);
         return filePath;
     }
@@ -633,6 +635,39 @@ ${body}
     }
 
     // ─── File I/O ──────────────────────────────────────────────
+
+    /**
+     * Write a CSV file with explicit UTF-8 BOM bytes via the low-level
+     * vault adapter so the BOM is preserved exactly on disk.
+     */
+    private async writeCsvExportFile(
+        project: StoryLineProject,
+        filename: string,
+        csvContent: string,
+    ): Promise<string> {
+        // Encode CSV text to UTF-8 bytes
+        const encoder = new TextEncoder();
+        const csvBytes = encoder.encode(csvContent);
+
+        // Build final buffer: BOM (EF BB BF) + CSV bytes
+        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        const combined = new Uint8Array(bom.length + csvBytes.length);
+        combined.set(bom, 0);
+        combined.set(csvBytes, bom.length);
+
+        const projectFolder = project.sceneFolder.replace(/\/Scenes\/?$/, '');
+        const exportFolder = `${projectFolder}/Exports`;
+
+        // Ensure export folder exists (adapter level)
+        if (!(await this.app.vault.adapter.exists(exportFolder))) {
+            await this.app.vault.createFolder(exportFolder);
+        }
+
+        const filePath = `${exportFolder}/${filename}`;
+        // Write raw bytes directly via adapter — bypasses vault caching that may strip BOM
+        await this.app.vault.adapter.writeBinary(filePath, combined.buffer);
+        return filePath;
+    }
 
     private async writeExportFile(
         project: StoryLineProject,

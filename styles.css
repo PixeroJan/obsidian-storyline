@@ -1787,7 +1787,64 @@ body.theme-dark {
 .storyline-help-text {
     font-size: 0.8em;
     color: var(--sc-text-faint);
-    font-style: italic;
+    font-style: normal;
+}
+
+.storyline-help-icon {
+    display: inline-flex;
+    vertical-align: middle;
+    font-style: normal;
+    color: var(--text-muted);
+}
+.storyline-help-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Subway / List view toggle */
+.storyline-view-toggle {
+    display: inline-flex;
+    gap: 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-left: 8px;
+}
+.storyline-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background 0.15s, color 0.15s;
+}
+.storyline-toggle-btn:hover {
+    background: var(--background-modifier-hover);
+}
+.storyline-toggle-btn.active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+.storyline-toggle-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Subway map */
+.subway-map-wrapper {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    background: var(--background-primary);
+    margin: 12px 0;
+}
+.subway-map-wrapper svg {
+    display: block;
+}
+.subway-map-wrapper svg text {
+    font-family: var(--font-interface);
 }
 
 /* Unassigned header */
@@ -2345,6 +2402,58 @@ body.theme-dark {
 }
 .character-create-profile-btn:hover {
     opacity: 0.9;
+}
+
+/* Unlinked card action row */
+.character-unlinked-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.character-link-btn,
+.character-ignore-btn {
+    font-size: 0.78em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+    color: var(--text-normal);
+}
+.character-link-btn:hover,
+.character-ignore-btn:hover {
+    background: var(--background-modifier-hover);
+}
+
+/* Link-to-character modal */
+.link-character-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.link-character-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.link-character-row:hover {
+    background: var(--background-modifier-hover);
+}
+.link-character-name {
+    font-weight: 600;
+}
+.link-character-nickname {
+    color: var(--text-muted);
+    font-size: 0.9em;
+    margin-left: 4px;
 }
 
 /* Empty state */
@@ -4684,4 +4793,329 @@ body.theme-dark {
     height: 0;
     width: 14px;
     margin-top: 5px;
+}
+
+/* ============================================
+   Settings — Collapsible Color Section
+   ============================================ */
+.story-line-color-section {
+    margin: 12px 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 0;
+}
+.story-line-color-section > summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 14px;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+.story-line-color-section > summary::-webkit-details-marker {
+    display: none;
+}
+.story-line-color-section > summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform 0.15s ease;
+}
+.story-line-color-section[open] > summary::before {
+    transform: rotate(90deg);
+}
+.story-line-color-section > div {
+    padding: 4px 14px 14px;
+}
+
+/* ============================================
+   Character & Location — Portrait / Image
+   ============================================ */
+
+/* ── Character Overview Card Portrait ── */
+.character-card-portrait {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 8px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--background-modifier-hover);
+    border: 2px solid var(--background-modifier-border);
+    flex-shrink: 0;
+}
+.character-portrait-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.character-portrait-placeholder {
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.character-portrait-placeholder svg {
+    width: 32px;
+    height: 32px;
+}
+
+/* ── Character Detail Portrait ── */
+.character-detail-portrait {
+    width: 96px;
+    height: 96px;
+    margin: 12px auto 6px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--background-modifier-hover);
+    border: 2px solid var(--background-modifier-border);
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s;
+}
+.character-detail-portrait:hover {
+    border-color: var(--interactive-accent);
+}
+.character-detail-portrait-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.character-detail-portrait-placeholder {
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.character-detail-portrait-placeholder svg {
+    width: 48px;
+    height: 48px;
+}
+.character-portrait-change-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 9px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 2px 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.character-detail-portrait:hover .character-portrait-change-label {
+    opacity: 1;
+}
+
+/* ── Location Tree Thumbnail ── */
+.location-tree-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    object-fit: cover;
+    vertical-align: middle;
+}
+
+/* ── Location Detail Portrait ── */
+.location-detail-portrait {
+    width: 120px;
+    height: 80px;
+    margin: 12px auto 6px;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--background-modifier-hover);
+    border: 2px solid var(--background-modifier-border);
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s;
+}
+.location-detail-portrait:hover {
+    border-color: var(--interactive-accent);
+}
+.location-detail-portrait-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.location-detail-portrait-placeholder {
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.location-detail-portrait-placeholder svg {
+    width: 36px;
+    height: 36px;
+}
+.location-portrait-change-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 9px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 2px 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.location-detail-portrait:hover .location-portrait-change-label {
+    opacity: 1;
+}
+
+/* ============================================
+   Image Choice Modal
+   ============================================ */
+.storyline-image-choice-modal h3 {
+    margin-bottom: 12px;
+}
+.image-choice-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 16px;
+}
+.image-choice-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.image-choice-buttons button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    font-size: 14px;
+    width: 100%;
+    justify-content: center;
+}
+.image-choice-btn-icon {
+    display: flex;
+    align-items: center;
+}
+.image-choice-btn-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Help View — right-split documentation pane
+   ═══════════════════════════════════════════════════════ */
+
+.storyline-help-container {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.storyline-help-content {
+    padding: 16px 20px 40px;
+    max-width: 100%;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* Headings */
+.storyline-help-content h1 {
+    font-size: 1.5em;
+    margin-top: 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: 8px;
+}
+.storyline-help-content h2 {
+    font-size: 1.25em;
+    margin-top: 24px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: 6px;
+}
+.storyline-help-content h3 {
+    font-size: 1.1em;
+    margin-top: 20px;
+}
+.storyline-help-content h4 {
+    font-size: 1em;
+    margin-top: 16px;
+}
+
+/* Tables — horizontally scrollable in narrow pane */
+.storyline-help-content table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 12px 0;
+    max-width: 100%;
+}
+.storyline-help-content th,
+.storyline-help-content td {
+    padding: 6px 10px;
+    border: 1px solid var(--background-modifier-border);
+    text-align: left;
+    white-space: normal;
+    min-width: 60px;
+}
+.storyline-help-content th {
+    background: var(--background-secondary);
+    font-weight: 600;
+}
+
+/* Code blocks */
+.storyline-help-content code {
+    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    background: var(--background-secondary);
+}
+.storyline-help-content pre {
+    overflow-x: auto;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: var(--background-secondary);
+}
+
+/* TOC links */
+.storyline-help-content ul a,
+.storyline-help-content ol a {
+    color: var(--text-accent);
+    text-decoration: none;
+}
+.storyline-help-content ul a:hover,
+.storyline-help-content ol a:hover {
+    text-decoration: underline;
+}
+
+/* Horizontal rules */
+.storyline-help-content hr {
+    border: none;
+    border-top: 1px solid var(--background-modifier-border);
+    margin: 24px 0;
+}
+
+/* Lists */
+.storyline-help-content li {
+    margin-bottom: 4px;
+}
+
+/* Error fallback */
+.storyline-help-error {
+    padding: 20px;
+    color: var(--text-muted);
+    font-style: italic;
 }

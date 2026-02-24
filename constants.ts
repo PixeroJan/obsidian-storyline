@@ -11,3 +11,4 @@ export const CHARACTER_VIEW_TYPE = 'story-line-character';
 export const STATS_VIEW_TYPE = 'story-line-stats';
 export const PLOTGRID_VIEW_TYPE = 'story-line-plotgrid';
 export const LOCATION_VIEW_TYPE = 'story-line-location';
+export const HELP_VIEW_TYPE = 'story-line-help';

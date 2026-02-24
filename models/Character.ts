@@ -11,6 +11,8 @@ export interface Character {
     // ── Basic Information ──────────────────────────────
     /** Character name */
     name: string;
+    /** Vault-relative path to a portrait/avatar image */
+    image?: string;
     /** Nicknames or aliases */
     nickname?: string;
     /** Age or date of birth */
@@ -204,7 +206,7 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
  * Frontmatter keys that map to Character fields (excludes computed/meta keys)
  */
 export const CHARACTER_FIELD_KEYS: (keyof Character)[] = [
-    'name', 'nickname', 'age', 'role', 'occupation', 'residency', 'locations', 'family',
+    'name', 'image', 'nickname', 'age', 'role', 'occupation', 'residency', 'locations', 'family',
     'appearance', 'distinguishingFeatures', 'style', 'quirks',
     'personality', 'internalMotivation', 'externalMotivation', 'strengths', 'flaws', 'fears', 'belief', 'misbelief',
     'formativeMemories', 'accomplishments', 'secrets',

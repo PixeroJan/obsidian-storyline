@@ -1,6 +1,6 @@
 # StoryLine — Obsidian Plugin for Writers
 
-**Version 1.0.0** · By Jan Sandström
+**Version 1.1.0** · By Jan Sandström
 
 StoryLine transforms your Obsidian vault into a full-featured book planning and writing tool. Organize scenes, build rich character profiles, manage worlds and locations, track plotlines, and monitor your progress — all without leaving Obsidian. Fully theme-aware with dark and light mode support.
 
@@ -128,12 +128,25 @@ Visualize your scenes on a chronological timeline.
 
 ### Plotlines View
 
-Track your story's plotlines (tags) across the narrative.
+Track your story's plotlines (tags) across the narrative. Two view modes are available — toggle between them with the buttons in the toolbar.
 
+#### Subway Map (default)
+- Transit-style SVG visualization with one flat lane per plotline.
+- Scenes appear as labeled station nodes along each plotline's track.
+- **Gradient connectors** link shared scenes across plotlines, colored by the source tag.
+- **Act dividers** show vertical lines with act labels for structural context.
+- **Scene labels & tag pills** display below each node for quick identification.
+- **Drag to pan** — click and drag the map to navigate large stories.
+- **Per-tag color picker** — click the palette (🎨) icon next to any plotline header to assign a custom color. Right-click a header for "Change color" / "Reset color".
+
+#### List View
 - Each plotline (tag) gets its own row showing which scenes it appears in.
 - Quickly see which plotlines are active, dormant, or unresolved.
+
+#### Common Features
 - **Rename** or **delete** plotlines across all scenes at once.
 - Visualize plotline density and coverage.
+- Scenes default to **book order** (reading order). Toggle to sequence order from the toolbar.
 
 ### Characters View
 
@@ -141,6 +154,7 @@ A dedicated character management system with rich profiles.
 
 #### Overview Grid
 - All characters displayed as **compact cards** with role badge, snippet, and completeness bar.
+- **Portrait images** — each card shows a circular portrait (64×64 px). Click the placeholder icon to add an image.
 - Cards are color-coded by role (protagonist, antagonist, supporting, minor, mentor, love interest).
 - **Unlinked characters** — characters mentioned in scenes but without a profile are listed separately with a one-click "Create" button.
 - Click any card to open the full character detail editor.
@@ -155,6 +169,8 @@ A dedicated character management system with rich profiles.
   - **Relationships** — allies, enemies, romantic, mentors, other connections.
   - **Character Arc** — starting state, desired arc, ending state.
   - **Custom Fields** — add your own key/value pairs for anything else.
+- **Portrait area** — circular portrait (96×96 px) at the top of the editor. Click to add or change the image. Hover shows "Add image" / "Change image" label.
+- **Image picker** — choose to import an image from your computer (saved into `<Project>/Images/`), pick an existing vault image, or remove the current image.
 - All fields show grey **placeholder text** that disappears when you type.
 - **Auto-save** — changes are saved automatically after a short delay (no manual save needed).
 - **Side panel** shows:
@@ -173,6 +189,7 @@ A hierarchical worldbuilding and location management system.
 
 #### Overview Tree
 - Worlds appear as **collapsible top-level nodes** with a globe icon and location count.
+- **Image thumbnails** — small (20×20 px) thumbnails appear next to each node when an image is set.
 - Locations nest underneath their world, with further child locations indented below their parent.
 - **Standalone locations** (not linked to any world) appear in a separate section.
 - **Unlinked locations** — places referenced in scenes but without a profile show a "Create" button.
@@ -181,6 +198,8 @@ A hierarchical worldbuilding and location management system.
 #### Detail Editor
 - **World profiles** have eight collapsible sections: Overview, Geography & Environment, Culture & Society, Politics & Power, Magic & Technology, Beliefs & Mythology, Economy & Trade, History & Lore.
 - **Location profiles** have five sections: Overview, Atmosphere & Description, Story Significance, Connected Locations, and a Hierarchy section with World and Parent dropdowns.
+- **Portrait area** — rectangular portrait (120×80 px) at the top of the detail editor. Click to add or change the image.
+- **Image picker** — import from computer (saved into `<Project>/Images/` with automatic dedup), choose from vault, or remove.
 - **Custom fields** for any additional notes.
 - **Auto-save** with focus-loss protection (editing won't be interrupted).
 - **Side panel** shows:
@@ -453,14 +472,26 @@ StoryLine color-codes scene cards across all views. Choose a mode in **Settings 
 | **Act** | Each act gets a distinct color |
 | **Tag** | Cards colored by their first tag's assigned color |
 
-### Tag Colors
+### Color Schemes
 
-When using **Tag** color coding mode (or just to visually distinguish plotlines):
+StoryLine ships with **16 built-in color schemes** plus a fully custom option:
 
-1. Go to **Settings → Tag Colors**.
-2. Click the **color swatch** next to any tag to pick a color.
-3. Tag badges throughout the UI (Inspector, Board, Timeline) display with their assigned color.
-4. Colors persist across sessions and are applied consistently in all views.
+| Group | Schemes |
+|-------|----------|
+| **Catppuccin** | Latte, Frappé, Macchiato, Mocha |
+| **Moods** | Spring, Morning, Summer, Dusk, Midnight, Autumn, Ocean, Forest, Sunset, Arctic, Vintage, Neon |
+| **Custom** | Define your own palette in settings |
+
+Each scheme provides 14 colors that are automatically assigned to tags. Select a scheme in **Settings → Color Coding** — schemes are displayed as compact cards grouped by family, with a color preview strip and a mood hint.
+
+### Per-Tag Color Overrides
+
+Override individual tag colors without changing the whole scheme:
+
+- **From the Plotlines view** — click the palette (🎨) icon next to any plotline header, or right-click and choose "Change color" / "Reset color".
+- **From Settings** — in the Color Coding section, each tag appears as a compact chip with a color swatch. Click the swatch to pick a custom color; click the × to reset.
+
+Overrides persist across sessions and take priority over the active scheme.
 
 All color coding is **theme-aware** — colors automatically adapt to your current Obsidian theme (dark or light mode).
 
@@ -808,7 +839,8 @@ Open **Settings → StoryLine** to configure:
 | Default Target Word Count | Word count goal per scene | `800` |
 | Default View | Which view opens first | `Board` |
 | Color Coding | Card color mode (status / POV / emotion / act / tag) | `status` |
-| Tag Colors | Per-tag color assignments for tag color coding mode | — |
+| Color Scheme | Choose from 16 palettes (Catppuccin + Moods) or custom | `mocha` |
+| Tag Color Overrides | Per-tag color overrides shown as compact chips | — |
 | Show Word Counts | Display word counts on cards | On |
 | Compact Card View | Smaller cards with less detail | Off |
 | Plot Hole Detection | Enable the Validator engine | On |
@@ -894,4 +926,4 @@ MIT
 
 ---
 
-*StoryLine v1.0.0 — Transform your vault into a powerful book planning tool.*
+*StoryLine v1.1.0 — Transform your vault into a powerful book planning tool.*
