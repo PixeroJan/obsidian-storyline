@@ -10,6 +10,30 @@ import { App, Modal, TFile, Notice, FuzzySuggestModal } from 'obsidian';
 import * as obsidian from 'obsidian';
 
 /**
+ * Helper function to resolve an image path to a valid resource URL
+ * Tries multiple approaches to handle different image storage methods
+ */
+export function resolveImagePath(app: App, imagePath: string): string {
+    if (!imagePath) return '';
+    
+    // Handle direct URLs
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+        return imagePath;
+    }
+    
+    // Try to get the file object — vault.getResourcePath(TFile) is the most reliable
+    try {
+        const imageFile = app.vault.getAbstractFileByPath(imagePath);
+        if (imageFile instanceof TFile) {
+            return app.vault.getResourcePath(imageFile);
+        }
+    } catch { /* fall through */ }
+    
+    // Fallback to adapter resource path
+    return app.vault.adapter.getResourcePath(imagePath);
+}
+
+/**
  * Get the project-level Images folder path.
  * Derives it from the scene folder (strips /Scenes, appends /Images).
  */
@@ -41,6 +65,8 @@ function importImageFromComputer(app: App, sceneFolder: string): Promise<string 
 
             try {
                 const imagesFolder = getImagesFolderPath(app, sceneFolder);
+                
+
 
                 // Ensure Images folder exists
                 if (!(await app.vault.adapter.exists(imagesFolder))) {
@@ -69,10 +95,11 @@ function importImageFromComputer(app: App, sceneFolder: string): Promise<string 
                 await app.vault.createBinary(targetPath, buffer);
 
                 new Notice(`Image imported: ${targetPath.split('/').pop()}`);
+                
                 resolve(targetPath);
             } catch (err) {
                 console.error('[StoryLine] Image import failed:', err);
-                new Notice('Failed to import image: ' + String(err));
+                new Notice(`❌ Failed to import image: ${String(err)}`);
                 resolve(undefined);
             }
         });
@@ -142,12 +169,28 @@ class ImageChoiceModal extends Modal {
         // Current image preview
         if (this.currentImage) {
             const preview = contentEl.createDiv('image-choice-preview');
-            const imgSrc = this.app.vault.adapter.getResourcePath(this.currentImage);
-            const img = preview.createEl('img', { attr: { src: imgSrc } });
-            img.style.maxWidth = '160px';
-            img.style.maxHeight = '120px';
-            img.style.borderRadius = '8px';
-            img.style.objectFit = 'cover';
+            try {
+                // Use the helper function to resolve the image path
+                const imgSrc = resolveImagePath(this.app, this.currentImage);
+                
+                const img = preview.createEl('img', { attr: { src: imgSrc } });
+                img.style.maxWidth = '160px';
+                img.style.maxHeight = '120px';
+                img.style.borderRadius = '8px';
+                img.style.objectFit = 'cover';
+                
+                // Add error handler to show placeholder if image fails to load
+                img.onerror = () => {
+                    img.remove();
+                    const placeholder = preview.createDiv('image-choice-preview-placeholder');
+                    placeholder.setText('Image not found');
+                    console.log('Failed to load image in picker:', this.currentImage);
+                };
+            } catch (error) {
+                console.error('Error loading image in picker:', error);
+                const placeholder = preview.createDiv('image-choice-preview-placeholder');
+                placeholder.setText('Image not found');
+            }
             img.style.border = '1px solid var(--background-modifier-border)';
 
             const pathLabel = preview.createDiv();

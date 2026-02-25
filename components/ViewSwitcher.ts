@@ -2,6 +2,7 @@ import { WorkspaceLeaf } from 'obsidian';
 import * as obsidian from 'obsidian';
 import type SceneCardsPlugin from '../main';
 import { ExportModal } from './ExportModal';
+import { isMobile, DESKTOP_ONLY_VIEWS } from './MobileAdapter';
 import {
     BOARD_VIEW_TYPE,
     TIMELINE_VIEW_TYPE,
@@ -41,7 +42,12 @@ export function renderViewSwitcher(
 ): HTMLElement {
     const switcher = container.createDiv('story-line-view-switcher');
 
-    for (const entry of VIEW_ENTRIES) {
+    // Filter out desktop-only views on mobile
+    const entries = isMobile
+        ? VIEW_ENTRIES.filter(e => !DESKTOP_ONLY_VIEWS.has(e.type))
+        : VIEW_ENTRIES;
+
+    for (const entry of entries) {
         const tab = switcher.createEl('button', {
             cls: `story-line-view-tab ${entry.type === activeViewType ? 'active' : ''}`,
             attr: { 'aria-label': entry.label, title: entry.label },

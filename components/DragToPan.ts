@@ -27,6 +27,9 @@ export function enableDragToPan(el: HTMLElement): () => void {
     let isMiddleBtn = false;
 
     const onPointerDown = (e: PointerEvent) => {
+        // On touch devices, let native scroll handle panning
+        if (e.pointerType === 'touch') return;
+
         // Middle button always pans
         isMiddleBtn = e.button === 1;
         // Left button pans only when target is not interactive

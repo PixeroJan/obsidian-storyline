@@ -225,7 +225,6 @@ export default class SceneCardsPlugin extends Plugin {
         this.addCommand({
             id: 'undo',
             name: 'Undo Last Scene Change',
-            hotkeys: [{ modifiers: ['Mod'], key: 'z' }],
             callback: async () => {
                 await this.sceneManager.undoManager.undo();
             },
@@ -234,7 +233,6 @@ export default class SceneCardsPlugin extends Plugin {
         this.addCommand({
             id: 'redo',
             name: 'Redo Last Scene Change',
-            hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'z' }],
             callback: async () => {
                 await this.sceneManager.undoManager.redo();
             },
@@ -732,6 +730,7 @@ export default class SceneCardsPlugin extends Plugin {
             const modal = new Modal(this.app);
             modal.titleEl.setText('New StoryLine Project');
             let title = '';
+            let customFolder = '';
 
             new Setting(modal.contentEl)
                 .setName('Project name')
@@ -742,11 +741,20 @@ export default class SceneCardsPlugin extends Plugin {
                 });
 
             new Setting(modal.contentEl)
+                .setName('Location')
+                .setDesc(`Leave empty to use default (${this.settings.storyLineRoot}). Or enter a vault folder path like "Writing/Novels".`)
+                .addText((text: any) => {
+                    text.setPlaceholder(this.settings.storyLineRoot);
+                    text.onChange((v: string) => (customFolder = v.trim()));
+                });
+
+            new Setting(modal.contentEl)
                 .addButton((btn: any) => {
                     btn.setButtonText('Create').setCta().onClick(async () => {
                         if (!title.trim()) return;
                         try {
-                            const project = await this.sceneManager.createProject(title.trim());
+                            const basePath = customFolder || undefined;
+                            const project = await this.sceneManager.createProject(title.trim(), '', basePath);
                             await this.sceneManager.setActiveProject(project);
                             this.refreshOpenViews();
                             try { await this.activateView(BOARD_VIEW_TYPE); } catch { /* non-critical */ }
@@ -862,7 +870,11 @@ class ProjectSelectModal extends Modal {
                 // repopulate select
                 select.empty();
                 for (const p of projects) {
-                    const opt = select.createEl('option', { text: p.title });
+                    const rootPath = this.plugin.settings.storyLineRoot;
+                    const isCustom = !p.filePath.startsWith(rootPath + '/');
+                    const parentDir = p.filePath.substring(0, p.filePath.lastIndexOf('/'));
+                    const label = isCustom ? `${p.title}  (${parentDir})` : p.title;
+                    const opt = select.createEl('option', { text: label });
                     opt.setAttr('value', p.filePath);
                 }
                 if (projects.length > 0) select.value = (created && created.filePath) || projects[0].filePath;
@@ -884,7 +896,11 @@ class ProjectSelectModal extends Modal {
                     select.createEl('option', { text: 'No projects found' }).setAttribute('disabled', 'true');
                 }
                 for (const p of projects) {
-                    const opt = select.createEl('option', { text: p.title });
+                    const rootPath = this.plugin.settings.storyLineRoot;
+                    const isCustom = !p.filePath.startsWith(rootPath + '/');
+                    const parentDir = p.filePath.substring(0, p.filePath.lastIndexOf('/'));
+                    const label = isCustom ? `${p.title}  (${parentDir})` : p.title;
+                    const opt = select.createEl('option', { text: label });
                     opt.setAttr('value', p.filePath);
                 }
                 if (projects.length > 0) {

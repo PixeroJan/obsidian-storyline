@@ -2,6 +2,8 @@ import { Scene, STATUS_CONFIG, SceneStatus, TIMELINE_MODE_LABELS, TIMELINE_MODE_
 import { Modal, App, FuzzySuggestModal } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { openConfirmModal } from './ConfirmModal';
+import { SplitSceneModal } from './SplitMergeModals';
+import { isMobile } from './MobileAdapter';
 import { SceneManager } from '../services/SceneManager';
 import type SceneCardsPlugin from '../main';
 import { resolveTagColor } from '../settings';
@@ -74,6 +76,12 @@ export class InspectorComponent {
 
         this.container.empty();
         this.container.addClass('story-line-inspector');
+
+        // Mobile: drag handle for bottom-sheet UX
+        if (isMobile) {
+            this.container.addClass('sl-mobile');
+            this.container.createDiv('inspector-drag-handle');
+        }
 
         // Header
         const header = this.container.createDiv('inspector-header');
@@ -605,6 +613,17 @@ export class InspectorComponent {
             text: 'Edit Scene'
         });
         editBtn.addEventListener('click', () => this.onEdit(scene));
+
+        const splitBtn = actions.createEl('button', {
+            text: 'Split Scene'
+        });
+        splitBtn.addEventListener('click', () => {
+            new SplitSceneModal(this.plugin, scene, () => {
+                // After split, hide inspector and notify parent to refresh
+                this.hide();
+                this.onDelete(scene); // triggers board refresh
+            }).open();
+        });
 
         const deleteBtn = actions.createEl('button', {
             cls: 'mod-warning',

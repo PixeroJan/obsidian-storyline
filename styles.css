@@ -1520,6 +1520,7 @@ body.theme-dark {
 
 .swimlane-timeline {
     overflow: auto;      /* scroll both axes */
+    -webkit-overflow-scrolling: touch;
 }
 
 .swimlane-grid {
@@ -1839,6 +1840,7 @@ body.theme-dark {
     border-radius: 8px;
     background: var(--background-primary);
     margin: 12px 0;
+    -webkit-overflow-scrolling: touch;
 }
 .subway-map-wrapper svg {
     display: block;
@@ -4852,7 +4854,9 @@ body.theme-dark {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
 }
+
 .character-portrait-placeholder {
     color: var(--text-faint);
     display: flex;
@@ -5119,3 +5123,359 @@ body.theme-dark {
     color: var(--text-muted);
     font-style: italic;
 }
+
+/* ============================================
+   Mobile Support (iOS / iPadOS / Android)
+   ============================================ */
+
+/*
+ * .sl-mobile   — all mobile devices
+ * .sl-phone    — phone-sized screens
+ * .sl-tablet   — tablet-sized screens (iPad, etc.)
+ *
+ * Obsidian also provides body.is-mobile, body.is-phone, body.is-tablet
+ */
+
+/* ── Touch-friendly scene cards ────────────────────── */
+
+.sl-mobile .scene-card {
+    min-height: 44px;
+    padding: 10px 12px;
+    cursor: default;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.sl-mobile .scene-card.touch-dragging {
+    opacity: 0.4;
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+.sl-touch-ghost {
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    transition: transform 0.1s ease;
+}
+
+/* ── Board layout: stack columns vertically on phones ── */
+
+.sl-phone .story-line-board {
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px;
+}
+
+.sl-phone .story-line-column {
+    min-width: 100%;
+    max-width: 100%;
+}
+
+.sl-phone .story-line-column-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--background-primary);
+    padding: 8px 12px;
+}
+
+/* Tablets: allow 3 columns side-by-side */
+.sl-tablet .story-line-board {
+    flex-wrap: wrap;
+}
+
+.sl-tablet .story-line-column {
+    min-width: 30%;
+    max-width: 32%;
+    flex: 1 1 30%;
+}
+
+/* ── Toolbar mobile adjustments ──────────────────── */
+
+.sl-mobile .story-line-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 8px;
+}
+
+.sl-mobile .story-line-view-switcher {
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+.sl-mobile .story-line-view-tab {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 6px 8px;
+}
+
+/* Hide tab labels on phones, keep icons */
+.sl-phone .view-tab-label {
+    display: none;
+}
+
+/* ── Inspector as bottom sheet on mobile ───────────── */
+
+.sl-mobile .story-line-inspector-panel {
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    max-height: 60vh;
+    height: auto;
+    border-left: none;
+    border-top: 2px solid var(--interactive-accent);
+    border-radius: 12px 12px 0 0;
+    overflow-y: auto;
+    z-index: 100;
+    background: var(--background-primary);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Drag handle at top of the bottom sheet */
+.sl-mobile .inspector-drag-handle {
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 8px auto;
+    background: var(--text-muted);
+    border-radius: 2px;
+    opacity: 0.4;
+}
+
+/* Inspector action buttons: stack vertically, full width */
+.sl-mobile .inspector-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+}
+
+.sl-mobile .inspector-actions button {
+    width: 100%;
+    min-height: 44px;
+}
+
+/* ── Filters on mobile ─────────────────────────────── */
+
+.sl-mobile .story-line-filter-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sl-mobile .story-line-search {
+    max-width: 100%;
+    width: 100%;
+}
+
+.sl-mobile .filter-dropdown,
+.sl-mobile .filter-select {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* ── Bulk action bar on mobile ─────────────────────── */
+
+.sl-mobile .story-line-bulk-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px;
+}
+
+.sl-mobile .bulk-bar-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 12px;
+}
+
+/* ── Character view grid: single column on phones ──── */
+
+.sl-phone .character-grid {
+    grid-template-columns: 1fr;
+}
+
+.sl-tablet .character-grid {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+/* Hide map/story-graph toggle buttons on mobile */
+.sl-mobile .character-mode-btn[data-mode="map"],
+.sl-mobile .character-mode-btn[data-mode="story-graph"] {
+    display: none;
+}
+
+/* ── Location view: touch-friendly tree ────────────── */
+
+.sl-mobile .location-tree-node {
+    min-height: 44px;
+    padding: 8px 12px;
+}
+
+/* ── Timeline view adjustments ─────────────────────── */
+
+.sl-mobile .timeline-zoom-controls button {
+    min-width: 44px;
+    min-height: 44px;
+}
+
+.sl-phone .timeline-swimlane-header {
+    font-size: 12px;
+    min-width: 80px;
+}
+
+/* ── Stats view: stack cards on phones ─────────────── */
+
+.sl-phone .stats-overview {
+    flex-direction: column;
+}
+
+.sl-phone .stats-card {
+    width: 100%;
+}
+
+/* ── Quick Add modal on mobile ─────────────────────── */
+
+.sl-mobile .story-line-quick-add .setting-item {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.sl-mobile .story-line-quick-add .setting-item-info {
+    flex: none;
+    margin-right: 0;
+    margin-bottom: 4px;
+}
+
+/* ── General mobile touch improvements ─────────────── */
+
+.sl-mobile button,
+.sl-mobile select,
+.sl-mobile input {
+    min-height: 44px;
+}
+
+.sl-mobile .dropdown {
+    min-height: 44px;
+}
+
+/* No extra top padding needed — Obsidian’s nav bar handles the notch. */
+
+/* Prevent text selection during interactions */
+.sl-mobile .story-line-board,
+.sl-mobile .story-line-column-body {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Desktop-only notice shown in views disabled on mobile */
+.sl-mobile-unavailable {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.sl-mobile-unavailable h3 {
+    margin-bottom: 8px;
+    color: var(--text-normal);
+}
+
+.sl-mobile-unavailable p {
+    max-width: 300px;
+    line-height: 1.5;
+}
+
+/* ── Compact mobile layout: remove empty space ── */
+
+/* Remove inspector panel padding on mobile (it overlays instead) */
+.sl-mobile.story-line-board-container,
+.sl-mobile.story-line-timeline-container,
+.sl-mobile.story-line-storyline-container,
+.sl-mobile.story-line-character-container,
+.sl-mobile.story-line-stats-container,
+.sl-mobile.story-line-location-container {
+    padding-right: 0;
+}
+
+/* Compact the title row on mobile */
+.sl-mobile .story-line-view-title {
+    font-size: 0.95em;
+    margin: 0;
+}
+
+/* ── Phone-specific toolbar compaction ────────────── */
+
+/* Hide the "StoryLine" title row on phones — Obsidian's nav bar already shows the title */
+.sl-phone .story-line-title-row {
+    display: none;
+}
+
+/* Tighter toolbar on phones */
+.sl-phone .story-line-toolbar {
+    padding: 4px 8px;
+    gap: 2px;
+}
+
+/* Smaller view-switcher tabs on phone */
+.sl-phone .story-line-view-tab {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 4px 6px;
+}
+
+/* Toolbar controls row: compact single line */
+.sl-phone .story-line-toolbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: nowrap;
+    width: 100%;
+    font-size: 0.85em;
+}
+
+/* Make the "Group by" dropdown smaller on phone */
+.sl-phone .story-line-group-control {
+    font-size: 0.8em;
+}
+.sl-phone .story-line-group-control select {
+    min-height: 32px;
+    padding: 2px 4px;
+}
+
+/* Smaller "+ New Scene" button on phone */
+.sl-phone .story-line-add-btn {
+    font-size: 0.8em;
+    padding: 4px 8px;
+    min-height: 32px;
+    white-space: nowrap;
+}
+
+/* Smaller filter bar on mobile */
+.sl-mobile .story-line-filters-container {
+    padding: 2px 8px;
+}
+
+/* Compact filter bar on phone */
+.sl-phone .story-line-filter-bar {
+    padding: 4px 8px;
+    gap: 4px;
+}
+
+/* Smaller search box on phone */
+.sl-phone .story-line-search {
+    padding: 3px 6px;
+    font-size: 0.8em;
+}
+
+/* Compact sort controls on phone */
+.sl-phone .story-line-sort {
+    font-size: 0.8em;
+    gap: 2px;

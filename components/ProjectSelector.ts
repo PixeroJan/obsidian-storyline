@@ -29,8 +29,16 @@ export function renderProjectSelector(
     const select = wrapper.createEl('select', { cls: 'dropdown project-selector-dropdown' });
 
     for (const project of projects) {
+        // Show folder hint for projects outside the default root
+        const rootPath = plugin.settings.storyLineRoot;
+        const isCustomLocation = !project.filePath.startsWith(rootPath + '/');
+        const parentDir = project.filePath.substring(0, project.filePath.lastIndexOf('/'));
+        const displayText = isCustomLocation
+            ? `${project.title}  (${parentDir})`
+            : project.title;
+
         const option = select.createEl('option', {
-            text: project.title,
+            text: displayText,
             value: project.filePath,
         });
         if (active && project.filePath === active.filePath) {
