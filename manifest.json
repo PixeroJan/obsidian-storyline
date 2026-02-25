@@ -1,7 +1,7 @@
 {
   "id": "storyline",
   "name": "StoryLine",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minAppVersion": "1.0.0",
   "description": "Transform your vault into a powerful book planning tool. Board view, timeline, character tracking, and more.",
   "author": "Jan Sandström",

@@ -809,6 +809,48 @@ export class BoardView extends ItemView {
 
         menu.addSeparator();
 
+        // Move to Act submenu
+        const definedActs = this.sceneManager.getDefinedActs();
+        if (definedActs.length > 0) {
+            menu.addItem(item => {
+                item.setTitle('Move to Act…')
+                    .setIcon('folder');
+                // Build submenu manually via Menu
+            });
+            for (const act of definedActs) {
+                menu.addItem(item => {
+                    const actLabel = this.sceneManager.getActLabel(act);
+                    const display = actLabel ? `Act ${act} — ${actLabel}` : `Act ${act}`;
+                    item.setTitle(display)
+                        .setChecked(scene.act === act)
+                        .onClick(async () => {
+                            await this.sceneManager.updateScene(scene.filePath, { act });
+                            this.refreshBoard();
+                        });
+                });
+            }
+        }
+
+        // Move to Chapter submenu
+        const definedChapters = this.sceneManager.getDefinedChapters();
+        if (definedChapters.length > 0) {
+            menu.addSeparator();
+            for (const ch of definedChapters) {
+                menu.addItem(item => {
+                    const chLabel = this.sceneManager.getChapterLabel(ch);
+                    const display = chLabel ? `Ch ${ch} — ${chLabel}` : `Chapter ${ch}`;
+                    item.setTitle(display)
+                        .setChecked(scene.chapter === ch)
+                        .onClick(async () => {
+                            await this.sceneManager.updateScene(scene.filePath, { chapter: ch });
+                            this.refreshBoard();
+                        });
+                });
+            }
+        }
+
+        menu.addSeparator();
+
         menu.addItem(item => {
             item.setTitle('Delete Scene')
                 .setIcon('trash')
@@ -898,6 +940,16 @@ export class BoardView extends ItemView {
                         }
                     });
             });
+
+            // Add existing scenes to this act
+            menu.addSeparator();
+            menu.addItem(item => {
+                item.setTitle('Add existing scenes…')
+                    .setIcon('plus-circle')
+                    .onClick(() => {
+                        this.openAssignScenesModal('act', actNum);
+                    });
+            });
         } else if (chMatch) {
             const chNum = parseInt(chMatch[1], 10);
             const currentLabel = this.sceneManager.getChapterLabel(chNum) || '';
@@ -941,6 +993,16 @@ export class BoardView extends ItemView {
                         }
                     });
             });
+
+            // Add existing scenes to this chapter
+            menu.addSeparator();
+            menu.addItem(item => {
+                item.setTitle('Add existing scenes…')
+                    .setIcon('plus-circle')
+                    .onClick(() => {
+                        this.openAssignScenesModal('chapter', chNum);
+                    });
+            });
         }
 
         menu.showAtMouseEvent(event);
@@ -971,6 +1033,92 @@ export class BoardView extends ItemView {
         saveBtn.addEventListener('click', async () => {
             await onSave(value);
             modal.close();
+        });
+        const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
+        cancelBtn.addEventListener('click', () => modal.close());
+
+        modal.open();
+    }
+
+    /**
+     * Open a modal to assign existing scenes to a chapter or act.
+     * Shows a checklist of unassigned scenes (those without a chapter/act value).
+     */
+    private openAssignScenesModal(field: 'chapter' | 'act', value: number): void {
+        const modal = new Modal(this.app);
+        const label = field === 'chapter'
+            ? `Chapter ${value}` + (this.sceneManager.getChapterLabel(value) ? ` — ${this.sceneManager.getChapterLabel(value)}` : '')
+            : `Act ${value}` + (this.sceneManager.getActLabel(value) ? ` — ${this.sceneManager.getActLabel(value)}` : '');
+        modal.titleEl.setText(`Add scenes to ${label}`);
+
+        const { contentEl } = modal;
+        contentEl.createEl('p', {
+            cls: 'setting-item-description',
+            text: `Select scenes to assign to ${label}. Only scenes not already in a ${field} are shown.`
+        });
+
+        const allScenes = this.sceneManager.getFilteredScenes(
+            undefined,
+            { field: 'sequence', direction: 'asc' }
+        );
+        // Show scenes without a value for this field, plus scenes in other groups
+        const candidates = allScenes.filter(s => {
+            const current = field === 'chapter' ? s.chapter : s.act;
+            return current === undefined || current !== value;
+        });
+
+        if (candidates.length === 0) {
+            contentEl.createEl('p', { text: 'All scenes are already assigned.' });
+            const closeRow = contentEl.createDiv('structure-close-row');
+            closeRow.createEl('button', { text: 'Close', cls: 'mod-cta' })
+                .addEventListener('click', () => modal.close());
+            modal.open();
+            return;
+        }
+
+        const selectedPaths = new Set<string>();
+        const listEl = contentEl.createDiv('assign-scene-list');
+        listEl.style.maxHeight = '400px';
+        listEl.style.overflow = 'auto';
+        listEl.style.margin = '8px 0';
+
+        for (const scene of candidates) {
+            const row = listEl.createDiv('assign-scene-row');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.gap = '8px';
+            row.style.padding = '4px 0';
+
+            const cb = row.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+            const currentVal = field === 'chapter' ? scene.chapter : scene.act;
+            const info = currentVal !== undefined ? ` [${field} ${currentVal}]` : ' [unassigned]';
+            row.createSpan({ text: `${scene.title}${info}` });
+
+            cb.addEventListener('change', () => {
+                if (cb.checked) selectedPaths.add(scene.filePath);
+                else selectedPaths.delete(scene.filePath);
+            });
+        }
+
+        const btnRow = contentEl.createDiv('structure-close-row');
+        btnRow.style.display = 'flex';
+        btnRow.style.gap = '8px';
+        btnRow.style.marginTop = '12px';
+        const assignBtn = btnRow.createEl('button', { text: 'Assign Selected', cls: 'mod-cta' });
+        assignBtn.addEventListener('click', async () => {
+            if (selectedPaths.size === 0) {
+                new Notice('No scenes selected');
+                return;
+            }
+            for (const fp of selectedPaths) {
+                const updates: Partial<Scene> = {};
+                if (field === 'chapter') updates.chapter = value;
+                else updates.act = value;
+                await this.sceneManager.updateScene(fp, updates);
+            }
+            new Notice(`Assigned ${selectedPaths.size} scene(s) to ${label}`);
+            modal.close();
+            this.refreshBoard();
         });
         const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
         cancelBtn.addEventListener('click', () => modal.close());

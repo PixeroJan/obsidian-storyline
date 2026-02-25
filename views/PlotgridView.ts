@@ -157,7 +157,7 @@ export class PlotgridView extends ItemView {
 
         this.canvasEl = this.scrollAreaEl.createDiv('plot-grid-canvas');
         this.canvasEl.style.position = 'relative';
-        this.canvasEl.style.transformOrigin = 'top left';
+        // Use CSS zoom instead of transform: scale() — transforms break position: sticky
         this.canvasEl.style.width = '100%';
         this.canvasEl.style.boxSizing = 'border-box';
 
@@ -469,9 +469,10 @@ export class PlotgridView extends ItemView {
     private setZoom(z: number) {
         this.data.zoom = z;
         if (this.canvasEl && this.scrollAreaEl) {
-            this.canvasEl.style.transform = `scale(${z})`;
+            // Use CSS zoom instead of transform: scale() to preserve position: sticky
+            (this.canvasEl.style as any).zoom = String(z);
             const totalWidth = this.computeTotalWidth();
-            this.canvasEl.style.width = totalWidth / z + 'px';
+            this.canvasEl.style.width = totalWidth + 'px';
         }
         this.scheduleSave();
         const toolbar = this.wrapperEl?.querySelector('.plot-grid-toolbar') || this.wrapperEl?.querySelector('.story-line-toolbar');
@@ -502,7 +503,7 @@ export class PlotgridView extends ItemView {
         this.canvasEl.style.gridTemplateRows = rowTemplate;
         // If there are no columns, allow the canvas to stretch to the container width.
         if (this.data.columns.length === 0) this.canvasEl.style.width = '100%';
-        else this.canvasEl.style.width = this.computeTotalWidth() / this.data.zoom + 'px';
+        else this.canvasEl.style.width = this.computeTotalWidth() + 'px';
 
         const corner = this.canvasEl.createDiv('plot-grid-corner');
         corner.setAttr('data-type', 'corner');
@@ -1856,10 +1857,23 @@ export class PlotgridView extends ItemView {
             }
         }
 
-        /** Resolve a name to its canonical form via the alias map */
+        /** Resolve a name to its canonical form via the alias map.
+         *  Falls back to checking individual words (e.g. "Konstapel Bark" → try "Bark").
+         */
         const resolve = (name: string): string => {
             if (!aliasMap) return name;
-            return aliasMap.get(name.toLowerCase()) || name;
+            // Exact match
+            const exact = aliasMap.get(name.toLowerCase());
+            if (exact) return exact;
+            // Try each word (handles titles/ranks: "Konstapel Bark" → "Bark")
+            const words = name.split(/\s+/);
+            if (words.length > 1) {
+                for (const word of words) {
+                    const match = aliasMap.get(word.toLowerCase());
+                    if (match) return match;
+                }
+            }
+            return name;
         };
 
         for (const scene of scenes) {

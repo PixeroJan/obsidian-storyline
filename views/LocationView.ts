@@ -13,6 +13,7 @@ import { UndoManager } from '../services/UndoManager';
 import { pickImage as pickImageModal, resolveImagePath } from '../components/ImagePicker';
 
 import type SceneCardsPlugin from '../main';
+import { CharacterManager } from '../services/CharacterManager';
 
 import { LOCATION_VIEW_TYPE } from '../constants';
 import { applyMobileClass } from '../components/MobileAdapter';
@@ -730,16 +731,34 @@ export class LocationView extends ItemView {
             }
         }
 
-        // Characters that appear here
+        // Characters that appear here (canonicalized via alias map)
+        const charMgr = this.plugin.characterManager as CharacterManager | undefined;
+        const manualAliases = (this.plugin as any)?.settings?.characterAliases;
+        const aliasMap = charMgr ? charMgr.buildAliasMap(manualAliases) : null;
+        const resolveName = (name: string): string => {
+            if (!aliasMap) return name;
+            const exact = aliasMap.get(name.toLowerCase());
+            if (exact) return exact;
+            // Try individual words (e.g. "Konstapel Bark" → try "Bark")
+            const words = name.split(/\s+/);
+            for (const word of words) {
+                const match = aliasMap.get(word.toLowerCase());
+                if (match) return match;
+            }
+            return name;
+        };
+
         const charsHere = new Map<string, number>();
         for (const scene of locScenes) {
             if (scene.pov) {
-                charsHere.set(scene.pov, (charsHere.get(scene.pov) || 0) + 1);
+                const resolved = resolveName(scene.pov);
+                charsHere.set(resolved, (charsHere.get(resolved) || 0) + 1);
             }
             if (scene.characters) {
                 for (const c of scene.characters) {
-                    if (c !== scene.pov) {
-                        charsHere.set(c, (charsHere.get(c) || 0) + 1);
+                    const resolved = resolveName(c);
+                    if (resolved !== resolveName(scene.pov || '')) {
+                        charsHere.set(resolved, (charsHere.get(resolved) || 0) + 1);
                     }
                 }
             }

@@ -516,15 +516,22 @@ export class InspectorComponent {
         };
         renderTagChips();
 
-        // ── Description (body text — read-only preview) ──
-        if (scene.body) {
+        // ── Description (body text — editable) ──
+        {
             const descSection = this.container.createDiv('inspector-section');
             descSection.createSpan({ cls: 'inspector-label', text: 'Description:' });
-            descSection.createEl('p', {
-                cls: 'inspector-description',
-                text: scene.body.length > 300
-                    ? scene.body.substring(0, 300) + '...'
-                    : scene.body
+            const descInput = descSection.createEl('textarea', {
+                cls: 'inspector-description-input',
+                attr: { placeholder: 'Scene description / body text…', rows: '4' },
+            });
+            descInput.value = scene.body || '';
+            styleInput(descInput);
+            descInput.style.padding = '6px 8px';
+            descInput.style.resize = 'vertical';
+            descInput.addEventListener('change', async () => {
+                const val = descInput.value;
+                await this.sceneManager.updateScene(scene.filePath, { body: val } as any);
+                scene.body = val;
             });
         }
 
