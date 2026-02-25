@@ -328,6 +328,11 @@ export interface SceneCardsSettings {
     colorCoding: ColorCodingMode;
     showWordCounts: boolean;
     compactCardView: boolean;
+    characterCardPortraitSize: number;
+    characterDetailPortraitSize: number;
+    locationTreeThumbSize: number;
+    locationDetailPortraitWidth: number;
+    locationDetailPortraitHeight: number;
 
     // Writing goals
     dailyWordGoal: number;
@@ -375,6 +380,11 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     colorCoding: 'status',
     showWordCounts: true,
     compactCardView: false,
+    characterCardPortraitSize: 64,
+    characterDetailPortraitSize: 96,
+    locationTreeThumbSize: 20,
+    locationDetailPortraitWidth: 120,
+    locationDetailPortraitHeight: 80,
 
     dailyWordGoal: 1000,
 
@@ -529,6 +539,107 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.compactCardView = value;
                     await this.plugin.saveSettings();
+                }));
+
+        const imageDetails = containerEl.createEl('details', { cls: 'story-line-image-size-section' });
+        imageDetails.createEl('summary', { text: 'Image & frame sizes' });
+        const imageBody = imageDetails.createDiv();
+        imageBody.style.padding = '8px 0';
+
+        const numberSetting = (
+            parent: HTMLElement,
+            name: string,
+            desc: string,
+            value: number,
+            min: number,
+            max: number,
+            fallback: number,
+            onSet: (next: number) => void,
+        ) => {
+            new Setting(parent)
+                .setName(name)
+                .setDesc(desc)
+                .addText(text => text
+                    .setPlaceholder(String(fallback))
+                    .setValue(String(value))
+                    .onChange(async (raw) => {
+                        const parsed = Number(raw);
+                        const next = Number.isFinite(parsed)
+                            ? Math.max(min, Math.min(max, Math.round(parsed)))
+                            : fallback;
+                        onSet(next);
+                        await this.plugin.saveSettings();
+                    }));
+        };
+
+        numberSetting(
+            imageBody,
+            'Character card portrait size',
+            'Size in px for the circular portrait on character cards (default 64).',
+            this.plugin.settings.characterCardPortraitSize,
+            32,
+            200,
+            64,
+            (next) => this.plugin.settings.characterCardPortraitSize = next,
+        );
+
+        numberSetting(
+            imageBody,
+            'Character detail portrait size',
+            'Size in px for the large character portrait in detail view (default 96).',
+            this.plugin.settings.characterDetailPortraitSize,
+            48,
+            320,
+            96,
+            (next) => this.plugin.settings.characterDetailPortraitSize = next,
+        );
+
+        numberSetting(
+            imageBody,
+            'Location tree thumbnail size',
+            'Size in px for location/world thumbnails in the tree (default 20).',
+            this.plugin.settings.locationTreeThumbSize,
+            12,
+            80,
+            20,
+            (next) => this.plugin.settings.locationTreeThumbSize = next,
+        );
+
+        numberSetting(
+            imageBody,
+            'Location detail image width',
+            'Width in px for location detail image frame (default 120).',
+            this.plugin.settings.locationDetailPortraitWidth,
+            64,
+            480,
+            120,
+            (next) => this.plugin.settings.locationDetailPortraitWidth = next,
+        );
+
+        numberSetting(
+            imageBody,
+            'Location detail image height',
+            'Height in px for location detail image frame (default 80).',
+            this.plugin.settings.locationDetailPortraitHeight,
+            48,
+            360,
+            80,
+            (next) => this.plugin.settings.locationDetailPortraitHeight = next,
+        );
+
+        new Setting(imageBody)
+            .setName('Reset image sizes')
+            .setDesc('Restore all image/frame sizes to default values.')
+            .addButton(btn => btn
+                .setButtonText('Reset to defaults')
+                .onClick(async () => {
+                    this.plugin.settings.characterCardPortraitSize = DEFAULT_SETTINGS.characterCardPortraitSize;
+                    this.plugin.settings.characterDetailPortraitSize = DEFAULT_SETTINGS.characterDetailPortraitSize;
+                    this.plugin.settings.locationTreeThumbSize = DEFAULT_SETTINGS.locationTreeThumbSize;
+                    this.plugin.settings.locationDetailPortraitWidth = DEFAULT_SETTINGS.locationDetailPortraitWidth;
+                    this.plugin.settings.locationDetailPortraitHeight = DEFAULT_SETTINGS.locationDetailPortraitHeight;
+                    await this.plugin.saveSettings();
+                    this.display();
                 }));
 
         // --- Writing Goals ---

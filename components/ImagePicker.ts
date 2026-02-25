@@ -9,35 +9,85 @@
 import { App, Modal, TFile, Notice, FuzzySuggestModal } from 'obsidian';
 import * as obsidian from 'obsidian';
 
+function normalizeImagePath(imagePath: string): string {
+    let normalized = imagePath.trim();
+    if (!normalized) return '';
+
+    normalized = normalized.replace(/\\/g, '/');
+
+    if (normalized.startsWith('!')) {
+        normalized = normalized.slice(1).trim();
+    }
+
+    const wikiMatch = normalized.match(/^\[\[([\s\S]+?)\]\]$/);
+    if (wikiMatch) {
+        normalized = wikiMatch[1].trim();
+    }
+
+    const pipeIndex = normalized.indexOf('|');
+    if (pipeIndex >= 0) {
+        normalized = normalized.slice(0, pipeIndex).trim();
+    }
+
+    const headingIndex = normalized.indexOf('#');
+    if (headingIndex >= 0) {
+        normalized = normalized.slice(0, headingIndex).trim();
+    }
+
+    normalized = normalized.replace(/^\/+/, '');
+    return normalized;
+}
+
 /**
  * Helper function to resolve an image path to a valid resource URL
  * Tries multiple approaches to handle different image storage methods
  */
 export function resolveImagePath(app: App, imagePath: string): string {
     if (!imagePath) return '';
+    const normalizedPath = normalizeImagePath(imagePath);
+    if (!normalizedPath) return '';
     
     // Handle direct URLs
-    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-        return imagePath;
+    if (normalizedPath.startsWith('http://') || normalizedPath.startsWith('https://')) {
+        return normalizedPath;
     }
     
     // Try to get the file object — vault.getResourcePath(TFile) is the most reliable
     try {
-        const imageFile = app.vault.getAbstractFileByPath(imagePath);
+        const imageFile = app.vault.getAbstractFileByPath(normalizedPath);
         if (imageFile instanceof TFile) {
             return app.vault.getResourcePath(imageFile);
         }
     } catch { /* fall through */ }
+
+    // Try Obsidian linkpath resolution (handles relative and extensionless paths)
+    try {
+        const linked = app.metadataCache.getFirstLinkpathDest(normalizedPath, '');
+        if (linked instanceof TFile) {
+            return app.vault.getResourcePath(linked);
+        }
+    } catch { /* fall through */ }
+
+    // Fallback: match by basename when only filename was stored in frontmatter
+    try {
+        const lower = normalizedPath.toLowerCase();
+        const allFiles = app.vault.getFiles();
+        const byExactPath = allFiles.find(f => f.path.toLowerCase() === lower);
+        if (byExactPath) return app.vault.getResourcePath(byExactPath);
+
+        const byTail = allFiles.find(f => f.path.toLowerCase().endsWith(`/${lower}`));
+        if (byTail) return app.vault.getResourcePath(byTail);
+    } catch { /* fall through */ }
     
     // Fallback to adapter resource path
-    return app.vault.adapter.getResourcePath(imagePath);
+    return app.vault.adapter.getResourcePath(normalizedPath);
 }
 
 /**
  * Get the project-level Images folder path.
  * Derives it from the scene folder (strips /Scenes, appends /Images).
  */
-function getImagesFolderPath(app: App, sceneFolder: string): string {
+function getImagesFolderPath(sceneFolder: string): string {
     const projectRoot = sceneFolder.replace(/\\/g, '/').replace(/\/Scenes\/?$/, '');
     return `${projectRoot}/Images`;
 }
@@ -54,18 +104,29 @@ function importImageFromComputer(app: App, sceneFolder: string): Promise<string 
         input.style.display = 'none';
         document.body.appendChild(input);
 
-        input.addEventListener('change', async () => {
+        let settled = false;
+        const complete = (result: string | undefined): void => {
+            if (settled) return;
+            settled = true;
+            input.removeEventListener('change', onChange);
+            input.removeEventListener('cancel', onCancel);
+            window.removeEventListener('focus', onFocus);
+            if (document.body.contains(input)) {
+                document.body.removeChild(input);
+            }
+            resolve(result);
+        };
+
+        const onChange = async () => {
             const file = input.files?.[0];
-            document.body.removeChild(input);
 
             if (!file) {
-                resolve(undefined);
+                complete(undefined);
                 return;
             }
 
             try {
-                const imagesFolder = getImagesFolderPath(app, sceneFolder);
-                
+                const imagesFolder = getImagesFolderPath(sceneFolder);
 
 
                 // Ensure Images folder exists
@@ -96,29 +157,29 @@ function importImageFromComputer(app: App, sceneFolder: string): Promise<string 
 
                 new Notice(`Image imported: ${targetPath.split('/').pop()}`);
                 
-                resolve(targetPath);
+                complete(targetPath);
             } catch (err) {
                 console.error('[StoryLine] Image import failed:', err);
                 new Notice(`❌ Failed to import image: ${String(err)}`);
-                resolve(undefined);
+                complete(undefined);
             }
-        });
+        };
 
-        input.addEventListener('cancel', () => {
-            document.body.removeChild(input);
-            resolve(undefined);
-        });
+        const onCancel = () => {
+            complete(undefined);
+        };
 
-        // Fallback: if the dialog is dismissed without firing 'change' or 'cancel'
-        // we listen for focus returning to the window
+        // Fallback for dialogs dismissed without firing 'change'/'cancel'.
         const onFocus = () => {
             setTimeout(() => {
-                if (document.body.contains(input)) {
-                    document.body.removeChild(input);
-                }
-                window.removeEventListener('focus', onFocus);
+                if (settled) return;
+                if (input.files && input.files.length > 0) return;
+                complete(undefined);
             }, 300);
         };
+
+        input.addEventListener('change', onChange);
+        input.addEventListener('cancel', onCancel);
         window.addEventListener('focus', onFocus);
 
         input.click();
@@ -178,6 +239,7 @@ class ImageChoiceModal extends Modal {
                 img.style.maxHeight = '120px';
                 img.style.borderRadius = '8px';
                 img.style.objectFit = 'cover';
+                img.style.border = '1px solid var(--background-modifier-border)';
                 
                 // Add error handler to show placeholder if image fails to load
                 img.onerror = () => {
@@ -191,7 +253,6 @@ class ImageChoiceModal extends Modal {
                 const placeholder = preview.createDiv('image-choice-preview-placeholder');
                 placeholder.setText('Image not found');
             }
-            img.style.border = '1px solid var(--background-modifier-border)';
 
             const pathLabel = preview.createDiv();
             pathLabel.style.fontSize = '11px';
@@ -208,15 +269,10 @@ class ImageChoiceModal extends Modal {
         obsidian.setIcon(importIcon, 'upload');
         importBtn.prepend(importIcon);
         importBtn.addEventListener('click', async () => {
+            this.resolved = true;
             this.close();
             const result = await importImageFromComputer(this.app, this.sceneFolder);
-            if (result) {
-                this.resolved = true;
-                this.onResult(result);
-            } else {
-                this.resolved = true;
-                this.onResult(undefined);
-            }
+            this.onResult(result);
         });
 
         // Choose from vault
@@ -225,13 +281,14 @@ class ImageChoiceModal extends Modal {
         obsidian.setIcon(vaultIcon, 'folder-open');
         vaultBtn.prepend(vaultIcon);
         vaultBtn.addEventListener('click', () => {
+            this.resolved = true;
             this.close();
+
             const allFiles = this.app.vault.getFiles()
                 .filter(f => /\.(png|jpe?g|gif|svg|webp|bmp|avif)$/i.test(f.path))
                 .sort((a, b) => a.path.localeCompare(b.path));
 
             const picker = new VaultImagePickerModal(this.app, allFiles, (result) => {
-                this.resolved = true;
                 this.onResult(result);
             });
             picker.open();
@@ -264,7 +321,7 @@ class ImageChoiceModal extends Modal {
 class VaultImagePickerModal extends FuzzySuggestModal<TFile> {
     private imageFiles: TFile[];
     private onSelect: (path: string | undefined) => void;
-    private picked = false;
+    private settled = false;
 
     constructor(app: App, files: TFile[], onSelect: (path: string | undefined) => void) {
         super(app);
@@ -281,15 +338,20 @@ class VaultImagePickerModal extends FuzzySuggestModal<TFile> {
         return item.path;
     }
 
-    onChooseItem(item: TFile): void {
-        this.picked = true;
-        this.onSelect(item.path);
+    private emitOnce(path: string | undefined): void {
+        if (this.settled) return;
+        this.settled = true;
+        this.onSelect(path);
+    }
+
+    onChooseItem(item: TFile, _evt: MouseEvent | KeyboardEvent): void {
+        this.emitOnce(item.path);
     }
 
     onClose(): void {
         super.onClose();
-        if (!this.picked) {
-            this.onSelect(undefined);
-        }
+        // Defer cancel emission to avoid event-order race where close can fire
+        // before choose callback in some modal stacks.
+        setTimeout(() => this.emitOnce(undefined), 0);
     }
 }

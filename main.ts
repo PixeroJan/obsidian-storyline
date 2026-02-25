@@ -46,6 +46,7 @@ export default class SceneCardsPlugin extends Plugin {
 
     async onload(): Promise<void> {
         await this.loadSettings();
+        this.applyImageSizingVariables();
 
         this.sceneManager = new SceneManager(this.app, this);
         this.locationManager = new LocationManager(this.app);
@@ -306,7 +307,17 @@ export default class SceneCardsPlugin extends Plugin {
     }
 
     async saveSettings(): Promise<void> {
+        this.applyImageSizingVariables();
         await this.saveData(this.settings);
+    }
+
+    private applyImageSizingVariables(): void {
+        const root = document.documentElement;
+        root.style.setProperty('--sl-character-card-portrait-size', `${this.settings.characterCardPortraitSize}px`);
+        root.style.setProperty('--sl-character-detail-portrait-size', `${this.settings.characterDetailPortraitSize}px`);
+        root.style.setProperty('--sl-location-tree-thumb-size', `${this.settings.locationTreeThumbSize}px`);
+        root.style.setProperty('--sl-location-detail-portrait-width', `${this.settings.locationDetailPortraitWidth}px`);
+        root.style.setProperty('--sl-location-detail-portrait-height', `${this.settings.locationDetailPortraitHeight}px`);
     }
 
     /**
