@@ -53,3 +53,29 @@ export function deriveProjectFolders(
         locationFolder: `${base}/Locations`,
     };
 }
+
+/**
+ * Derive project folder paths from the project .md file's actual location.
+ * Works for projects anywhere in the vault — not tied to storyLineRoot.
+ *
+ * Layout detection:
+ *  - New layout:  `Any/Path/MyNovel/MyNovel.md`  → base = `Any/Path/MyNovel`
+ *  - Legacy:      `Any/Path/MyNovel.md`           → base = `Any/Path/MyNovel`
+ */
+export function deriveProjectFoldersFromFilePath(
+    filePath: string
+): { baseFolder: string; sceneFolder: string; characterFolder: string; locationFolder: string } {
+    const lastSlash = filePath.lastIndexOf('/');
+    const parentDir = lastSlash >= 0 ? filePath.substring(0, lastSlash) : '';
+    const basename = (filePath.split('/').pop() ?? '').replace(/\.md$/i, '');
+    const parentName = parentDir.split('/').pop() ?? '';
+
+    // If the file sits inside a folder with the same name → new layout
+    const baseFolder = (parentName === basename) ? parentDir : `${parentDir}/${basename}`;
+    return {
+        baseFolder,
+        sceneFolder: `${baseFolder}/Scenes`,
+        characterFolder: `${baseFolder}/Characters`,
+        locationFolder: `${baseFolder}/Locations`,
+    };
+}

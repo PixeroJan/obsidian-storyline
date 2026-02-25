@@ -89,9 +89,28 @@ export function enableTouchDrag(
     let ghost: HTMLElement | null = null;
     let startX = 0;
     let startY = 0;
+    /** Suppress the synthetic click that fires after touchend */
+    let suppressClick = false;
 
-    const LONG_PRESS_MS = 400;
-    const MOVE_THRESHOLD = 8;
+    const LONG_PRESS_MS = 300;
+    const MOVE_THRESHOLD = 20;
+
+    /** Find all scrollable ancestors up to the document */
+    function getScrollParents(el: HTMLElement): HTMLElement[] {
+        const parents: HTMLElement[] = [];
+        let parent = el.parentElement;
+        while (parent) {
+            const style = getComputedStyle(parent);
+            if (/(auto|scroll)/.test(style.overflowY || '') ||
+                /(auto|scroll)/.test(style.overflow || '')) {
+                parents.push(parent);
+            }
+            parent = parent.parentElement;
+        }
+        return parents;
+    }
+
+    let scrollParents: HTMLElement[] = [];
 
     function cleanup() {
         isDragging = false;
@@ -104,6 +123,13 @@ export function enableTouchDrag(
             longPressTimer = null;
         }
         card.removeClass('touch-dragging');
+        card.style.removeProperty('touch-action');
+        // Re-enable scrolling on all locked ancestors
+        for (const sp of scrollParents) {
+            sp.style.removeProperty('overflow-y');
+            sp.style.removeProperty('touch-action');
+        }
+        scrollParents = [];
         // Remove all drop indicators
         document.querySelectorAll('.drop-above, .drop-below, .drag-over').forEach(el => {
             el.removeClass('drop-above', 'drop-below', 'drag-over');
@@ -111,13 +137,23 @@ export function enableTouchDrag(
     }
 
     function onTouchStart(e: TouchEvent) {
+        if (e.touches.length > 1) return; // Ignore multi-touch
         const touch = e.touches[0];
         startX = touch.clientX;
         startY = touch.clientY;
 
         longPressTimer = setTimeout(() => {
             isDragging = true;
+            suppressClick = true;
             card.addClass('touch-dragging');
+
+            // Disable scrolling on the card and all scroll ancestors
+            card.style.touchAction = 'none';
+            scrollParents = getScrollParents(card);
+            for (const sp of scrollParents) {
+                sp.style.overflowY = 'hidden';
+                sp.style.touchAction = 'none';
+            }
 
             // Create ghost element
             ghost = card.cloneNode(true) as HTMLElement;
@@ -125,7 +161,7 @@ export function enableTouchDrag(
             ghost.style.position = 'fixed';
             ghost.style.zIndex = '10000';
             ghost.style.pointerEvents = 'none';
-            ghost.style.opacity = '0.8';
+            ghost.style.opacity = '0.85';
             ghost.style.width = card.offsetWidth + 'px';
             ghost.style.transform = 'scale(1.05)';
             ghost.style.left = (startX - card.offsetWidth / 2) + 'px';
@@ -153,7 +189,9 @@ export function enableTouchDrag(
             return;
         }
 
+        // Prevent scrolling while dragging
         e.preventDefault();
+        e.stopPropagation();
 
         // Move ghost
         if (ghost) {
@@ -206,12 +244,26 @@ export function enableTouchDrag(
         }
 
         cleanup();
+
+        // Suppress the synthetic click event that the browser fires after touchend
+        // Use a short timeout so the flag resets even if click never fires
+        setTimeout(() => { suppressClick = false; }, 400);
+    }
+
+    function onClickCapture(e: MouseEvent) {
+        if (suppressClick) {
+            e.stopPropagation();
+            e.preventDefault();
+            suppressClick = false;
+        }
     }
 
     card.addEventListener('touchstart', onTouchStart, { passive: true });
     card.addEventListener('touchmove', onTouchMove, { passive: false });
     card.addEventListener('touchend', onTouchEnd, { passive: true });
-    card.addEventListener('touchcancel', cleanup, { passive: true });
+    card.addEventListener('touchcancel', () => { cleanup(); suppressClick = false; }, { passive: true });
+    // Capture-phase click handler to suppress click after drag
+    card.addEventListener('click', onClickCapture, { capture: true });
 
     // Return cleanup function
     return () => {
@@ -220,5 +272,6 @@ export function enableTouchDrag(
         card.removeEventListener('touchmove', onTouchMove);
         card.removeEventListener('touchend', onTouchEnd);
         card.removeEventListener('touchcancel', cleanup);
+        card.removeEventListener('click', onClickCapture, { capture: true });
     };
 }

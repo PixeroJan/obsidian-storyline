@@ -10,6 +10,8 @@ import { QuickAddModal } from '../components/QuickAddModal';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { VirtualScroller } from '../components/VirtualScroller';
 import { enableDragToPan } from '../components/DragToPan';
+import { SplitSceneModal, MergeSceneModal } from '../components/SplitMergeModals';
+import { isMobile, applyMobileClass, enableTouchDrag } from '../components/MobileAdapter';
 import { BOARD_VIEW_TYPE } from '../constants';
 import type SceneCardsPlugin from '../main';
 
@@ -58,6 +60,7 @@ export class BoardView extends ItemView {
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
         container.addClass('story-line-board-container');
+        applyMobileClass(container);
         this.rootContainer = container;
 
         await this.sceneManager.initialize();
@@ -254,6 +257,7 @@ export class BoardView extends ItemView {
      */
     private renderColumn(board: HTMLElement, title: string, scenes: Scene[]): void {
         const column = board.createDiv('story-line-column');
+        column.setAttribute('data-group', title);
 
         // Column header
         const header = column.createDiv('story-line-column-header');
@@ -318,6 +322,26 @@ export class BoardView extends ItemView {
 
                 await this.handleDropOnCard(filePath, scene, title, scenes, insertBefore);
             });
+
+            // Mobile: touch-based drag-and-drop
+            if (isMobile) {
+                enableTouchDrag(cardEl, scene.filePath, async (targetEl, insertBefore) => {
+                    const targetPath = targetEl.getAttribute('data-path');
+                    if (!targetPath || targetPath === scene.filePath) return;
+                    const targetScene = this.sceneManager.getScene(targetPath);
+                    if (!targetScene) return;
+
+                    // Resolve the *target* column (may differ from source)
+                    const targetColumn = targetEl.closest('.story-line-column');
+                    const targetGroupKey = targetColumn?.getAttribute('data-group') || title;
+                    const groups = this.sceneManager.getScenesGroupedByWithEmpty(
+                        this.groupBy, this.currentFilter, this.currentSort
+                    );
+                    const targetScenes = groups.get(targetGroupKey) || scenes;
+
+                    await this.handleDropOnCard(scene.filePath, targetScene, targetGroupKey, targetScenes, insertBefore);
+                });
+            }
 
             return cardEl;
         };
@@ -690,6 +714,32 @@ export class BoardView extends ItemView {
             });
             this.updateBulkBar();
         });
+
+        // Merge scenes (2+ selected)
+        const mergeBtn = this.bulkBarEl.createEl('button', {
+            cls: 'bulk-bar-btn',
+            text: 'Merge'
+        });
+        const mergeIcon = mergeBtn.createSpan();
+        obsidian.setIcon(mergeIcon, 'combine');
+        mergeBtn.addEventListener('click', () => {
+            // Collect selected scenes in sequence order
+            const scenes = Array.from(this.selectedScenes)
+                .map(fp => this.sceneManager.getScene(fp))
+                .filter(Boolean) as Scene[];
+            scenes.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+
+            if (scenes.length < 2) {
+                new Notice('Select at least 2 scenes to merge');
+                return;
+            }
+
+            new MergeSceneModal(this.plugin, scenes, () => {
+                this.selectedScenes.clear();
+                this.refreshBoard();
+                this.updateBulkBar();
+            }).open();
+        });
     }
 
     /**
@@ -731,6 +781,14 @@ export class BoardView extends ItemView {
                 .onClick(async () => {
                     await this.sceneManager.duplicateScene(scene.filePath);
                     this.refreshBoard();
+                });
+        });
+
+        menu.addItem(item => {
+            item.setTitle('Split Scene')
+                .setIcon('scissors')
+                .onClick(() => {
+                    new SplitSceneModal(this.plugin, scene, () => this.refreshBoard()).open();
                 });
         });
 

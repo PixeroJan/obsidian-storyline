@@ -5139,17 +5139,46 @@ body.theme-dark {
 /* ── Touch-friendly scene cards ────────────────────── */
 
 .sl-mobile .scene-card {
-    min-height: 44px;
+    min-height: 64px;
     padding: 10px 12px;
     cursor: default;
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
+    overflow: hidden;
+}
+
+/* Clamp conflict / summary text on mobile to prevent overflow */
+.sl-mobile .scene-card-conflict {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Clamp title on mobile too, in case it's very long */
+.sl-mobile .scene-card-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sl-mobile .scene-card.touch-dragging {
     opacity: 0.4;
     box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+/* Drop indicators for scene cards (touch drag-and-drop) */
+.scene-card.drop-above {
+    box-shadow: 0 -3px 0 0 var(--sc-accent, var(--interactive-accent));
+    z-index: 2;
+}
+.scene-card.drop-below {
+    box-shadow: 0 3px 0 0 var(--sc-accent, var(--interactive-accent));
+    z-index: 2;
 }
 
 .sl-touch-ghost {

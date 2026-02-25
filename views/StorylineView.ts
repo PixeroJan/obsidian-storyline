@@ -6,6 +6,7 @@ import { renderViewSwitcher } from '../components/ViewSwitcher';
 import type SceneCardsPlugin from '../main';
 
 import { STORYLINE_VIEW_TYPE } from '../constants';
+import { applyMobileClass } from '../components/MobileAdapter';
 import { enableDragToPan } from '../components/DragToPan';
 import { resolveTagColor } from '../settings';
 
@@ -48,6 +49,7 @@ export class StorylineView extends ItemView {
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
         container.addClass('story-line-storyline-container');
+        applyMobileClass(container);
         this.rootContainer = container;
 
         await this.sceneManager.initialize();

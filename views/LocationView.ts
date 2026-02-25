@@ -10,11 +10,12 @@ import { SceneManager } from '../services/SceneManager';
 import { LocationManager } from '../services/LocationManager';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { UndoManager } from '../services/UndoManager';
-import { pickImage as pickImageModal } from '../components/ImagePicker';
+import { pickImage as pickImageModal, resolveImagePath } from '../components/ImagePicker';
 
 import type SceneCardsPlugin from '../main';
 
 import { LOCATION_VIEW_TYPE } from '../constants';
+import { applyMobileClass } from '../components/MobileAdapter';
 
 /**
  * Location View — hierarchical World → Location browser with inline editing.
@@ -59,6 +60,7 @@ export class LocationView extends ItemView {
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
         container.addClass('story-line-location-container');
+        applyMobileClass(container);
         this.rootContainer = container;
 
         await this.sceneManager.initialize();
@@ -177,8 +179,22 @@ export class LocationView extends ItemView {
 
         const icon = header.createSpan('location-tree-icon');
         if (world.image) {
-            const imgSrc = this.app.vault.adapter.getResourcePath(world.image);
-            icon.createEl('img', { attr: { src: imgSrc, alt: world.name }, cls: 'location-tree-thumb' });
+            try {
+                // Use the helper function to resolve the image path
+                const imgSrc = resolveImagePath(this.app, world.image);
+                
+                const img = icon.createEl('img', { attr: { src: imgSrc, alt: world.name }, cls: 'location-tree-thumb' });
+                
+                // Add error handler to show placeholder if image fails to load
+                img.onerror = () => {
+                    img.remove();
+                    obsidian.setIcon(icon, 'globe');
+                    console.log('Failed to load world image:', world.image);
+                };
+            } catch (error) {
+                console.error('Error loading world image:', error);
+                obsidian.setIcon(icon, 'globe');
+            }
         } else {
             obsidian.setIcon(icon, 'globe');
         }
@@ -228,8 +244,22 @@ export class LocationView extends ItemView {
 
         const icon = header.createSpan('location-tree-icon');
         if (loc.image) {
-            const imgSrc = this.app.vault.adapter.getResourcePath(loc.image);
-            icon.createEl('img', { attr: { src: imgSrc, alt: loc.name }, cls: 'location-tree-thumb' });
+            try {
+                // Use the helper function to resolve the image path
+                const imgSrc = resolveImagePath(this.app, loc.image);
+                
+                const img = icon.createEl('img', { attr: { src: imgSrc, alt: loc.name }, cls: 'location-tree-thumb' });
+                
+                // Add error handler to show placeholder if image fails to load
+                img.onerror = () => {
+                    img.remove();
+                    obsidian.setIcon(icon, 'map-pin');
+                    console.log('Failed to load location image:', loc.image);
+                };
+            } catch (error) {
+                console.error('Error loading location image:', error);
+                obsidian.setIcon(icon, 'map-pin');
+            }
         } else {
             obsidian.setIcon(icon, 'map-pin');
         }
@@ -329,9 +359,25 @@ export class LocationView extends ItemView {
         const renderPortrait = () => {
             portraitArea.empty();
             if (draft.image) {
-                const imgSrc = this.app.vault.adapter.getResourcePath(draft.image);
-                const img = portraitArea.createEl('img', { attr: { src: imgSrc, alt: draft.name } });
-                img.classList.add('location-detail-portrait-img');
+                try {
+                    // Use the helper function to resolve the image path
+                    const imgSrc = resolveImagePath(this.app, draft.image);
+                    
+                    const img = portraitArea.createEl('img', { attr: { src: imgSrc, alt: draft.name } });
+                    img.classList.add('location-detail-portrait-img');
+                    
+                    // Add error handler to show placeholder if image fails to load
+                    img.onerror = () => {
+                        img.remove();
+                        const ph = portraitArea.createDiv('location-detail-portrait-placeholder');
+                        obsidian.setIcon(ph, 'image');
+                        console.log('Failed to load location detail image:', draft.image);
+                    };
+                } catch (error) {
+                    console.error('Error loading location detail image:', error);
+                    const ph = portraitArea.createDiv('location-detail-portrait-placeholder');
+                    obsidian.setIcon(ph, 'image');
+                }
             } else {
                 const ph = portraitArea.createDiv('location-detail-portrait-placeholder');
                 obsidian.setIcon(ph, 'image');

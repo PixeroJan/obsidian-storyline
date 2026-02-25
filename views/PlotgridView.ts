@@ -11,6 +11,7 @@ import { LinkScanner } from '../services/LinkScanner';
 import * as lucide from 'lucide';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { enableDragToPan } from '../components/DragToPan';
+import { isMobile } from '../components/MobileAdapter';
 import { PLOTGRID_VIEW_TYPE } from '../constants';
 import { resolveTagColor } from '../settings';
 import type SceneCardsPlugin from '../main';
@@ -61,6 +62,15 @@ export class PlotgridView extends ItemView {
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
         container.addClass('story-line-board-container');
+
+        // PlotGrid is desktop-only — show friendly message on mobile
+        if (isMobile) {
+            const msg = container.createDiv('sl-mobile-unavailable');
+            msg.createEl('h3', { text: 'Plot Grid' });
+            msg.createEl('p', { text: 'The plot grid requires a larger screen. Use the Board view to manage scenes on mobile.' });
+            return;
+        }
+
         this.containerEl.addClass('plot-grid-root');
 
         await this.loadData();

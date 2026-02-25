@@ -1,6 +1,6 @@
 import { App, TFile, TFolder, Notice, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { Scene, SceneFilter, SortConfig, SortField, STATUS_ORDER, FilterPreset, BeatSheetTemplate } from '../models/Scene';
-import { StoryLineProject, deriveProjectFolders } from '../models/StoryLineProject';
+import { StoryLineProject, deriveProjectFolders, deriveProjectFoldersFromFilePath } from '../models/StoryLineProject';
 import { MetadataParser } from './MetadataParser';
 import { UndoManager } from './UndoManager';
 import { SceneQueryService, ISceneStore } from './SceneQueryService';
@@ -115,6 +115,20 @@ export class SceneManager implements ISceneStore {
             } catch { /* folder unreadable — skip */ }
         }
 
+        // ── Vault-wide discovery ──────────────────────────────────
+        // Scan the entire vault for .md files with type: storyline
+        // that live outside the root folder (custom locations).
+        try {
+            const allFiles = this.app.vault.getMarkdownFiles();
+            for (const file of allFiles) {
+                if (this.projects.has(file.path)) continue; // already found in root scan
+                const cache = this.app.metadataCache.getFileCache(file);
+                if (cache?.frontmatter?.type === 'storyline') {
+                    await tryParse(file.path);
+                }
+            }
+        } catch { /* vault-wide scan is best-effort */ }
+
         // Restore active project from settings
         const savedPath = this.plugin.settings.activeProjectFile;
         if (savedPath && this.projects.has(savedPath)) {
@@ -134,8 +148,8 @@ export class SceneManager implements ISceneStore {
     /**
      * Create a new StoryLine project
      */
-    async createProject(title: string, description = ''): Promise<StoryLineProject> {
-        const rootPath = this.plugin.settings.storyLineRoot;
+    async createProject(title: string, description = '', customBasePath?: string): Promise<StoryLineProject> {
+        const rootPath = customBasePath || this.plugin.settings.storyLineRoot;
         await this.ensureFolder(rootPath);
 
         const safeName = title.replace(/[\\/:*?"<>|]/g, '-');
@@ -269,9 +283,9 @@ export class SceneManager implements ISceneStore {
             // Derive basename from file path (strip directory + extension)
             const basename = filePath.split('/').pop()?.replace(/\.md$/i, '') ?? filePath;
             const title = fm.title || basename;
-            const rootPath = this.plugin.settings.storyLineRoot;
-            const safeName = basename;
-            const folders = deriveProjectFolders(rootPath, safeName);
+
+            // Derive folders from the file's actual location (works for any vault path)
+            const folders = deriveProjectFoldersFromFilePath(filePath);
 
             return {
                 filePath,
@@ -870,5 +884,156 @@ export class SceneManager implements ISceneStore {
         if (!existing) {
             await this.app.vault.createFolder(normalized);
         }
+    }
+
+    // ────────────────────────────────────
+    //  Split & Merge
+    // ────────────────────────────────────
+
+    /**
+     * Split a scene into two at a given character offset in the body text.
+     * Scene A keeps the original's metadata. Scene B inherits all metadata
+     * (including status) but gets a new sequence number.
+     *
+     * Returns [sceneA file, sceneB file].
+     */
+    async splitScene(
+        filePath: string,
+        splitOffset: number,
+        titleA?: string,
+        titleB?: string,
+    ): Promise<[TFile, TFile]> {
+        const scene = this.scenes.get(filePath);
+        if (!scene) throw new Error('Scene not found');
+
+        const body = scene.body || '';
+        const bodyA = body.substring(0, splitOffset).trim();
+        const bodyB = body.substring(splitOffset).trim();
+
+        // Scene A: update existing file with first half
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (!file || !(file instanceof TFile)) throw new Error('Scene file not found');
+
+        const updatesA: Partial<Scene> = { body: bodyA };
+        if (titleA) updatesA.title = titleA;
+        await MetadataParser.updateFrontmatter(this.app, file, updatesA);
+        const parsedA = await MetadataParser.parseFile(this.app, file);
+        if (parsedA) this.scenes.set(file.path, parsedA);
+
+        // Shift sequence numbers for all scenes after the original
+        const origSeq = scene.sequence ?? 0;
+        const allScenes = this.getAllScenes()
+            .filter(s => (s.sequence ?? 0) > origSeq)
+            .sort((a, b) => (b.sequence ?? 0) - (a.sequence ?? 0)); // descending to avoid collisions
+        for (const s of allScenes) {
+            await this.updateScene(s.filePath, { sequence: (s.sequence ?? 0) + 1 });
+        }
+
+        // Scene B: create new file inheriting metadata
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { filePath: _fp, body: _body, wordcount: _wc, created: _cr, modified: _mod, ...inherited } = scene;
+        const sceneB: Partial<Scene> = {
+            ...inherited,
+            title: titleB || `${scene.title} (part 2)`,
+            sequence: origSeq + 1,
+            body: bodyB,
+        };
+
+        const fileB = await this.createScene(sceneB);
+        new Notice(`Split "${scene.title}" into two scenes`);
+        return [file, fileB];
+    }
+
+    /**
+     * Merge two or more adjacent scenes into one.
+     * The first scene's file is kept; subsequent scenes are deleted.
+     * Metadata is combined: characters unioned, lower status kept, etc.
+     *
+     * @param filePaths  Ordered list of scene file paths to merge
+     * @param mergedTitle  Optional title for the merged scene
+     * @returns The merged scene's TFile
+     */
+    async mergeScenes(filePaths: string[], mergedTitle?: string): Promise<TFile> {
+        if (filePaths.length < 2) throw new Error('Need at least 2 scenes to merge');
+
+        const scenes = filePaths.map(fp => this.scenes.get(fp)).filter(Boolean) as Scene[];
+        if (scenes.length < 2) throw new Error('Could not find all scenes');
+
+        const primary = scenes[0];
+        const rest = scenes.slice(1);
+
+        // Combine body text with separators
+        const combinedBody = scenes
+            .map(s => (s.body || '').trim())
+            .filter(b => b.length > 0)
+            .join('\n\n---\n\n');
+
+        // Union characters (deduplicated)
+        const charSet = new Set<string>();
+        for (const s of scenes) {
+            if (s.pov) charSet.add(s.pov);
+            if (s.characters) s.characters.forEach(c => charSet.add(c));
+        }
+
+        // Union tags (deduplicated)
+        const tagSet = new Set<string>();
+        for (const s of scenes) {
+            if (s.tags) s.tags.forEach(t => tagSet.add(t));
+        }
+
+        // Keep lower (earlier) status
+        const lowestStatus = scenes.reduce((lowest, s) => {
+            const idxCurrent = STATUS_ORDER.indexOf(s.status as any);
+            const idxLowest = STATUS_ORDER.indexOf(lowest as any);
+            // -1 means not found; treat as highest so it doesn't win
+            const safeCurrent = idxCurrent >= 0 ? idxCurrent : STATUS_ORDER.length;
+            const safeLowest = idxLowest >= 0 ? idxLowest : STATUS_ORDER.length;
+            return safeCurrent < safeLowest ? s.status : lowest;
+        }, primary.status || 'idea');
+
+        // Combine locations if different
+        const locations = [...new Set(scenes.map(s => s.location).filter(Boolean))];
+        const mergedLocation = locations.length === 1 ? locations[0] : locations.join(', ');
+
+        // Union setup/payoff links
+        const setupSet = new Set<string>();
+        const payoffSet = new Set<string>();
+        for (const s of scenes) {
+            if (s.setup_scenes) s.setup_scenes.forEach(x => setupSet.add(x));
+            if (s.payoff_scenes) s.payoff_scenes.forEach(x => payoffSet.add(x));
+        }
+
+        // Build merged updates for primary scene
+        const updates: Partial<Scene> = {
+            body: combinedBody,
+            title: mergedTitle || primary.title,
+            characters: [...charSet],
+            tags: [...tagSet],
+            status: lowestStatus,
+            location: mergedLocation,
+            setup_scenes: setupSet.size > 0 ? [...setupSet] : undefined,
+            payoff_scenes: payoffSet.size > 0 ? [...payoffSet] : undefined,
+        };
+
+        // Update the primary scene
+        const primaryFile = this.app.vault.getAbstractFileByPath(primary.filePath);
+        if (!primaryFile || !(primaryFile instanceof TFile)) throw new Error('Primary scene file not found');
+        await MetadataParser.updateFrontmatter(this.app, primaryFile, updates);
+        const parsed = await MetadataParser.parseFile(this.app, primaryFile);
+        if (parsed) this.scenes.set(primaryFile.path, parsed);
+
+        // Delete the other scenes
+        for (const s of rest) {
+            await this.deleteScene(s.filePath);
+        }
+
+        // Resequence remaining scenes to close gaps
+        const ordered = this.getAllScenes()
+            .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+            .map(s => s.filePath);
+        await this.resequenceScenes(ordered);
+
+        new Notice(`Merged ${scenes.length} scenes into "${updates.title}"`);
+        return primaryFile;
     }
 }

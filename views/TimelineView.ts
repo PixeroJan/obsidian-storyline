@@ -11,6 +11,7 @@ import { enableDragToPan } from '../components/DragToPan';
 import type SceneCardsPlugin from '../main';
 
 import { TIMELINE_VIEW_TYPE } from '../constants';
+import { applyMobileClass } from '../components/MobileAdapter';
 
 /**
  * Timeline ordering mode
@@ -65,6 +66,7 @@ export class TimelineView extends ItemView {
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
         container.addClass('story-line-timeline-container');
+        applyMobileClass(container);
         this.rootContainer = container;
 
         await this.sceneManager.initialize();

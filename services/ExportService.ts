@@ -119,9 +119,9 @@ export class ExportService {
             lines.push(`#### ${scene.title || 'Untitled Scene'}`);
             lines.push('');
 
-            // Scene body
+            // Scene body (strip wikilinks for clean export)
             if (scene.body && scene.body.trim()) {
-                lines.push(scene.body.trim());
+                lines.push(this.stripWikiLinks(scene.body.trim()));
                 lines.push('');
             } else {
                 lines.push('*No content yet.*');
@@ -473,8 +473,9 @@ ${body}
             parts.push(`<h4>${this.escHtml(scene.title || 'Untitled Scene')}</h4>`);
 
             if (scene.body && scene.body.trim()) {
-                // Convert basic markdown paragraphs to HTML
-                const paragraphs = scene.body.trim().split(/\n{2,}/);
+                // Convert basic markdown paragraphs to HTML (strip wikilinks)
+                const cleanBody = this.stripWikiLinks(scene.body.trim());
+                const paragraphs = cleanBody.split(/\n{2,}/);
                 for (const p of paragraphs) {
                     parts.push(`<p>${this.escHtml(p.trim())}</p>`);
                 }
@@ -612,7 +613,7 @@ ${body}
                     scene.title || 'Untitled',
                     String(scene.act ?? ''),
                     String(scene.chapter ?? ''),
-                    scene.body || '',
+                    this.stripWikiLinks(scene.body || ''),
                 ]);
             }
         }
@@ -703,5 +704,19 @@ ${body}
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
+    }
+
+    /**
+     * Strip Obsidian-style wikilinks from text, keeping only the display name.
+     *  - `[[Alias|Display]]`  → `Display`
+     *  - `[[Path/To/Note]]`   → `Note`  (last path segment)
+     *  - `[[Simple]]`         → `Simple`
+     */
+    private stripWikiLinks(text: string): string {
+        return text.replace(/\[\[([^\]]+)\]\]/g, (_match, inner: string) => {
+            if (inner.includes('|')) return inner.split('|').pop()!.trim();
+            if (inner.includes('/')) return inner.split('/').pop()!.trim();
+            return inner.trim();
+        });
     }
 }

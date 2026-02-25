@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, TFile, Notice, Modal, Setting } from 'obsidian';
+import { ItemView, WorkspaceLeaf, TFile, Notice, Modal, Setting, requestUrl } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { Scene, STATUS_CONFIG } from '../models/Scene';
 import { Character, CHARACTER_CATEGORIES, CHARACTER_ROLES, CharacterFieldDef, extractCharacterProps, extractCharacterLocationTags, extractAllCharacterTags, TagType } from '../models/Character';
@@ -8,7 +8,8 @@ import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { UndoManager } from '../services/UndoManager';
 import { RelationshipMap } from '../components/RelationshipMap';
 import { StoryGraph } from '../components/StoryGraph';
-import { pickImage as pickImageModal } from '../components/ImagePicker';
+import { pickImage as pickImageModal, resolveImagePath } from '../components/ImagePicker';
+import { isMobile, DESKTOP_ONLY_CHARACTER_MODES, applyMobileClass } from '../components/MobileAdapter';
 
 import type SceneCardsPlugin from '../main';
 
@@ -67,6 +68,7 @@ export class CharacterView extends ItemView {
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
         container.addClass('story-line-character-container');
+        applyMobileClass(container);
         this.rootContainer = container;
 
         await this.sceneManager.initialize();
@@ -109,6 +111,8 @@ export class CharacterView extends ItemView {
                 }
             });
 
+            // Map and StoryGraph modes — desktop only
+            if (!isMobile) {
             const mapBtn = modeToggle.createEl('button', {
                 cls: `character-mode-btn ${this.viewMode === 'map' ? 'active' : ''}`,
             });
@@ -134,6 +138,12 @@ export class CharacterView extends ItemView {
                     if (this.rootContainer) this.renderView(this.rootContainer);
                 }
             });
+            } // end if (!isMobile)
+        }
+
+        // Force grid mode on mobile if user was in a desktop-only mode
+        if (isMobile && DESKTOP_ONLY_CHARACTER_MODES.has(this.viewMode)) {
+            this.viewMode = 'grid';
         }
 
         // New character button
@@ -296,9 +306,21 @@ export class CharacterView extends ItemView {
         // Portrait / placeholder
         const portrait = card.createDiv('character-card-portrait');
         if (char.image) {
-            const imgSrc = this.app.vault.adapter.getResourcePath(char.image);
-            const img = portrait.createEl('img', { attr: { src: imgSrc, alt: char.name } });
-            img.classList.add('character-portrait-img');
+            const imgSrc = resolveImagePath(this.app, char.image);
+            if (imgSrc) {
+                const img = portrait.createEl('img', {
+                    cls: 'character-portrait-img',
+                    attr: { src: imgSrc, alt: char.name }
+                });
+                img.onerror = () => {
+                    img.remove();
+                    const ph = portrait.createDiv('character-portrait-placeholder');
+                    obsidian.setIcon(ph, 'circle-user-round');
+                };
+            } else {
+                const ph = portrait.createDiv('character-portrait-placeholder');
+                obsidian.setIcon(ph, 'circle-user-round');
+            }
         } else {
             const placeholder = portrait.createDiv('character-portrait-placeholder');
             obsidian.setIcon(placeholder, 'circle-user-round');
@@ -619,9 +641,21 @@ export class CharacterView extends ItemView {
         const renderPortrait = () => {
             portraitArea.empty();
             if (draft.image) {
-                const imgSrc = this.app.vault.adapter.getResourcePath(draft.image);
-                const img = portraitArea.createEl('img', { attr: { src: imgSrc, alt: draft.name } });
-                img.classList.add('character-detail-portrait-img');
+                const imgSrc = resolveImagePath(this.app, draft.image);
+                if (imgSrc) {
+                    const img = portraitArea.createEl('img', {
+                        cls: 'character-detail-portrait-img',
+                        attr: { src: imgSrc, alt: draft.name }
+                    });
+                    img.onerror = () => {
+                        img.remove();
+                        const ph = portraitArea.createDiv('character-detail-portrait-placeholder');
+                        obsidian.setIcon(ph, 'circle-user-round');
+                    };
+                } else {
+                    const ph = portraitArea.createDiv('character-detail-portrait-placeholder');
+                    obsidian.setIcon(ph, 'circle-user-round');
+                }
             } else {
                 const ph = portraitArea.createDiv('character-detail-portrait-placeholder');
                 obsidian.setIcon(ph, 'circle-user-round');
