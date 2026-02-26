@@ -105,10 +105,10 @@ export class StatsView extends ItemView {
         // Word count
         const wordSection = content.createDiv('stats-section');
         wordSection.createEl('h4', { text: 'Word Count' });
-        const totalTarget = stats.totalTargetWords || 80000;
+        const totalTarget = this.plugin.settings.projectWordGoal || stats.totalTargetWords || 80000;
         const wordPercent = Math.round((stats.totalWords / totalTarget) * 100);
         wordSection.createEl('p', {
-            text: `${stats.totalWords.toLocaleString()} / ~${totalTarget.toLocaleString()} (${wordPercent}%)`
+            text: `${stats.totalWords.toLocaleString()} / ${totalTarget.toLocaleString()} (${wordPercent}%)`
         });
         const wcBar = wordSection.createDiv('stats-bar stats-bar-wide');
         const wcFill = wcBar.createDiv('stats-bar-fill');

@@ -41,13 +41,14 @@ export class LocationManager {
         for (const f of listing.files) {
             if (f.endsWith('.md')) {
                 try {
-                    const content = await adapter.read(f);
-                    this.parseAndStoreContent(content, f);
+                    const filePath = normalizePath(f);
+                    const content = await adapter.read(filePath);
+                    this.parseAndStoreContent(content, filePath);
                 } catch { /* file unreadable — skip */ }
             }
         }
         for (const sub of listing.folders) {
-            await this.scanFolderAdapter(sub);
+            await this.scanFolderAdapter(normalizePath(sub));
         }
     }
 
@@ -206,19 +207,22 @@ export class LocationManager {
     // ── Save ───────────────────────────────────────────
 
     async saveWorld(world: StoryWorld): Promise<void> {
-        await this.saveItem(world, WORLD_FIELD_KEYS as string[]);
-        this.worlds.set(world.filePath, { ...world });
+        const normalizedFilePath = normalizePath(world.filePath);
+        await this.saveItem({ ...world, filePath: normalizedFilePath }, WORLD_FIELD_KEYS as string[]);
+        this.worlds.set(normalizedFilePath, { ...world, filePath: normalizedFilePath });
     }
 
     async saveLocation(location: StoryLocation): Promise<void> {
-        await this.saveItem(location, LOCATION_FIELD_KEYS as string[]);
-        this.locations.set(location.filePath, { ...location });
+        const normalizedFilePath = normalizePath(location.filePath);
+        await this.saveItem({ ...location, filePath: normalizedFilePath }, LOCATION_FIELD_KEYS as string[]);
+        this.locations.set(normalizedFilePath, { ...location, filePath: normalizedFilePath });
     }
 
     private async saveItem(item: WorldOrLocation, fieldKeys: string[]): Promise<void> {
-        const file = this.app.vault.getAbstractFileByPath(item.filePath);
+        const normalizedFilePath = normalizePath(item.filePath);
+        const file = this.app.vault.getAbstractFileByPath(normalizedFilePath);
         if (!(file instanceof TFile)) {
-            throw new Error(`File not found: ${item.filePath}`);
+            throw new Error(`File not found: ${normalizedFilePath}`);
         }
 
         const content = await this.app.vault.read(file);
@@ -255,12 +259,13 @@ export class LocationManager {
     // ── Delete ─────────────────────────────────────────
 
     async deleteItem(filePath: string): Promise<void> {
-        const file = this.app.vault.getAbstractFileByPath(filePath);
+        const normalizedFilePath = normalizePath(filePath);
+        const file = this.app.vault.getAbstractFileByPath(normalizedFilePath);
         if (file instanceof TFile) {
             await this.app.vault.trash(file, true);
         }
-        this.worlds.delete(filePath);
-        this.locations.delete(filePath);
+        this.worlds.delete(normalizedFilePath);
+        this.locations.delete(normalizedFilePath);
     }
 
     // ── Helpers ────────────────────────────────────────

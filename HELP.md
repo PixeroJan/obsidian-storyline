@@ -837,6 +837,7 @@ Open **Settings → StoryLine** to configure:
 | Default Status | Status for new scenes | `idea` |
 | Auto-generate Sequence | Auto-number new scenes | On |
 | Default Target Word Count | Word count goal per scene | `800` |
+| Project Word Goal | Word count goal for the whole project | `80000` |
 | Default View | Which view opens first | `Board` |
 | Color Coding | Card color mode (status / POV / emotion / act / tag) | `status` |
 | Color Scheme | Choose from 16 palettes (Catppuccin + Moods) or custom | `mocha` |

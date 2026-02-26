@@ -27,10 +27,11 @@ export class CharacterManager {
         for (const f of listing.files) {
             if (f.endsWith('.md')) {
                 try {
-                    const content = await adapter.read(f);
-                    const character = this.parseCharacterContent(content, f);
+                    const filePath = normalizePath(f);
+                    const content = await adapter.read(filePath);
+                    const character = this.parseCharacterContent(content, filePath);
                     if (character) {
-                        this.characters.set(f, character);
+                        this.characters.set(filePath, character);
                     }
                 } catch { /* file unreadable — skip */ }
             }
@@ -166,9 +167,10 @@ export class CharacterManager {
      * Save/update a character back to its file.
      */
     async saveCharacter(character: Character): Promise<void> {
-        const file = this.app.vault.getAbstractFileByPath(character.filePath);
+        const normalizedFilePath = normalizePath(character.filePath);
+        const file = this.app.vault.getAbstractFileByPath(normalizedFilePath);
         if (!(file instanceof TFile)) {
-            throw new Error(`Character file not found: ${character.filePath}`);
+            throw new Error(`Character file not found: ${normalizedFilePath}`);
         }
 
         const content = await this.app.vault.read(file);
@@ -209,18 +211,19 @@ export class CharacterManager {
         await this.app.vault.modify(file, newContent);
 
         // Update in-memory cache
-        this.characters.set(character.filePath, { ...character });
+        this.characters.set(normalizedFilePath, { ...character, filePath: normalizedFilePath });
     }
 
     /**
      * Delete a character file.
      */
     async deleteCharacter(filePath: string): Promise<void> {
-        const file = this.app.vault.getAbstractFileByPath(filePath);
+        const normalizedFilePath = normalizePath(filePath);
+        const file = this.app.vault.getAbstractFileByPath(normalizedFilePath);
         if (file instanceof TFile) {
             await this.app.vault.trash(file, true);
         }
-        this.characters.delete(filePath);
+        this.characters.delete(normalizedFilePath);
     }
 
     /**
@@ -230,12 +233,13 @@ export class CharacterManager {
         const safeName = newName.replace(/[\\/:*?"<>|]/g, '-');
         const newPath = normalizePath(`${folderPath}/${safeName}.md`);
 
-        const file = this.app.vault.getAbstractFileByPath(character.filePath);
-        if (file instanceof TFile && newPath !== character.filePath) {
+        const oldPath = normalizePath(character.filePath);
+        const file = this.app.vault.getAbstractFileByPath(oldPath);
+        if (file instanceof TFile && newPath !== oldPath) {
             await this.app.fileManager.renameFile(file, newPath);
         }
 
-        this.characters.delete(character.filePath);
+        this.characters.delete(oldPath);
         const updated: Character = { ...character, filePath: newPath, name: newName };
         this.characters.set(newPath, updated);
         await this.saveCharacter(updated);

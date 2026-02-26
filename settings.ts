@@ -336,6 +336,7 @@ export interface SceneCardsSettings {
 
     // Writing goals
     dailyWordGoal: number;
+    projectWordGoal: number;
 
     // Advanced
     enablePlotHoleDetection: boolean;
@@ -387,6 +388,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     locationDetailPortraitHeight: 80,
 
     dailyWordGoal: 1000,
+    projectWordGoal: 80000,
 
     enablePlotHoleDetection: true,
     showWarnings: true,
@@ -653,6 +655,17 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 .setValue(String(this.plugin.settings.dailyWordGoal))
                 .onChange(async (value) => {
                     this.plugin.settings.dailyWordGoal = Number(value) || 1000;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Project word goal')
+            .setDesc('Target total words for the active project (shown in Stats view)')
+            .addText(text => text
+                .setPlaceholder('80000')
+                .setValue(String(this.plugin.settings.projectWordGoal))
+                .onChange(async (value) => {
+                    this.plugin.settings.projectWordGoal = Number(value) || 80000;
                     await this.plugin.saveSettings();
                 }));
 
