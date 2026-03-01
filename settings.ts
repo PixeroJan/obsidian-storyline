@@ -3,6 +3,8 @@ import * as obsidian from 'obsidian';
 import { ColorCodingMode, SceneStatus, ViewType, SceneTemplate, BUILTIN_SCENE_TEMPLATES } from './models/Scene';
 import type SceneCardsPlugin from './main';
 import { HELP_VIEW_TYPE } from './constants';
+import { SLDocxSettings, SL_DEFAULT_DOCX_SETTINGS } from './services/DocxConverter';
+import { SLPdfSettings, SL_DEFAULT_PDF_SETTINGS } from './services/PdfConverter';
 
 // ═══════════════════════════════════════════════════════
 //  COLOR PALETTES — Catppuccin + Mood-based
@@ -325,6 +327,9 @@ export interface SceneCardsSettings {
 
     // Display
     defaultView: ViewType;
+    defaultBoardMode: 'corkboard' | 'kanban';
+    showNotesInKanban: boolean;
+    showScenesInCorkboard: boolean;
     colorCoding: ColorCodingMode;
     showWordCounts: boolean;
     compactCardView: boolean;
@@ -364,6 +369,12 @@ export interface SceneCardsSettings {
 
     // Hide frontmatter (properties) in live preview / reading mode
     hideFrontmatter: boolean;
+
+    // DOCX export settings (adapted from ToWord plugin)
+    docxSettings: SLDocxSettings;
+
+    // PDF export settings (using pdf-lib)
+    pdfSettings: SLPdfSettings;
 }
 
 /**
@@ -378,6 +389,9 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     defaultTargetWordCount: 800,
 
     defaultView: 'board',
+    defaultBoardMode: 'corkboard',
+    showNotesInKanban: false,
+    showScenesInCorkboard: true,
     colorCoding: 'status',
     showWordCounts: true,
     compactCardView: false,
@@ -407,6 +421,10 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     ignoredCharacters: [],
 
     hideFrontmatter: true,
+
+    docxSettings: { ...SL_DEFAULT_DOCX_SETTINGS },
+
+    pdfSettings: { ...SL_DEFAULT_PDF_SETTINGS },
 };
 
 /**
@@ -506,6 +524,42 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 });
             });
+
+        new Setting(containerEl)
+            .setName('Default Board mode')
+            .setDesc('Which sub-view opens first inside Board')
+            .addDropdown(dropdown => {
+                dropdown.addOption('corkboard', 'Corkboard');
+                dropdown.addOption('kanban', 'Kanban');
+                dropdown.setValue(this.plugin.settings.defaultBoardMode || 'corkboard');
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.defaultBoardMode = value as 'corkboard' | 'kanban';
+                    await this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                });
+            });
+
+        new Setting(containerEl)
+            .setName('Show notes in Kanban')
+            .setDesc('When enabled, corkboard notes are also visible in Kanban columns')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.showNotesInKanban ?? false)
+                .onChange(async (value) => {
+                    this.plugin.settings.showNotesInKanban = value;
+                    await this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                }));
+
+        new Setting(containerEl)
+            .setName('Show scenes in Corkboard')
+            .setDesc('When enabled, scene cards are visible on the corkboard alongside notes')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.showScenesInCorkboard ?? true)
+                .onChange(async (value) => {
+                    this.plugin.settings.showScenesInCorkboard = value;
+                    await this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                }));
 
         new Setting(containerEl)
             .setName('Color coding')
@@ -894,6 +948,12 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                         this.renderTemplateList(templateListEl);
                     }).open();
                 }));
+
+        // --- DOCX Export Settings (collapsible) ---
+        this.renderDocxSettings(containerEl);
+
+        // --- PDF Export Settings (collapsible) ---
+        this.renderPdfSettings(containerEl);
     }
 
     /** Render the tag-color assignment list with color pickers */
@@ -1015,6 +1075,256 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                         this.renderTemplateList(container);
                     }));
         }
+    }
+
+    /** Render collapsible DOCX export settings section */
+    private renderDocxSettings(containerEl: HTMLElement): void {
+        const details = containerEl.createEl('details', { cls: 'story-line-docx-settings' });
+        details.createEl('summary', { text: 'DOCX Export Settings' });
+
+        const body = details.createDiv();
+
+        body.createEl('p', {
+            text: 'Configure Word (.docx) export behavior. These settings apply when exporting via the Export dialog.',
+            cls: 'setting-item-description',
+        });
+
+        const ds = this.plugin.settings.docxSettings;
+
+        // Font family
+        new Setting(body)
+            .setName('Default font family')
+            .setDesc('Font used in the exported document (e.g. Calibri, Times New Roman, Arial).')
+            .addText(text => text
+                .setPlaceholder('Calibri')
+                .setValue(ds.defaultFontFamily)
+                .onChange(async (value) => {
+                    this.plugin.settings.docxSettings.defaultFontFamily = value || 'Calibri';
+                    await this.plugin.saveSettings();
+                }));
+
+        // Font size
+        new Setting(body)
+            .setName('Default font size')
+            .setDesc('Base font size in half-points (e.g. 24 = 12pt, 28 = 14pt).')
+            .addText(text => text
+                .setPlaceholder('24')
+                .setValue(String(ds.defaultFontSize))
+                .onChange(async (value) => {
+                    const num = parseInt(value, 10);
+                    if (!isNaN(num) && num > 0) {
+                        this.plugin.settings.docxSettings.defaultFontSize = num;
+                        await this.plugin.saveSettings();
+                    }
+                }));
+
+        // Include metadata (frontmatter)
+        new Setting(body)
+            .setName('Include metadata')
+            .setDesc('When enabled, YAML frontmatter is included in the exported document. Disabled by default.')
+            .addToggle(toggle => toggle
+                .setValue(ds.includeMetadata)
+                .onChange(async (value) => {
+                    this.plugin.settings.docxSettings.includeMetadata = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        // Preserve formatting
+        new Setting(body)
+            .setName('Preserve formatting')
+            .setDesc('Maintain original Markdown formatting in the output (bold, italic, code, etc.).')
+            .addToggle(toggle => toggle
+                .setValue(ds.preserveFormatting)
+                .onChange(async (value) => {
+                    this.plugin.settings.docxSettings.preserveFormatting = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        // Enable preprocessing
+        new Setting(body)
+            .setName('Enable preprocessing')
+            .setDesc('Preprocess Markdown before conversion (normalise line-breaks, clean up).')
+            .addToggle(toggle => toggle
+                .setValue(ds.enablePreprocessing)
+                .onChange(async (value) => {
+                    this.plugin.settings.docxSettings.enablePreprocessing = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        // Use Obsidian appearance
+        new Setting(body)
+            .setName('Use Obsidian appearance')
+            .setDesc('Detect and apply the current Obsidian theme font settings to the document.')
+            .addToggle(toggle => toggle
+                .setValue(ds.useObsidianAppearance)
+                .onChange(async (value) => {
+                    this.plugin.settings.docxSettings.useObsidianAppearance = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        // Include filename as header
+        new Setting(body)
+            .setName('Include filename as header')
+            .setDesc('Add the note filename as a heading at the top of the exported document.')
+            .addToggle(toggle => toggle
+                .setValue(ds.includeFilenameAsHeader)
+                .onChange(async (value) => {
+                    this.plugin.settings.docxSettings.includeFilenameAsHeader = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        // Page size
+        new Setting(body)
+            .setName('Page size')
+            .setDesc('Paper size for the exported document.')
+            .addDropdown(dropdown => dropdown
+                .addOptions({
+                    'A4': 'A4',
+                    'A5': 'A5',
+                    'A3': 'A3',
+                    'Letter': 'Letter',
+                    'Legal': 'Legal',
+                    'Tabloid': 'Tabloid',
+                })
+                .setValue(ds.pageSize)
+                .onChange(async (value) => {
+                    this.plugin.settings.docxSettings.pageSize = value as any;
+                    await this.plugin.saveSettings();
+                }));
+
+        // Chunking threshold
+        new Setting(body)
+            .setName('Chunking threshold')
+            .setDesc('Number of elements before chunked processing kicks in (for large documents). Default: 500.')
+            .addText(text => text
+                .setPlaceholder('500')
+                .setValue(String(ds.chunkingThreshold))
+                .onChange(async (value) => {
+                    const num = parseInt(value, 10);
+                    if (!isNaN(num) && num > 0) {
+                        this.plugin.settings.docxSettings.chunkingThreshold = num;
+                        await this.plugin.saveSettings();
+                    }
+                }));
+    }
+
+    /** Render collapsible PDF export settings section */
+    private renderPdfSettings(containerEl: HTMLElement): void {
+        const details = containerEl.createEl('details', { cls: 'story-line-pdf-settings' });
+        details.createEl('summary', { text: 'PDF Export Settings' });
+
+        const body = details.createDiv();
+
+        body.createEl('p', {
+            text: 'Configure PDF export behavior. Uses pdf-lib for cross-platform generation (works on mobile).',
+            cls: 'setting-item-description',
+        });
+
+        const ps = this.plugin.settings.pdfSettings;
+
+        // Font family
+        new Setting(body)
+            .setName('Font family')
+            .setDesc('Standard PDF font to use in the exported document.')
+            .addDropdown(dropdown => dropdown
+                .addOptions({
+                    'Helvetica': 'Helvetica (sans-serif)',
+                    'TimesRoman': 'Times Roman (serif)',
+                    'Courier': 'Courier (monospace)',
+                })
+                .setValue(ps.fontFamily)
+                .onChange(async (value) => {
+                    this.plugin.settings.pdfSettings.fontFamily = value as any;
+                    await this.plugin.saveSettings();
+                }));
+
+        // Font size
+        new Setting(body)
+            .setName('Font size')
+            .setDesc('Base body font size in points (e.g. 11, 12).')
+            .addText(text => text
+                .setPlaceholder('11')
+                .setValue(String(ps.fontSize))
+                .onChange(async (value) => {
+                    const num = parseFloat(value);
+                    if (!isNaN(num) && num > 0) {
+                        this.plugin.settings.pdfSettings.fontSize = num;
+                        await this.plugin.saveSettings();
+                    }
+                }));
+
+        // Page size
+        new Setting(body)
+            .setName('Page size')
+            .setDesc('Paper size for the exported PDF.')
+            .addDropdown(dropdown => dropdown
+                .addOptions({
+                    'A4': 'A4',
+                    'A5': 'A5',
+                    'A3': 'A3',
+                    'Letter': 'Letter',
+                    'Legal': 'Legal',
+                })
+                .setValue(ps.pageSize)
+                .onChange(async (value) => {
+                    this.plugin.settings.pdfSettings.pageSize = value as any;
+                    await this.plugin.saveSettings();
+                }));
+
+        // Line spacing
+        new Setting(body)
+            .setName('Line spacing')
+            .setDesc('Line height multiplier (1.0 = single, 1.5, 2.0 = double).')
+            .addText(text => text
+                .setPlaceholder('1.4')
+                .setValue(String(ps.lineSpacing))
+                .onChange(async (value) => {
+                    const num = parseFloat(value);
+                    if (!isNaN(num) && num > 0) {
+                        this.plugin.settings.pdfSettings.lineSpacing = num;
+                        await this.plugin.saveSettings();
+                    }
+                }));
+
+        // Margins
+        new Setting(body)
+            .setName('Margins (pt)')
+            .setDesc('Top / Bottom / Left / Right margins in points. 72pt = 1 inch.')
+            .addText(text => text
+                .setPlaceholder('72')
+                .setValue(String(ps.marginTop))
+                .onChange(async (value) => {
+                    const num = parseFloat(value);
+                    if (!isNaN(num) && num >= 0) {
+                        this.plugin.settings.pdfSettings.marginTop = num;
+                        this.plugin.settings.pdfSettings.marginBottom = num;
+                        this.plugin.settings.pdfSettings.marginLeft = num;
+                        this.plugin.settings.pdfSettings.marginRight = num;
+                        await this.plugin.saveSettings();
+                    }
+                }));
+
+        // Include metadata (frontmatter)
+        new Setting(body)
+            .setName('Include metadata')
+            .setDesc('When enabled, YAML frontmatter is included in the exported PDF. Disabled by default.')
+            .addToggle(toggle => toggle
+                .setValue(ps.includeMetadata)
+                .onChange(async (value) => {
+                    this.plugin.settings.pdfSettings.includeMetadata = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        // Include page numbers
+        new Setting(body)
+            .setName('Include page numbers')
+            .setDesc('Show centered page numbers at the bottom of each page.')
+            .addToggle(toggle => toggle
+                .setValue(ps.includePageNumbers)
+                .onChange(async (value) => {
+                    this.plugin.settings.pdfSettings.includePageNumbers = value;
+                    await this.plugin.saveSettings();
+                }));
     }
 }
 

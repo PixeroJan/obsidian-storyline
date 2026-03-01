@@ -264,6 +264,21 @@ body.theme-dark {
     height: 14px;
 }
 
+/* Prevent tiled dropdown-arrow artifacts (seen on some Win11/Electron setups) */
+.story-line-board-container select,
+.story-line-timeline-container select,
+.story-line-storyline-container select,
+.story-line-character-container select,
+.story-line-location-container select,
+.story-line-stats-container select,
+.story-line-quick-add select,
+.storyline-export-modal select,
+.project-select-dropdown,
+.project-selector-dropdown {
+    background-repeat: no-repeat !important;
+    background-position: right 8px center;
+}
+
 /* Push controls to the right */
 .story-line-toolbar-controls {
     display: flex;
@@ -358,13 +373,17 @@ body.theme-dark {
 }
 
 .story-line-search-wrapper { display: flex; align-items: center; gap: 8px; }
+.relation-builder-hidden-select {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
 
-/* Filter presets */
-.story-line-preset-section { margin-top: 8px; border-top: 1px solid var(--sc-card-border); padding-top: 8px; }
-.story-line-preset-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.story-line-preset-header .setting-item-name { font-size: 0.85em; font-weight: 600; }
-.story-line-preset-save { font-size: 0.75em !important; }
-.story-line-preset-name-input { padding: 2px 6px; font-size: 0.8em; border: 1px solid var(--sc-accent); border-radius: 4px; width: 120px; }
+.relation-builder-add-picker {
+    width: 100%;
+}
 .story-line-preset-chip { background: var(--background-secondary-alt); border-style: dashed; }
 
 .story-line-search {
@@ -437,6 +456,37 @@ body.theme-dark {
 }
 
 /* --- Board View --- */
+.story-line-board-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--sc-card-border);
+    border-radius: 6px;
+    background: var(--background-secondary);
+}
+
+.story-line-board-mode-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.8em;
+    cursor: pointer;
+}
+
+.story-line-board-mode-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.story-line-board-mode-btn.active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent, var(--sl-badge-text));
+    font-weight: 600;
+}
+
 .story-line-board {
     display: flex;
     gap: var(--sc-gap);
@@ -444,6 +494,260 @@ body.theme-dark {
     overflow-x: auto;
     flex: 1;
     align-items: flex-start;
+}
+
+.story-line-board.story-line-corkboard {
+    display: block;
+    overflow: hidden;
+    position: relative;
+    padding: 0;
+}
+
+.story-line-corkboard-viewport {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+    background-color: var(--background-primary);
+    background-image: none;
+}
+
+.story-line-corkboard-viewport.is-panning {
+    cursor: grabbing;
+}
+
+.story-line-corkboard-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.story-line-corkboard-node {
+    position: absolute;
+    width: 280px;
+    cursor: grab;
+}
+
+.story-line-corkboard-node.is-dragging {
+    cursor: grabbing;
+    z-index: 5;
+}
+
+.story-line-corkboard-card {
+    box-shadow: var(--sl-shadow-sm);
+}
+
+.story-line-corkboard-note-card .scene-card-meta,
+.story-line-corkboard-note-card .scene-card-conflict,
+.story-line-corkboard-note-card .scene-card-characters,
+.story-line-corkboard-note-card .scene-card-footer {
+    display: none;
+}
+
+.scene-card.story-line-corkboard-note-card {
+    --sl-note-bg: color-mix(in srgb, var(--color-yellow) 32%, var(--background-primary));
+    --sl-note-accent: rgba(122, 112, 84, 0.4);
+    --sl-note-accent-strong: rgba(122, 112, 84, 0.78);
+    --sl-note-accent-ui: color-mix(in srgb, var(--sl-note-accent) 75%, white 25%);
+    border-left: 0 !important;
+    border: 1px solid var(--background-modifier-border) !important;
+    background: var(--sl-note-bg) !important;
+    border-radius: 8px;
+    box-shadow: var(--sl-shadow-sm);
+    resize: none;
+    overflow: hidden;
+    min-width: 240px;
+    min-height: 220px;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.scene-card.story-line-corkboard-note-card:hover {
+    background: var(--sl-note-bg) !important;
+    box-shadow: var(--sl-shadow-sm);
+}
+
+.scene-card.story-line-corkboard-note-card::after {
+    content: none;
+}
+
+.story-line-corkboard-note-resize-handle {
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 14px;
+    height: 14px;
+    pointer-events: auto;
+    cursor: nwse-resize;
+    z-index: 3;
+    opacity: 1;
+    border-radius: 0;
+    background:
+        linear-gradient(135deg,
+            transparent 0 50%,
+            var(--sl-note-accent-ui, var(--sl-note-accent, var(--text-muted))) 51% 59%,
+            transparent 60% 100%),
+        linear-gradient(135deg,
+            transparent 0 66%,
+            var(--sl-note-accent-ui, var(--sl-note-accent, var(--text-muted))) 67% 75%,
+            transparent 76% 100%),
+        linear-gradient(135deg,
+            transparent 0 82%,
+            var(--sl-note-accent-ui, var(--sl-note-accent, var(--text-muted))) 83% 91%,
+            transparent 92% 100%);
+}
+
+.story-line-corkboard-note-card .scene-card-header {
+    display: none;
+}
+
+.story-line-corkboard-note-card .scene-card-title {
+    display: none;
+}
+
+.story-line-corkboard-note-editor {
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 100%;
+    flex: 1;
+    padding-top: 20px;
+    box-sizing: border-box;
+}
+
+.story-line-corkboard-note-text {
+    width: 100%;
+    min-height: 150px;
+    resize: none;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 1em;
+    line-height: 1.45;
+    background: var(--sl-note-bg) !important;
+    color: var(--text-normal);
+    box-sizing: border-box;
+    overflow: hidden;
+    box-shadow: none;
+    flex: 1;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.story-line-corkboard-note-preview {
+    width: 100%;
+    min-height: 150px;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 1em;
+    line-height: 1.45;
+    background: var(--sl-note-bg) !important;
+    color: var(--text-normal);
+    box-sizing: border-box;
+    overflow: hidden;
+    cursor: text;
+    flex: 1;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.story-line-corkboard-note-preview * {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.story-line-corkboard-note-preview > :first-child {
+    margin-top: 0;
+}
+
+.story-line-corkboard-note-preview > :last-child {
+    margin-bottom: 0;
+}
+
+.story-line-corkboard-note-preview-empty {
+    color: var(--text-muted);
+}
+
+.story-line-corkboard-note-text:focus {
+    outline: none;
+    border: none;
+    background: var(--sl-note-bg) !important;
+    box-shadow: none;
+}
+
+.story-line-corkboard-note-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: auto;
+    padding-right: 6px;
+    padding-bottom: 4px;
+}
+
+.story-line-corkboard-convert-btn {
+    all: unset;
+    background: transparent !important;
+    color: var(--sl-note-accent-ui, var(--sl-note-accent)) !important;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: none !important;
+    border: none !important;
+    outline: none !important;
+}
+
+.story-line-corkboard-convert-btn svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 2;
+    shape-rendering: geometricPrecision;
+    opacity: 1;
+    color: var(--sl-note-accent-ui, var(--sl-note-accent, var(--text-muted))) !important;
+    stroke: var(--sl-note-accent-ui, var(--sl-note-accent, var(--text-muted))) !important;
+    fill: none !important;
+}
+
+.story-line-corkboard-convert-btn svg * {
+    stroke: var(--sl-note-accent-ui, var(--sl-note-accent, var(--text-muted))) !important;
+}
+
+.story-line-corkboard-convert-btn:hover {
+    color: var(--sl-note-accent);
+    background: none;
+    opacity: 1;
+}
+
+.story-line-corkboard-convert-btn:hover,
+.story-line-corkboard-convert-btn:focus,
+.story-line-corkboard-convert-btn:focus-visible,
+.story-line-corkboard-convert-btn:active {
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+}
+
+.story-line-corkboard-convert-btn svg {
+    filter: none !important;
+}
+
+.story-line-note-color-modal-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
 }
 
 /* Bulk action bar */
@@ -2837,10 +3141,174 @@ body.theme-dark {
     align-items: center;
     gap: 4px;
 }
+.story-line-show-notes-btn {
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.8em;
+    cursor: pointer;
+}
+.story-line-show-notes-btn:hover {
+    border-color: var(--interactive-accent);
+    color: var(--text-normal);
+}
+.story-line-show-notes-btn.active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent, #fff);
+    border-color: var(--interactive-accent);
+}
+.story-line-filters-container.is-corkboard-mode .story-line-sort {
+    display: none;
+}
 .character-tag-select {
     flex: 1;
     min-width: 0;
 }
+
+/* Relation builder layout: stack items vertically and keep add-row width aligned */
+.relation-builder-list {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.relation-builder-item {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+.relation-builder-item .character-field-input {
+    width: 100%;
+    box-shadow: none !important;
+}
+
+.relation-builder-inline-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 33%) 22px minmax(0, 1fr) 32px;
+    column-gap: 12px;
+}
+
+.relation-builder-inline-row .character-field-input {
+    min-width: 0;
+    box-shadow: none !important;
+}
+
+.relation-builder-remove {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none !important;
+    font-size: 1.25em;
+    line-height: 1;
+}
+
+.relation-builder-drag-handle {
+    width: 22px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: grab;
+}
+
+.relation-builder-drag-handle:hover {
+    color: var(--text-normal);
+}
+
+.relation-builder-drag-handle:active {
+    cursor: grabbing;
+}
+
+.relation-builder-drag-handle svg {
+    width: 15px;
+    height: 15px;
+}
+
+.relation-builder-add-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+}
+
+.relation-builder-add-row .character-field-input {
+    min-width: 0;
+}
+
+.relation-builder-custom-input {
+    width: 100%;
+}
+
+.relation-builder-hidden-select {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.relation-builder-add-row .character-custom-add-btn {
+    width: 100%;
+}
+
+.relation-builder-item {
+    cursor: grab;
+}
+
+.relation-builder-item.relation-builder-dragging {
+    opacity: 0.65;
+    cursor: grabbing;
+}
+
+.relation-builder-item.relation-builder-drag-over {
+    outline: 2px dashed var(--interactive-accent);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
+@media (max-width: 700px) {
+    .relation-builder-item,
+    .relation-builder-add-row {
+        width: 100%;
+    }
+
+    .relation-builder-inline-row {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 6px;
+    }
+
+    .relation-builder-drag-handle {
+        justify-self: start;
+    }
+
+    .relation-builder-remove {
+        justify-self: end;
+    }
+}
+
+/* Defensive fallback for Win11/Electron arrow tiling in relationships pickers */
+.story-line-character-container .character-field-input.dropdown,
+.story-line-character-container .character-tag-select {
+    background-image: none !important;
+}
+
+/* Apply same safeguard in Timeline and Location views */
+.story-line-timeline-container select,
+.story-line-location-container select {
+    background-image: none !important;
+}
+
 .character-tag-add-btn {
     flex-shrink: 0;
     width: 28px;
@@ -4410,6 +4878,7 @@ body.theme-dark {
 
 .pg-mini-desc {
     display: -webkit-box;
+    line-clamp: 3;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -4832,6 +5301,72 @@ body.theme-dark {
     padding: 4px 14px 14px;
 }
 
+/* ── DOCX Export Settings (collapsible, framed) ── */
+.story-line-docx-settings {
+    margin: 12px 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 0;
+}
+.story-line-docx-settings > summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 14px;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+.story-line-docx-settings > summary::-webkit-details-marker {
+    display: none;
+}
+.story-line-docx-settings > summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform 0.15s ease;
+}
+.story-line-docx-settings[open] > summary::before {
+    transform: rotate(90deg);
+}
+.story-line-docx-settings > div {
+    padding: 4px 14px 14px;
+}
+
+/* ── PDF Export Settings (collapsible, framed) ── */
+.story-line-pdf-settings {
+    margin: 12px 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 0;
+}
+.story-line-pdf-settings > summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 14px;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+.story-line-pdf-settings > summary::-webkit-details-marker {
+    display: none;
+}
+.story-line-pdf-settings > summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform 0.15s ease;
+}
+.story-line-pdf-settings[open] > summary::before {
+    transform: rotate(90deg);
+}
+.story-line-pdf-settings > div {
+    padding: 4px 14px 14px;
+}
+
 /* ============================================
    Character & Location — Portrait / Image
    ============================================ */
@@ -5151,6 +5686,7 @@ body.theme-dark {
 /* Clamp conflict / summary text on mobile to prevent overflow */
 .sl-mobile .scene-card-conflict {
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -5160,6 +5696,7 @@ body.theme-dark {
 /* Clamp title on mobile too, in case it's very long */
 .sl-mobile .scene-card-title {
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -5508,3 +6045,4 @@ body.theme-dark {
 .sl-phone .story-line-sort {
     font-size: 0.8em;
     gap: 2px;
+}

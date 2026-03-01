@@ -124,6 +124,10 @@ export interface Scene {
     body?: string;
     /** Editorial notes / revision comments (not part of manuscript) */
     notes?: string;
+    /** True when this item is a corkboard note card (not a regular scene card) */
+    corkboardNote?: boolean;
+    /** Optional custom corkboard note color (hex, e.g. #F7E27A) */
+    corkboardNoteColor?: string;
     /** Timeline handling mode (linear, flashback, dream, parallel, etc.) */
     timeline_mode?: TimelineMode;
     /** Named strand for parallel / frame narratives (e.g. "1943", "outer frame") */

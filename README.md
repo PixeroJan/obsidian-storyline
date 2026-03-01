@@ -1,6 +1,6 @@
 # StoryLine — Obsidian Plugin for Writers
 
-**Version 1.1.0** · By Jan Sandström
+**Version 1.3.0** · By Jan Sandström
 
 StoryLine transforms your Obsidian vault into a complete book planning and writing tool. Organize scenes, build characters, manage locations, track plotlines, and monitor your progress — all inside Obsidian.
 
@@ -16,6 +16,15 @@ StoryLine transforms your Obsidian vault into a complete book planning and writi
 
 ## Views
 
+### Corkboard View
+
+A freeform spatial canvas inside the Board view. Use sticky notes to brainstorm and capture your first ideas — then convert them into full scenes when they're ready. Notes support markdown and can be styled with different colors. Pin scene cards and notes anywhere on the board and drag to rearrange. Toggle between the standard Kanban columns and corkboard mode with a single click. Positions are saved per project.
+
+![Corkboard View](screenshots/corkboard.jpg)
+
+---
+
+
 ### Board View
 
 Kanban-style scene cards organized by act, chapter, or status. Drag & drop scenes between columns. Color-coded by status, POV, emotion, or tag. Multi-select for bulk edits.
@@ -23,6 +32,7 @@ Kanban-style scene cards organized by act, chapter, or status. Drag & drop scene
 ![Board View](screenshots/01.Board.jpg)
 
 ---
+
 
 ### Plotgrid View
 
@@ -92,7 +102,7 @@ Dashboard with word counts, writing progress, pacing analysis (average scene len
 
 ## Export
 
-Four export formats: Markdown, JSON, CSV, and PDF (via HTML). Export either an outline (metadata + stats) or a full manuscript.
+Six export formats: Markdown, JSON, CSV, HTML, PDF, and DOCX. Export either an outline (metadata + stats) or a full manuscript. DOCX export includes its own settings for page size, margins, font, and header styles. PDF export works on desktop. DOCX and HTML export also work on mobile.
 
 ![Export](screenshots/16.Export.jpg)
 
@@ -101,6 +111,8 @@ Four export formats: Markdown, JSON, CSV, and PDF (via HTML). Export either an o
 ## Key Features
 
 - **Scene Management** — Full metadata, six-stage status pipeline, drag-and-drop, multi-select bulk edits, notes, snapshots, and reusable templates.
+- **Corkboard Mode** — Freeform spatial canvas with sticky notes for brainstorming. Convert notes into scenes when ready.
+- **DOCX / PDF / HTML Export** — Export manuscripts and outlines to Word, PDF, and standalone HTML. DOCX includes configurable page size, margins, and font settings.
 - **Timeline Modes** — Ten non-linear narrative modes: flashback, flash-forward, parallel, frame, simultaneous, time skip, dream, mythic, circular, and linear.
 - **Beat Sheet Templates** — Save the Cat, Three-Act, Hero's Journey — scaffold your acts with named beats.
 - **Relationship Map** — Interactive force-directed graph with six color-coded relationship types.
@@ -139,6 +151,7 @@ StoryLine/
     Scenes/                ← Scene files (Markdown + frontmatter)
     Characters/            ← Character profiles (Markdown + frontmatter)
     Locations/             ← Location & world profiles (Markdown + frontmatter)
+    System/                ← Per-project settings (JSON, auto-managed)
     Exports/               ← Exported files
 ```
 
@@ -152,7 +165,7 @@ Create, switch, and fork projects from the command palette. Each project gets it
 
 ---
 
-*For detailed documentation of every feature, field, and option, see the full [README](README.md).*
+*For detailed documentation of every feature, field, and option, see [HELP.md](HELP.md). For version history and upgrade notes, see the [CHANGELOG](CHANGELOG.md).*
 
 ---
 

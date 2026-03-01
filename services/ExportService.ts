@@ -4,10 +4,12 @@ import { StoryLineProject } from '../models/StoryLineProject';
 import { SceneManager } from './SceneManager';
 import { CharacterManager } from './CharacterManager';
 import { LocationManager } from './LocationManager';
-import { Character } from '../models/Character';
+import { Character, relationDisplayLabel } from '../models/Character';
 import { StoryWorld, StoryLocation } from '../models/Location';
+import { SLMarkdownToDocxConverter, SLDocxSettings, SLObsidianFontSettings } from './DocxConverter';
+import { SLPdfSettings } from './PdfConverter';
 
-export type ExportFormat = 'md' | 'json' | 'pdf' | 'csv';
+export type ExportFormat = 'md' | 'json' | 'html' | 'csv' | 'docx' | 'pdf';
 export type ExportScope = 'manuscript' | 'outline';
 
 /**
@@ -20,11 +22,24 @@ export class ExportService {
     private characterManager: CharacterManager;
     private locationManager: LocationManager;
 
+    private docxSettings: SLDocxSettings | null = null;
+    private pdfSettings: SLPdfSettings | null = null;
+
     constructor(app: App, sceneManager: SceneManager, characterManager: CharacterManager, locationManager: LocationManager) {
         this.app = app;
         this.sceneManager = sceneManager;
         this.characterManager = characterManager;
         this.locationManager = locationManager;
+    }
+
+    /** Set DOCX export settings (call before exporting to docx) */
+    setDocxSettings(settings: SLDocxSettings): void {
+        this.docxSettings = settings;
+    }
+
+    /** Set PDF export settings (call before exporting to pdf) */
+    setPdfSettings(settings: SLPdfSettings): void {
+        this.pdfSettings = settings;
     }
 
     // ─── Public API ────────────────────────────────────────────
@@ -51,10 +66,14 @@ export class ExportService {
                 return this.exportMarkdown(project, scenes, scope);
             case 'json':
                 return this.exportJson(project, scenes, scope);
-            case 'pdf':
+            case 'html':
                 return this.exportPdf(project, scenes, scope);
             case 'csv':
                 return this.exportCsv(project, scenes, scope);
+            case 'docx':
+                return this.exportDocx(project, scenes, scope);
+            case 'pdf':
+                return this.exportPdfLib(project, scenes, scope);
         }
     }
 
@@ -128,8 +147,7 @@ export class ExportService {
                 lines.push('');
             }
 
-            lines.push('---');
-            lines.push('');
+            // (no divider between scenes – the heading structure is sufficient)
         }
     }
 
@@ -200,8 +218,11 @@ export class ExportService {
                     if (char.expectedChange) lines.push(`**Expected change:** ${char.expectedChange}  `);
                     if (char.internalMotivation) lines.push(`**Internal motivation:** ${char.internalMotivation}  `);
                     if (char.externalMotivation) lines.push(`**External motivation:** ${char.externalMotivation}  `);
-                    if (char.allies) lines.push(`**Allies:** ${char.allies}  `);
-                    if (char.enemies) lines.push(`**Enemies:** ${char.enemies}  `);
+                    if (Array.isArray(char.relations) && char.relations.length > 0) {
+                        for (const relation of char.relations) {
+                            lines.push(`**${relationDisplayLabel(relation)}:** ${relation.target}  `);
+                        }
+                    }
                     lines.push('');
                 }
             } else {
@@ -333,8 +354,7 @@ export class ExportService {
                     if (c.strengths) obj.strengths = c.strengths;
                     if (c.flaws) obj.flaws = c.flaws;
                     if (c.fears) obj.fears = c.fears;
-                    if (c.allies) obj.allies = c.allies;
-                    if (c.enemies) obj.enemies = c.enemies;
+                    if (Array.isArray(c.relations) && c.relations.length > 0) obj.relations = c.relations;
                     if (c.custom && Object.keys(c.custom).length) obj.custom = c.custom;
                     return obj;
                 }),
@@ -473,18 +493,17 @@ ${body}
             parts.push(`<h4>${this.escHtml(scene.title || 'Untitled Scene')}</h4>`);
 
             if (scene.body && scene.body.trim()) {
-                // Convert basic markdown paragraphs to HTML (strip wikilinks)
-                const cleanBody = this.stripWikiLinks(scene.body.trim());
+                // Convert basic markdown paragraphs to HTML (strip wikilinks + tags, convert formatting)
+                const cleanBody = this.stripObsidianTags(this.stripWikiLinks(scene.body.trim()));
                 const paragraphs = cleanBody.split(/\n{2,}/);
                 for (const p of paragraphs) {
-                    parts.push(`<p>${this.escHtml(p.trim())}</p>`);
+                    parts.push(`<p>${this.mdInlineToHtml(p.trim())}</p>`);
                 }
             } else {
                 parts.push('<p class="no-content">No content yet.</p>');
             }
 
             parts.push('</div>');
-            parts.push('<hr>');
         }
 
         return parts.join('\n');
@@ -718,5 +737,433 @@ ${body}
             if (inner.includes('/')) return inner.split('/').pop()!.trim();
             return inner.trim();
         });
+    }
+
+    /**
+     * Strip Obsidian-style tags (#tag, #PascalTag, #kebab-tag) from text.
+     * Preserves heading markers (lines starting with #) and anchor links.
+     */
+    private stripObsidianTags(text: string): string {
+        // Match #word-chars that are NOT at the start of a line (headings)
+        // and NOT preceded by & (HTML entities like &#123;)
+        return text.replace(/(?<=\s|^)#([\w\-\/]+)/gm, '$1');
+    }
+
+    /**
+     * Convert inline Markdown formatting to HTML.
+     * Handles: **bold**, *italic*, `code`, ~~strikethrough~~, ==highlight==,
+     * and single-line breaks → <br>.
+     */
+    private mdInlineToHtml(text: string): string {
+        let s = this.escHtml(text);
+        // Bold: **text** or __text__
+        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        // Italic: *text* or _text_ (but not inside words for _)
+        s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        s = s.replace(/(?<=\s|^)_(.+?)_(?=\s|$)/g, '<em>$1</em>');
+        // Inline code: `text`
+        s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+        // Strikethrough: ~~text~~
+        s = s.replace(/~~(.+?)~~/g, '<s>$1</s>');
+        // Highlight: ==text==
+        s = s.replace(/==(.+?)==/g, '<mark>$1</mark>');
+        // Single newlines → <br>
+        s = s.replace(/\n/g, '<br>');
+        return s;
+    }
+
+    // ─── DOCX Export ──────────────────────────────────────────
+
+    private async exportDocx(
+        project: StoryLineProject,
+        scenes: Scene[],
+        scope: ExportScope,
+    ): Promise<string> {
+        const settings: SLDocxSettings = this.docxSettings || {
+            defaultFontFamily: 'Calibri',
+            defaultFontSize: 11,
+            includeMetadata: false,
+            preserveFormatting: true,
+            useObsidianAppearance: false,
+            includeFilenameAsHeader: false,
+            pageSize: 'A4',
+            chunkingThreshold: 100000,
+            enablePreprocessing: false,
+        };
+
+        const converter = new SLMarkdownToDocxConverter(settings);
+
+        // Build the markdown content (reuse existing builders)
+        const lines: string[] = [];
+        lines.push(`# ${project.title}`);
+        lines.push('');
+
+        if (scope === 'manuscript') {
+            this.buildManuscriptMd(lines, scenes);
+        } else {
+            this.buildOutlineMd(lines, scenes);
+        }
+
+        let markdown = lines.join('\n');
+
+        // Strip frontmatter if includeMetadata is false (default)
+        if (!settings.includeMetadata) {
+            markdown = this.stripFrontmatter(markdown);
+        }
+
+        // Get Obsidian font settings if requested
+        let obsidianFonts: SLObsidianFontSettings | null = null;
+        if (settings.useObsidianAppearance) {
+            obsidianFonts = this.getObsidianFontSettings();
+        }
+
+        // Create a resource loader for images
+        const resourceLoader = async (link: string): Promise<ArrayBuffer | null> => {
+            // Try to resolve as a vault file
+            const targetFile = this.app.metadataCache.getFirstLinkpathDest(link, '');
+            if (!targetFile) return null;
+            try {
+                return await this.app.vault.readBinary(targetFile);
+            } catch {
+                return null;
+            }
+        };
+
+        new Notice('Exporting to Word...');
+
+        const blob = await converter.convert(
+            markdown,
+            project.title,
+            obsidianFonts,
+            resourceLoader,
+        );
+
+        // Save the DOCX file
+        const arrayBuffer = await blob.arrayBuffer();
+        const filename = `${project.title} - ${scope === 'manuscript' ? 'Manuscript' : 'Outline'} (${this.timestamp()}).docx`;
+
+        const projectFolder = project.sceneFolder.replace(/\/Scenes\/?$/, '');
+        const exportFolder = `${projectFolder}/Exports`;
+
+        if (!(await this.app.vault.adapter.exists(exportFolder))) {
+            await this.app.vault.createFolder(exportFolder);
+        }
+
+        const filePath = `${exportFolder}/${filename}`;
+        await this.app.vault.adapter.writeBinary(filePath, arrayBuffer);
+
+        new Notice(`Exported to ${filename}`, 5000);
+        return filePath;
+    }
+
+    /** Strip YAML frontmatter (--- ... ---) from markdown content */
+    private stripFrontmatter(markdown: string): string {
+        if (!markdown.startsWith('---')) return markdown;
+        const lines = markdown.split('\n');
+        for (let i = 1; i < lines.length; i++) {
+            if (lines[i].trim() === '---') {
+                // Return everything after the closing --- (skip blank line after it)
+                const afterFrontmatter = lines.slice(i + 1).join('\n').replace(/^\n+/, '');
+                return afterFrontmatter;
+            }
+        }
+        return markdown; // No closing ---, return as-is
+    }
+
+    /** Read Obsidian's computed font settings for DOCX export */
+    private getObsidianFontSettings(): SLObsidianFontSettings {
+        let editorEl = document.querySelector('.markdown-preview-view, .markdown-source-view');
+        if (!editorEl || !(editorEl instanceof HTMLElement)) {
+            editorEl = document.body;
+        }
+
+        const computedStyle = window.getComputedStyle(editorEl as HTMLElement);
+
+        let textFont = computedStyle.getPropertyValue('--font-text').trim() ||
+            computedStyle.getPropertyValue('--default-font').trim() ||
+            computedStyle.getPropertyValue('--font-interface').trim();
+
+        if (!textFont || textFont === '') {
+            textFont = computedStyle.getPropertyValue('font-family');
+        }
+        if (textFont) {
+            textFont = textFont.replace(/['"]/g, '').split(',')[0].trim();
+        }
+        if (!textFont || textFont === '') textFont = 'Calibri';
+
+        let monospaceFont = computedStyle.getPropertyValue('--font-monospace').trim() ||
+            computedStyle.getPropertyValue('--font-monospace-default').trim() ||
+            computedStyle.getPropertyValue('--font-code').trim();
+
+        if (!monospaceFont || monospaceFont === '' || monospaceFont === 'undefined' || monospaceFont === '??' || monospaceFont.includes('??')) {
+            monospaceFont = 'Courier New';
+        }
+
+        const fontSizeStr = computedStyle.getPropertyValue('--font-text-size') ||
+            computedStyle.getPropertyValue('font-size') || '16px';
+        const fontSizePx = parseFloat(fontSizeStr);
+        const fontSizePt = Math.round(fontSizePx * 0.75);
+
+        const sizeMultiplier = fontSizePt / 11; // Relative to default 11pt
+
+        const lineHeightStr = computedStyle.getPropertyValue('--line-height-normal') ||
+            computedStyle.getPropertyValue('line-height') || '1.5';
+        const lineHeight = parseFloat(lineHeightStr);
+
+        // Heading sizes
+        const headingSizes: number[] = [];
+        const headingFonts: string[] = [];
+        const headingColors: string[] = [];
+        const multipliers = [2.0, 1.6, 1.4, 1.2, 1.1, 1.0];
+
+        for (let i = 1; i <= 6; i++) {
+            const selectors = [
+                `.markdown-preview-view h${i}`,
+                `.cm-header-${i}`,
+                `.HyperMD-header-${i}`,
+            ];
+
+            let found = false;
+            for (const selector of selectors) {
+                const headingEl = document.querySelector(selector);
+                if (headingEl && headingEl instanceof HTMLElement) {
+                    const hStyle = window.getComputedStyle(headingEl);
+                    const hFontSizePx = parseFloat(hStyle.getPropertyValue('font-size') || '16px');
+                    let hFontSizePt = Math.round(hFontSizePx * 0.75);
+                    hFontSizePt = Math.round(hFontSizePt * sizeMultiplier);
+                    headingSizes.push(hFontSizePt);
+                    headingFonts.push(textFont);
+                    headingColors.push(hStyle.getPropertyValue('color') || 'inherit');
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                headingSizes.push(Math.round(fontSizePt * multipliers[i - 1] * sizeMultiplier));
+                headingFonts.push(textFont);
+                headingColors.push('inherit');
+            }
+        }
+
+        return {
+            textFont,
+            monospaceFont,
+            baseFontSize: fontSizePt,
+            lineHeight,
+            sizeMultiplier,
+            headingSizes,
+            headingFonts,
+            headingColors,
+        };
+    }
+
+    // ─── PDF Export ──────────────────────────────────────────
+
+    private async exportPdfLib(
+        project: StoryLineProject,
+        scenes: Scene[],
+        scope: ExportScope,
+    ): Promise<string> {
+        const settings: SLPdfSettings = this.pdfSettings || {
+            fontFamily: 'Helvetica',
+            fontSize: 11,
+            pageSize: 'A4',
+            marginTop: 72,
+            marginBottom: 72,
+            marginLeft: 72,
+            marginRight: 72,
+            lineSpacing: 1.4,
+            includeMetadata: false,
+            includePageNumbers: true,
+            headerFontSize: 24,
+        };
+
+        new Notice('Exporting to PDF...');
+
+        // Uses Electron's <webview>.printToPDF() — Chrome's rendering engine
+        // handles all Unicode/fonts natively. Only available on desktop.
+        const html = this.buildPdfPrintHtml(project, scenes, scope, settings);
+        const pdfBytes = await this.tryElectronPrintToPdf(html, settings);
+
+        if (!pdfBytes) {
+            new Notice('PDF export requires the Obsidian desktop app.', 6000);
+            return '';
+        }
+
+        // Save the PDF file
+        const filename = `${project.title} - ${scope === 'manuscript' ? 'Manuscript' : 'Outline'} (${this.timestamp()}).pdf`;
+
+        const projectFolder = project.sceneFolder.replace(/\/Scenes\/?$/, '');
+        const exportFolder = `${projectFolder}/Exports`;
+
+        if (!(await this.app.vault.adapter.exists(exportFolder))) {
+            await this.app.vault.createFolder(exportFolder);
+        }
+
+        const filePath = `${exportFolder}/${filename}`;
+        await this.app.vault.adapter.writeBinary(filePath, pdfBytes);
+
+        new Notice(`Exported to ${filename}`, 5000);
+        return filePath;
+    }
+
+    // ─── Electron printToPDF via <webview> ────────────────────
+
+    /**
+     * Attempt to generate a PDF using Electron's <webview>.printToPDF().
+     * Returns the PDF bytes on success, or null if not on desktop / webview unavailable.
+     */
+    private async tryElectronPrintToPdf(html: string, settings: SLPdfSettings): Promise<Uint8Array | null> {
+        // Only works in Electron (desktop Obsidian)
+        if (typeof (window as any).require !== 'function') return null;
+
+        return new Promise<Uint8Array | null>((resolve) => {
+            try {
+                const webview = document.createElement('webview') as any;
+
+                // Hide the webview off-screen
+                webview.style.position = 'fixed';
+                webview.style.left = '-9999px';
+                webview.style.top = '-9999px';
+                webview.style.width = '1px';
+                webview.style.height = '1px';
+
+                // Security: no node integration inside the webview
+                webview.setAttribute('nodeintegration', 'false');
+                webview.setAttribute('webpreferences', 'contextIsolation=true');
+
+                // Load the HTML as a data URL
+                const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+                webview.setAttribute('src', dataUrl);
+
+                const cleanup = () => { try { webview.remove(); } catch { /* noop */ } };
+
+                // Safety timeout (15 s)
+                const timer = setTimeout(() => {
+                    console.warn('StoryLine PDF: webview printToPDF timed out, falling back to pdf-lib');
+                    cleanup();
+                    resolve(null);
+                }, 15000);
+
+                webview.addEventListener('dom-ready', async () => {
+                    try {
+                        // Short delay for rendering / images
+                        await new Promise(r => setTimeout(r, 500));
+
+                        // Margins are handled via CSS @page in the HTML template
+                        // (more reliable than printToPDF margin options across Electron versions).
+                        const pdfBuffer = await webview.printToPDF({
+                            pageSize: settings.pageSize || 'A4',
+                            printBackground: true,
+                            preferCSSPageSize: true,
+                            displayHeaderFooter: settings.includePageNumbers,
+                            headerTemplate: '<span></span>',
+                            footerTemplate: settings.includePageNumbers
+                                ? '<div style="width:100%;text-align:center;font-size:9px;color:#888;"><span class="pageNumber"></span></div>'
+                                : '<span></span>',
+                        });
+
+                        clearTimeout(timer);
+                        cleanup();
+                        resolve(new Uint8Array(pdfBuffer));
+                    } catch (e) {
+                        console.error('StoryLine PDF: printToPDF failed', e);
+                        clearTimeout(timer);
+                        cleanup();
+                        resolve(null);
+                    }
+                });
+
+                webview.addEventListener('did-fail-load', () => {
+                    clearTimeout(timer);
+                    cleanup();
+                    resolve(null);
+                });
+
+                document.body.appendChild(webview);
+            } catch (e) {
+                console.error('StoryLine PDF: webview not available', e);
+                resolve(null);
+            }
+        });
+    }
+
+    // ─── HTML specifically for printToPDF ─────────────────────
+
+    /**
+     * Build a self-contained HTML document tailored for Electron's printToPDF.
+     * Uses the PDF settings for font family, font size, line spacing, etc.
+     */
+    private buildPdfPrintHtml(
+        project: StoryLineProject,
+        scenes: Scene[],
+        scope: ExportScope,
+        settings: SLPdfSettings,
+    ): string {
+        const title = this.escHtml(project.title);
+        const body = scope === 'manuscript'
+            ? this.buildManuscriptHtml(scenes)
+            : this.buildOutlineHtml(scenes);
+
+        // Read font from Obsidian's appearance settings
+        const obsFont = this.getObsidianFontSettings();
+        const fontFamily = this.escHtml(obsFont.textFont) + ', sans-serif';
+        const fontSize = settings.fontSize || obsFont.baseFontSize || 11;
+        const lineSpacing = settings.lineSpacing || obsFont.lineHeight || 1.4;
+
+        // Convert pt margins → cm for CSS @page
+        const mTop    = ((settings.marginTop    || 72) / 72 * 2.54).toFixed(2);
+        const mBottom = ((settings.marginBottom || 72) / 72 * 2.54).toFixed(2);
+        const mLeft   = ((settings.marginLeft   || 72) / 72 * 2.54).toFixed(2);
+        const mRight  = ((settings.marginRight  || 72) / 72 * 2.54).toFixed(2);
+
+        // Scale heading sizes relative to the base
+        const h1Size = Math.round(fontSize * 2.0);
+        const h2Size = Math.round(fontSize * 1.6);
+        const h3Size = Math.round(fontSize * 1.3);
+        const h4Size = Math.round(fontSize * 1.1);
+
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${title}</title>
+<style>
+    @page {
+        size: ${settings.pageSize || 'A4'};
+        margin: ${mTop}cm ${mRight}cm ${mBottom}cm ${mLeft}cm;
+    }
+    * { box-sizing: border-box; }
+    body {
+        font-family: ${fontFamily};
+        font-size: ${fontSize}pt;
+        line-height: ${lineSpacing};
+        color: #222;
+        margin: 0;
+        padding: 0;
+    }
+    h1 { font-size: ${h1Size}pt; margin: 0 0 0.5em 0; border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+    h2 { font-size: ${h2Size}pt; margin-top: 1.5em; color: #444; }
+    h3 { font-size: ${h3Size}pt; margin-top: 1.2em; color: #555; }
+    h4 { font-size: ${h4Size}pt; margin-top: 1em; font-style: italic; }
+    p  { margin: 0 0 0.5em 0; }
+    hr { border: none; border-top: 1px solid #ccc; margin: 1.5em 0; }
+    table { width: 100%; border-collapse: collapse; font-size: ${Math.round(fontSize * 0.9)}pt; margin: 1em 0; }
+    th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+    th { background: #f5f5f5; font-weight: 600; }
+    .stats { font-size: ${Math.round(fontSize * 0.95)}pt; color: #555; margin-bottom: 1em; }
+    .no-content { color: #999; font-style: italic; }
+    .scene-block { page-break-inside: avoid; }
+    h1 { page-break-after: avoid; }
+    h2, h3 { page-break-after: avoid; }
+</style>
+</head>
+<body>
+<h1>${title}</h1>
+${body}
+</body>
+</html>`;
     }
 }

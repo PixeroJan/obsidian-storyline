@@ -56,9 +56,10 @@ export class SceneCardComponent {
         obsidian.setIcon(statusIconEl, statusCfg.icon);
 
         // Title
+        const displayTitle = this.getDisplayTitle(scene);
         card.createDiv({
             cls: 'scene-card-title',
-            text: scene.title || 'Untitled'
+            text: displayTitle
         });
 
         // Timeline mode badge (for non-linear scenes)
@@ -188,6 +189,36 @@ export class SceneCardComponent {
                 text: filled ? '●' : '○'
             });
         }
+    }
+
+    private getDisplayTitle(scene: Scene): string {
+        if (scene.corkboardNote) {
+            const firstLine = (scene.body || '')
+                .split(/\r?\n/)
+                .map(line => line.trim())
+                .find(line => line.length > 0);
+
+            if (firstLine) {
+                const cleaned = firstLine
+                    .replace(/^#{1,6}\s+/, '')
+                    .replace(/^[-*+]\s+/, '')
+                    .replace(/^>\s*/, '')
+                    .replace(/\*\*(.*?)\*\*/g, '$1')
+                    .replace(/\*(.*?)\*/g, '$1')
+                    .replace(/`([^`]+)`/g, '$1')
+                    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+                    .trim();
+
+                if (cleaned.length > 0) {
+                    return cleaned.length > 60 ? `${cleaned.slice(0, 60)}…` : cleaned;
+                }
+            }
+
+            return 'Note';
+        }
+
+        const title = (scene.title || '').trim();
+        return title || 'Untitled';
     }
 
     /**

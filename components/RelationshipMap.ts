@@ -7,6 +7,7 @@
 
 import * as obsidian from 'obsidian';
 import type { Character } from '../models/Character';
+import { RELATION_BASE_TYPE_BY_CATEGORY } from '../models/Character';
 
 export type RelationshipType = 'ally' | 'enemy' | 'romantic' | 'family' | 'mentor' | 'other';
 
@@ -193,73 +194,24 @@ export class RelationshipMap {
             }
         }
 
-        // Parse relationships from fields
+        // Parse relationships from structured rows
         for (const char of this.characters) {
             const fromKey = char.name.toLowerCase();
-            // Allies — now stored as string arrays
-            if (char.allies && Array.isArray(char.allies)) {
-                for (const name of char.allies) {
+            if (Array.isArray(char.relations)) {
+                for (const relation of char.relations) {
+                    const baseType = RELATION_BASE_TYPE_BY_CATEGORY[relation.category] || 'other';
+                    const name = relation.target?.trim();
+                    if (!name) continue;
                     this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'ally' });
-                }
-            } else if (char.allies && typeof char.allies === 'string') {
-                for (const name of this.parseNames(char.allies as any)) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'ally' });
+                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: baseType });
                 }
             }
-            // Enemies — now stored as string arrays
-            if (char.enemies && Array.isArray(char.enemies)) {
-                for (const name of char.enemies) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'enemy' });
-                }
-            } else if (char.enemies && typeof char.enemies === 'string') {
-                for (const name of this.parseNames(char.enemies as any)) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'enemy' });
-                }
-            }
+
+            // Legacy free-text family/background field may contain relatives by name.
             if (char.family) {
                 for (const name of this.parseNames(char.family)) {
                     this.ensureNode(nodeMap, name);
                     edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'family' });
-                }
-            }
-            // Romantic
-            if (char.romantic && Array.isArray(char.romantic)) {
-                for (const name of char.romantic) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'romantic' });
-                }
-            } else if (char.romantic && typeof char.romantic === 'string') {
-                for (const name of this.parseNames(char.romantic as any)) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'romantic' });
-                }
-            }
-            // Mentors
-            if (char.mentors && Array.isArray(char.mentors)) {
-                for (const name of char.mentors) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'mentor' });
-                }
-            } else if (char.mentors && typeof char.mentors === 'string') {
-                for (const name of this.parseNames(char.mentors as any)) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'mentor' });
-                }
-            }
-            // Other connections
-            if (char.otherRelations && Array.isArray(char.otherRelations)) {
-                for (const name of char.otherRelations) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'other' });
-                }
-            } else if (char.otherRelations && typeof char.otherRelations === 'string') {
-                for (const name of this.parseNames(char.otherRelations as any)) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'other' });
                 }
             }
         }

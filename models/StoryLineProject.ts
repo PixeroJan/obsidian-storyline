@@ -37,6 +37,8 @@ export interface StoryLineProject {
     chapterLabels: Record<number, string>;
     /** Saved filter presets (persisted in project frontmatter) */
     filterPresets: FilterPreset[];
+    /** Corkboard free-position layout (scene file path -> coordinates + layer order) */
+    corkboardPositions: Record<string, { x: number; y: number; z?: number }>;
 }
 
 /**

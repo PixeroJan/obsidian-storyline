@@ -17,7 +17,7 @@
 import * as obsidian from 'obsidian';
 import type { Scene } from '../models/Scene';
 import type { Character } from '../models/Character';
-import { extractCharacterProps, extractCharacterLocationTags } from '../models/Character';
+import { RELATION_BASE_TYPE_BY_CATEGORY, extractCharacterProps, extractCharacterLocationTags } from '../models/Character';
 import type { LinkScanResult, DetectedLink } from '../services/LinkScanner';
 
 // ── Types ─────────────────────────────────────────────
@@ -343,12 +343,16 @@ export class StoryGraph {
                     }
                 };
 
-                addRelEdges(char.allies, 'ally');
-                addRelEdges(char.enemies, 'enemy');
+                if (Array.isArray(char.relations)) {
+                    for (const relation of char.relations) {
+                        const baseType = RELATION_BASE_TYPE_BY_CATEGORY[relation.category] || 'other';
+                        const kind: EdgeKind = baseType === 'other' ? 'other-rel' : baseType;
+                        addRelEdges([relation.target], kind);
+                    }
+                }
+
+                // Legacy free-text family/background field may contain relatives by name.
                 addRelEdges(char.family, 'family');
-                addRelEdges(char.romantic, 'romantic');
-                addRelEdges(char.mentors, 'mentor');
-                addRelEdges(char.otherRelations, 'other-rel');
             }
         }
 

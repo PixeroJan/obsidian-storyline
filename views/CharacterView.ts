@@ -1,7 +1,7 @@
 import { ItemView, WorkspaceLeaf, TFile, Notice, Modal, Setting, requestUrl } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { Scene, STATUS_CONFIG } from '../models/Scene';
-import { Character, CHARACTER_CATEGORIES, CHARACTER_ROLES, CharacterFieldDef, extractCharacterProps, extractCharacterLocationTags, extractAllCharacterTags, TagType } from '../models/Character';
+import { Character, CharacterRelation, CharacterRelationCategory, CHARACTER_CATEGORIES, CHARACTER_ROLES, CharacterFieldDef, RELATION_CATEGORIES, RELATION_TYPES_BY_CATEGORY, extractCharacterProps, extractCharacterLocationTags, extractAllCharacterTags, normalizeCharacterRelations, TagType } from '../models/Character';
 import { SceneManager } from '../services/SceneManager';
 import { CharacterManager } from '../services/CharacterManager';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
@@ -734,9 +734,8 @@ export class CharacterView extends ItemView {
 
         const value = (draft as any)[field.key] ?? '';
 
-        // Allies & Enemies get a tag-style character picker
-        if (field.key === 'allies' || field.key === 'enemies') {
-            this.renderCharacterTagField(row, field, draft);
+        if (field.key === 'relations') {
+            this.renderRelationsField(row, draft);
             return;
         }
 
@@ -781,8 +780,252 @@ export class CharacterView extends ItemView {
         }
     }
 
+    private renderRelationsField(row: HTMLElement, draft: Character): void {
+        const container = row.createDiv('character-tag-field relation-builder-field');
+        const list = container.createDiv('character-tag-list relation-builder-list');
+        const addRow = container.createDiv('character-tag-add-row relation-builder-add-row');
+
+        const aliasMap = this.characterManager.buildAliasMap(this.plugin.settings.characterAliases);
+        const resolveAlias = (n: string): string => aliasMap.get(n.toLowerCase()) || n;
+
+        const fileCharacters = this.characterManager.getAllCharacters().map(c => c.name);
+        const sceneCharacters = this.sceneManager.getAllCharacters();
+        const mergedNames = Array.from(new Set([...fileCharacters, ...sceneCharacters].map(resolveAlias)))
+            .filter(n => n !== draft.name)
+            .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+        const relations: CharacterRelation[] = normalizeCharacterRelations(draft.relations);
+        const NEW_CUSTOM_TYPE_VALUE = '__custom_new__';
+
+        const inferCategoryFromType = (type: string): CharacterRelationCategory => {
+            for (const category of RELATION_CATEGORIES) {
+                const options = RELATION_TYPES_BY_CATEGORY[category.value];
+                if (options.includes(type)) return category.value;
+            }
+            return 'custom';
+        };
+
+        const buildTypeOptions = (select: HTMLSelectElement, currentType?: string) => {
+            select.empty();
+            for (const category of RELATION_CATEGORIES) {
+                const types = RELATION_TYPES_BY_CATEGORY[category.value];
+                if (types.length === 0) continue;
+                const group = document.createElement('optgroup');
+                group.label = category.label;
+                for (const type of types) {
+                    const opt = document.createElement('option');
+                    opt.value = type;
+                    opt.text = type;
+                    if (currentType === type) opt.selected = true;
+                    group.appendChild(opt);
+                }
+                select.appendChild(group);
+            }
+
+            const customGroup = document.createElement('optgroup');
+            customGroup.label = 'Custom';
+            const createOpt = document.createElement('option');
+            createOpt.value = NEW_CUSTOM_TYPE_VALUE;
+            createOpt.text = 'New';
+            customGroup.appendChild(createOpt);
+            select.appendChild(customGroup);
+
+            if (!select.value) {
+                const fallback = RELATION_TYPES_BY_CATEGORY.family[0] || 'sibling';
+                select.value = fallback;
+            }
+        };
+
+        let dragIndex: number | null = null;
+
+        const renderRows = () => {
+            list.empty();
+
+            for (let index = 0; index < relations.length; index++) {
+                const relation = relations[index];
+                const relRow = list.createDiv('character-field-row relation-builder-item');
+                relRow.draggable = false;
+                const inlineRow = relRow.createDiv('relation-builder-inline-row');
+                const typeSelect = inlineRow.createEl('select', { cls: 'character-field-input dropdown relation-builder-type' });
+                buildTypeOptions(typeSelect, relation.type);
+                const customTypeInput = inlineRow.createEl('input', {
+                    cls: 'character-field-input relation-builder-type relation-builder-custom-input',
+                    type: 'text',
+                    attr: { placeholder: 'Custom relation type (e.g. bodyguard)' },
+                });
+                customTypeInput.style.display = 'none';
+                const dragHandle = inlineRow.createDiv('relation-builder-drag-handle');
+                dragHandle.draggable = true;
+                dragHandle.ariaLabel = 'Drag to reorder relation';
+                dragHandle.title = 'Drag to reorder';
+                obsidian.setIcon(dragHandle, 'ellipsis-vertical');
+
+                const targetSelect = inlineRow.createEl('select', { cls: 'character-field-input dropdown relation-builder-target' });
+                targetSelect.createEl('option', { value: '', text: 'Select character' });
+                for (const name of mergedNames) {
+                    const opt = targetSelect.createEl('option', { value: name, text: name });
+                    if (name === relation.target) opt.selected = true;
+                }
+                if (relation.target && !mergedNames.includes(relation.target)) {
+                    const opt = targetSelect.createEl('option', { value: relation.target, text: relation.target });
+                    opt.selected = true;
+                }
+
+                const removeBtn = inlineRow.createEl('button', { cls: 'character-custom-remove relation-builder-remove', text: '×', attr: { title: 'Remove relation' } });
+
+                const setCustomMode = (enabled: boolean, focus = false) => {
+                    typeSelect.style.display = enabled ? 'none' : '';
+                    customTypeInput.style.display = enabled ? '' : 'none';
+                    if (enabled) {
+                        customTypeInput.value = relation.type && relation.type !== NEW_CUSTOM_TYPE_VALUE ? relation.type : '';
+                        if (focus) customTypeInput.focus();
+                    }
+                };
+
+                const shouldStartCustomMode = relation.category === 'custom' || relation.type === NEW_CUSTOM_TYPE_VALUE;
+                setCustomMode(shouldStartCustomMode);
+
+                typeSelect.addEventListener('change', () => {
+                    let selected = typeSelect.value;
+                    if (selected === NEW_CUSTOM_TYPE_VALUE) {
+                        relation.category = 'custom';
+                        relation.type = NEW_CUSTOM_TYPE_VALUE;
+                        setCustomMode(true, true);
+                        draft.relations = normalizeCharacterRelations(relations);
+                        this.scheduleSave(draft);
+                        return;
+                    }
+                    relation.type = selected;
+                    relation.category = inferCategoryFromType(relation.type);
+                    draft.relations = normalizeCharacterRelations(relations);
+                    this.scheduleSave(draft);
+                    setCustomMode(false);
+                });
+
+                customTypeInput.addEventListener('input', () => {
+                    const cleaned = customTypeInput.value.trim().toLowerCase().replace(/\s+/g, '-');
+                    if (!cleaned) {
+                        relation.type = NEW_CUSTOM_TYPE_VALUE;
+                        relation.category = 'custom';
+                        draft.relations = normalizeCharacterRelations(relations);
+                        this.scheduleSave(draft);
+                        return;
+                    }
+                    relation.type = cleaned;
+                    relation.category = 'custom';
+                    draft.relations = normalizeCharacterRelations(relations);
+                    this.scheduleSave(draft);
+                });
+
+                targetSelect.addEventListener('change', () => {
+                    relation.target = resolveAlias(targetSelect.value);
+                    draft.relations = normalizeCharacterRelations(relations);
+                    this.scheduleSave(draft);
+                });
+
+                removeBtn.addEventListener('click', () => {
+                    relations.splice(index, 1);
+                    draft.relations = normalizeCharacterRelations(relations);
+                    this.scheduleSave(draft);
+                    renderRows();
+                });
+
+                dragHandle.addEventListener('dragstart', (event) => {
+                    dragIndex = index;
+                    relRow.addClass('relation-builder-dragging');
+                    event.dataTransfer?.setData('text/plain', String(index));
+                    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+                });
+
+                relRow.addEventListener('dragover', (event) => {
+                    event.preventDefault();
+                    if (dragIndex === null || dragIndex === index) return;
+                    relRow.addClass('relation-builder-drag-over');
+                    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+                });
+
+                relRow.addEventListener('dragleave', () => {
+                    relRow.removeClass('relation-builder-drag-over');
+                });
+
+                relRow.addEventListener('drop', (event) => {
+                    event.preventDefault();
+                    relRow.removeClass('relation-builder-drag-over');
+                    if (dragIndex === null || dragIndex === index) return;
+
+                    const [moved] = relations.splice(dragIndex, 1);
+                    const insertIndex = dragIndex < index ? index - 1 : index;
+                    relations.splice(insertIndex, 0, moved);
+                    draft.relations = normalizeCharacterRelations(relations);
+                    this.scheduleSave(draft);
+                    renderRows();
+                });
+
+                relRow.addEventListener('dragend', () => {
+                    dragIndex = null;
+                    list.querySelectorAll('.relation-builder-drag-over').forEach(el => el.removeClass('relation-builder-drag-over'));
+                    list.querySelectorAll('.relation-builder-dragging').forEach(el => el.removeClass('relation-builder-dragging'));
+                });
+            }
+        };
+
+        const addBtn = addRow.createEl('button', { cls: 'character-custom-add-btn', text: '+ Add relation' });
+        addBtn.addEventListener('click', () => {
+            const existing = addRow.querySelector('.relation-builder-add-picker') as HTMLSelectElement | null;
+            if (existing) {
+                const existingPicker = existing as HTMLSelectElement & { showPicker?: () => void };
+                if (typeof existingPicker.showPicker === 'function') {
+                    existingPicker.showPicker();
+                } else {
+                    existing.focus();
+                    existing.click();
+                }
+                return;
+            }
+
+            addBtn.style.display = 'none';
+            const tempSelect = addRow.createEl('select', { cls: 'character-field-input dropdown relation-builder-add-type relation-builder-add-picker' });
+            tempSelect.createEl('option', { value: '', text: 'Choose relation type…' });
+            buildTypeOptions(tempSelect);
+            tempSelect.value = '';
+
+            const cleanup = () => {
+                if (tempSelect.parentElement) tempSelect.remove();
+                addBtn.style.display = '';
+            };
+
+            tempSelect.addEventListener('change', () => {
+                const selectedType = tempSelect.value;
+                if (!selectedType) {
+                    cleanup();
+                    return;
+                }
+                relations.push({ category: inferCategoryFromType(selectedType), type: selectedType, target: '' });
+                draft.relations = normalizeCharacterRelations(relations);
+                this.scheduleSave(draft);
+                cleanup();
+                renderRows();
+            });
+
+            tempSelect.addEventListener('blur', () => {
+                // Delay to allow change to fire first when selecting an option
+                setTimeout(() => cleanup(), 50);
+            });
+
+            const picker = tempSelect as HTMLSelectElement & { showPicker?: () => void };
+            if (typeof picker.showPicker === 'function') {
+                picker.showPicker();
+            } else {
+                tempSelect.focus();
+                tempSelect.click();
+            }
+        });
+
+        renderRows();
+    }
+
     /**
-     * Render a tag-style character picker for allies/enemies fields.
+     * Render a tag-style character picker for relationship fields.
      * Shows existing selections as removable tags, a dropdown to pick from existing characters,
      * and a "+" button to quickly create a new character.
      */

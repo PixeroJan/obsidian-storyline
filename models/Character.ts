@@ -28,6 +28,9 @@ export interface Character {
     /** Family & background */
     family?: string;
 
+    /** Structured relationship rows (category -> type -> target) */
+    relations?: CharacterRelation[];
+
     // ── Physical Characteristics ───────────────────────
     /** Appearance description */
     appearance?: string;
@@ -75,6 +78,73 @@ export interface Character {
     mentors?: string[];
     /** Other / miscellaneous connections (character names) */
     otherRelations?: string[];
+    /** Custom relationship type connections (character names) */
+    customRelations?: string[];
+    /** Label/name of the custom relation type (e.g. Bodyguard, Blood Oath) */
+    customRelationType?: string;
+
+    // Typed relationships (grouped)
+    // Family
+    siblings?: string[];
+    halfSiblings?: string[];
+    twins?: string[];
+    parents?: string[];
+    children?: string[];
+    stepParents?: string[];
+    stepChildren?: string[];
+    adoptiveParents?: string[];
+    adoptedChildren?: string[];
+    guardians?: string[];
+    wards?: string[];
+    grandparents?: string[];
+    grandchildren?: string[];
+    auntsUncles?: string[];
+    niecesNephews?: string[];
+    cousins?: string[];
+    inLaws?: string[];
+
+    // Romantic
+    spouses?: string[];
+    exPartners?: string[];
+
+    // Social
+    friends?: string[];
+    bestFriends?: string[];
+    confidants?: string[];
+    acquaintances?: string[];
+
+    // Conflict
+    rivals?: string[];
+    betrayers?: string[];
+    avengers?: string[];
+
+    // Guidance / hierarchy
+    mentees?: string[];
+    leaders?: string[];
+    followers?: string[];
+    bosses?: string[];
+    subordinates?: string[];
+    commanders?: string[];
+    secondsInCommand?: string[];
+    masters?: string[];
+    apprentices?: string[];
+
+    // Professional / institutional
+    colleagues?: string[];
+    businessPartners?: string[];
+    clients?: string[];
+    handlers?: string[];
+    assets?: string[];
+
+    // Story dynamics
+    protectors?: string[];
+    dependents?: string[];
+    owesDebtTo?: string[];
+    swornTo?: string[];
+    boundByOath?: string[];
+    idolizes?: string[];
+    fearsPeople?: string[];
+    obsessedWith?: string[];
 
     // ── Character Arc ──────────────────────────────────
     /** How they are at story start */
@@ -120,6 +190,55 @@ export interface CharacterFieldDef {
     multiline?: boolean;
 }
 
+export type CharacterRelationCategory =
+    | 'family'
+    | 'romantic'
+    | 'social'
+    | 'conflict'
+    | 'guidance'
+    | 'professional'
+    | 'story'
+    | 'custom';
+
+export interface CharacterRelation {
+    category: CharacterRelationCategory;
+    type: string;
+    target: string;
+}
+
+export const RELATION_CATEGORIES: { value: CharacterRelationCategory; label: string }[] = [
+    { value: 'family', label: 'Family' },
+    { value: 'romantic', label: 'Romantic' },
+    { value: 'social', label: 'Social' },
+    { value: 'conflict', label: 'Conflict' },
+    { value: 'guidance', label: 'Guidance / Hierarchy' },
+    { value: 'professional', label: 'Professional / Institutional' },
+    { value: 'story', label: 'Story Dynamics' },
+    { value: 'custom', label: 'Custom' },
+];
+
+export const RELATION_TYPES_BY_CATEGORY: Record<CharacterRelationCategory, string[]> = {
+    family: ['sibling', 'half-sibling', 'twin', 'parent', 'child', 'step-parent', 'step-child', 'adoptive-parent', 'adopted-child', 'guardian', 'ward', 'grandparent', 'grandchild', 'aunt/uncle', 'niece/nephew', 'cousin', 'in-law'],
+    romantic: ['partner', 'spouse', 'ex-partner'],
+    social: ['ally', 'friend', 'best-friend', 'confidant', 'acquaintance'],
+    conflict: ['enemy', 'rival', 'betrayer', 'avenger'],
+    guidance: ['mentor', 'mentee', 'leader', 'follower', 'boss', 'subordinate', 'commander', 'second-in-command', 'master', 'apprentice'],
+    professional: ['colleague', 'business-partner', 'client', 'handler', 'asset'],
+    story: ['protector', 'dependent', 'owes-debt-to', 'sworn-to', 'bound-by-oath', 'idolizes', 'fears', 'obsessed-with'],
+    custom: [],
+};
+
+export const RELATION_BASE_TYPE_BY_CATEGORY: Record<CharacterRelationCategory, 'ally' | 'enemy' | 'romantic' | 'family' | 'mentor' | 'other'> = {
+    family: 'family',
+    romantic: 'romantic',
+    social: 'ally',
+    conflict: 'enemy',
+    guidance: 'mentor',
+    professional: 'other',
+    story: 'other',
+    custom: 'other',
+};
+
 /**
  * All character field categories with their placeholder descriptions.
  * These define the UI layout and hint text.
@@ -143,11 +262,7 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
         title: 'Relationships',
         icon: 'users',
         fields: [
-            { key: 'allies', label: 'Allies & Friends', placeholder: 'Who they trust' },
-            { key: 'enemies', label: 'Enemies & Rivals', placeholder: 'Who they are in conflict with' },
-            { key: 'romantic', label: 'Romantic', placeholder: 'Love interests, partners, exes' },
-            { key: 'mentors', label: 'Mentors', placeholder: 'Teachers, guides, role models' },
-            { key: 'otherRelations', label: 'Other Connections', placeholder: 'Any other notable relationships' },
+            { key: 'relations', label: 'Relations', placeholder: 'Add relation rows by category and type' },
         ],
     },
     {
@@ -206,14 +321,202 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
  * Frontmatter keys that map to Character fields (excludes computed/meta keys)
  */
 export const CHARACTER_FIELD_KEYS: (keyof Character)[] = [
-    'name', 'image', 'nickname', 'age', 'role', 'occupation', 'residency', 'locations', 'family',
+    'name', 'image', 'nickname', 'age', 'role', 'occupation', 'residency', 'locations', 'family', 'relations',
     'appearance', 'distinguishingFeatures', 'style', 'quirks',
     'personality', 'internalMotivation', 'externalMotivation', 'strengths', 'flaws', 'fears', 'belief', 'misbelief',
     'formativeMemories', 'accomplishments', 'secrets',
-    'allies', 'enemies', 'romantic', 'mentors', 'otherRelations',
     'startingPoint', 'goal', 'expectedChange',
     'habits', 'props',
 ];
+
+export const CHARACTER_RELATION_ARRAY_FIELDS: (keyof Character)[] = [
+    'allies', 'enemies', 'romantic', 'mentors', 'customRelations',
+    'siblings', 'halfSiblings', 'twins', 'parents', 'children', 'stepParents', 'stepChildren',
+    'adoptiveParents', 'adoptedChildren', 'guardians', 'wards', 'grandparents', 'grandchildren',
+    'auntsUncles', 'niecesNephews', 'cousins', 'inLaws',
+    'spouses', 'exPartners',
+    'friends', 'bestFriends', 'confidants', 'acquaintances',
+    'rivals', 'betrayers', 'avengers',
+    'mentees', 'leaders', 'followers', 'bosses', 'subordinates', 'commanders', 'secondsInCommand', 'masters', 'apprentices',
+    'colleagues', 'businessPartners', 'clients', 'handlers', 'assets',
+    'protectors', 'dependents', 'owesDebtTo', 'swornTo', 'boundByOath', 'idolizes', 'fearsPeople', 'obsessedWith',
+];
+
+export const RELATION_FIELD_BASE_TYPE: Partial<Record<keyof Character, 'ally' | 'enemy' | 'romantic' | 'family' | 'mentor' | 'other'>> = {
+    allies: 'ally',
+    enemies: 'enemy',
+    romantic: 'romantic',
+    mentors: 'mentor',
+    customRelations: 'other',
+    otherRelations: 'other',
+
+    siblings: 'family',
+    halfSiblings: 'family',
+    twins: 'family',
+    parents: 'family',
+    children: 'family',
+    stepParents: 'family',
+    stepChildren: 'family',
+    adoptiveParents: 'family',
+    adoptedChildren: 'family',
+    guardians: 'family',
+    wards: 'family',
+    grandparents: 'family',
+    grandchildren: 'family',
+    auntsUncles: 'family',
+    niecesNephews: 'family',
+    cousins: 'family',
+    inLaws: 'family',
+
+    spouses: 'romantic',
+    exPartners: 'romantic',
+
+    friends: 'ally',
+    bestFriends: 'ally',
+    confidants: 'ally',
+    acquaintances: 'ally',
+
+    rivals: 'enemy',
+    betrayers: 'enemy',
+    avengers: 'enemy',
+
+    mentees: 'mentor',
+
+    leaders: 'other',
+    followers: 'other',
+    bosses: 'other',
+    subordinates: 'other',
+    commanders: 'other',
+    secondsInCommand: 'other',
+    masters: 'other',
+    apprentices: 'other',
+
+    colleagues: 'other',
+    businessPartners: 'other',
+    clients: 'other',
+    handlers: 'other',
+    assets: 'other',
+
+    protectors: 'other',
+    dependents: 'other',
+    owesDebtTo: 'other',
+    swornTo: 'other',
+    boundByOath: 'other',
+    idolizes: 'other',
+    fearsPeople: 'other',
+    obsessedWith: 'other',
+};
+
+export const RELATION_FIELD_LABELS: Partial<Record<keyof Character, string>> = {
+    siblings: 'Family · Sibling',
+    halfSiblings: 'Family · Half-Sibling',
+    twins: 'Family · Twin',
+    parents: 'Family · Parent',
+    children: 'Family · Child',
+    stepParents: 'Family · Step-Parent',
+    stepChildren: 'Family · Step-Child',
+    adoptiveParents: 'Family · Adoptive Parent',
+    adoptedChildren: 'Family · Adopted Child',
+    guardians: 'Family · Guardian',
+    wards: 'Family · Ward',
+    grandparents: 'Family · Grandparent',
+    grandchildren: 'Family · Grandchild',
+    auntsUncles: 'Family · Aunt/Uncle',
+    niecesNephews: 'Family · Niece/Nephew',
+    cousins: 'Family · Cousin',
+    inLaws: 'Family · In-Law',
+
+    romantic: 'Romantic · Partner',
+    spouses: 'Romantic · Spouse',
+    exPartners: 'Romantic · Ex-Partner',
+
+    allies: 'Social · Ally',
+    friends: 'Social · Friend',
+    bestFriends: 'Social · Best Friend',
+    confidants: 'Social · Confidant',
+    acquaintances: 'Social · Acquaintance',
+
+    enemies: 'Conflict · Enemy',
+    rivals: 'Conflict · Rival',
+    betrayers: 'Conflict · Betrayer',
+    avengers: 'Conflict · Avenger',
+
+    mentors: 'Guidance · Mentor',
+    mentees: 'Guidance · Mentee',
+    leaders: 'Guidance · Leader',
+    followers: 'Guidance · Follower',
+    bosses: 'Guidance · Boss',
+    subordinates: 'Guidance · Subordinate',
+    commanders: 'Guidance · Commander',
+    secondsInCommand: 'Guidance · Second-in-Command',
+    masters: 'Guidance · Master',
+    apprentices: 'Guidance · Apprentice',
+
+    colleagues: 'Professional · Colleague',
+    businessPartners: 'Professional · Business Partner',
+    clients: 'Professional · Client',
+    handlers: 'Professional · Handler',
+    assets: 'Professional · Asset',
+
+    protectors: 'Story Dynamics · Protector',
+    dependents: 'Story Dynamics · Dependent',
+    owesDebtTo: 'Story Dynamics · Owes Debt To',
+    swornTo: 'Story Dynamics · Sworn To',
+    boundByOath: 'Story Dynamics · Bound by Oath',
+    idolizes: 'Story Dynamics · Idolizes',
+    fearsPeople: 'Story Dynamics · Fears',
+    obsessedWith: 'Story Dynamics · Obsessed With',
+    customRelations: 'Story Dynamics · Custom',
+    otherRelations: 'Story Dynamics · Other',
+};
+
+export const LEGACY_RELATION_FIELDS_TO_CLEAN: (keyof Character)[] = [
+    'allies', 'enemies', 'romantic', 'mentors', 'otherRelations', 'customRelations',
+    'siblings', 'halfSiblings', 'twins', 'parents', 'children', 'stepParents', 'stepChildren',
+    'adoptiveParents', 'adoptedChildren', 'guardians', 'wards', 'grandparents', 'grandchildren',
+    'auntsUncles', 'niecesNephews', 'cousins', 'inLaws',
+    'spouses', 'exPartners',
+    'friends', 'bestFriends', 'confidants', 'acquaintances',
+    'rivals', 'betrayers', 'avengers',
+    'mentees', 'leaders', 'followers', 'bosses', 'subordinates', 'commanders', 'secondsInCommand', 'masters', 'apprentices',
+    'colleagues', 'businessPartners', 'clients', 'handlers', 'assets',
+    'protectors', 'dependents', 'owesDebtTo', 'swornTo', 'boundByOath', 'idolizes', 'fearsPeople', 'obsessedWith',
+];
+
+function normalizeRelationCategory(value: string): CharacterRelationCategory {
+    if (value === 'family' || value === 'romantic' || value === 'social' || value === 'conflict' || value === 'guidance' || value === 'professional' || value === 'story' || value === 'custom') {
+        return value;
+    }
+    return 'custom';
+}
+
+function normalizedType(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, '-');
+}
+
+export function normalizeCharacterRelations(relations: CharacterRelation[] | undefined): CharacterRelation[] {
+    if (!Array.isArray(relations)) return [];
+    const out: CharacterRelation[] = [];
+    const seen = new Set<string>();
+    for (const rel of relations) {
+        if (!rel || typeof rel.target !== 'string' || typeof rel.type !== 'string') continue;
+        const target = rel.target.trim();
+        if (!target) continue;
+        const category = normalizeRelationCategory(String(rel.category || 'custom'));
+        const type = normalizedType(rel.type);
+        if (!type) continue;
+        const key = `${category}|${type}|${target.toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ category, type, target });
+    }
+    return out;
+}
+
+export function relationDisplayLabel(relation: CharacterRelation): string {
+    const cat = RELATION_CATEGORIES.find(c => c.value === relation.category)?.label || relation.category;
+    return `${cat} · ${relation.type}`;
+}
 
 /**
  * Text fields to scan for #prop tags.

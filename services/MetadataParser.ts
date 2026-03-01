@@ -52,6 +52,8 @@ export class MetadataParser {
             modified: frontmatter.modified,
             body,
             notes: frontmatter.notes,
+            corkboardNote: this.parseBooleanFlag(frontmatter.corkboardNote ?? frontmatter.corkboard_note),
+            corkboardNoteColor: frontmatter.corkboardNoteColor ?? frontmatter.corkboard_note_color,
             timeline_mode: this.parseTimelineMode(frontmatter.timeline_mode),
             timeline_strand: frontmatter.timeline_strand,
         };
@@ -95,6 +97,8 @@ export class MetadataParser {
             if (key === 'filePath' || key === 'body') continue;
             // Remove empty notes rather than storing blank string
             if (key === 'notes' && !value) { delete frontmatter[key]; continue; }
+            if (key === 'corkboardNote' && !value) { delete frontmatter[key]; continue; }
+            if (key === 'corkboardNoteColor' && !value) { delete frontmatter[key]; continue; }
             if (value !== undefined) {
                 frontmatter[key] = value;
             }
@@ -137,6 +141,8 @@ export class MetadataParser {
         if (scene.setup_scenes?.length) fm.setup_scenes = scene.setup_scenes;
         if (scene.payoff_scenes?.length) fm.payoff_scenes = scene.payoff_scenes;
         if (scene.notes) fm.notes = scene.notes;
+        if (scene.corkboardNote) fm.corkboardNote = true;
+        if (scene.corkboardNoteColor) fm.corkboardNoteColor = scene.corkboardNoteColor;
         if (scene.timeline_mode && scene.timeline_mode !== 'linear') fm.timeline_mode = scene.timeline_mode;
         if (scene.timeline_strand) fm.timeline_strand = scene.timeline_strand;
         fm.wordcount = scene.body ? this.countWords(scene.body) : 0;
@@ -154,6 +160,20 @@ export class MetadataParser {
     private static parseTimelineMode(mode: string | undefined): TimelineMode | undefined {
         if (mode && TIMELINE_MODES.includes(mode as TimelineMode)) {
             return mode as TimelineMode;
+        }
+        return undefined;
+    }
+
+    private static parseBooleanFlag(value: unknown): boolean | undefined {
+        if (value === true || value === false) return value;
+        if (typeof value === 'string') {
+            const v = value.trim().toLowerCase();
+            if (v === 'true') return true;
+            if (v === 'false') return false;
+        }
+        if (typeof value === 'number') {
+            if (value === 1) return true;
+            if (value === 0) return false;
         }
         return undefined;
     }

@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Menu, Notice, TFile, Modal, Setting } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Menu, Notice, TFile, Modal, Setting, MarkdownRenderer } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { Scene, SceneFilter, SortConfig, BoardGroupBy, SceneStatus, BUILTIN_BEAT_SHEETS } from '../models/Scene';
 import { openConfirmModal } from '../components/ConfirmModal';
@@ -14,6 +14,17 @@ import { SplitSceneModal, MergeSceneModal } from '../components/SplitMergeModals
 import { isMobile, applyMobileClass, enableTouchDrag } from '../components/MobileAdapter';
 import { BOARD_VIEW_TYPE } from '../constants';
 import type SceneCardsPlugin from '../main';
+
+type BoardMode = 'kanban' | 'corkboard';
+
+const CORKBOARD_NOTE_COLOR_PRESETS: Array<{ label: string; color: string }> = [
+    { label: 'Yellow', color: '#F6EDB4' },
+    { label: 'Pink', color: '#F9D7DC' },
+    { label: 'Blue', color: '#DDEBFA' },
+    { label: 'Green', color: '#E1F1D9' },
+    { label: 'Orange', color: '#F9E0BF' },
+    { label: 'Lavender', color: '#E8DEF8' },
+];
 
 /**
  * Board View - Kanban-style scene card board
@@ -32,6 +43,16 @@ export class BoardView extends ItemView {
     private boardEl: HTMLElement | null = null;
     private bulkBarEl: HTMLElement | null = null;
     private rootContainer: HTMLElement | null = null;
+    private boardMode: BoardMode = 'corkboard';
+    private corkboardPositions: Map<string, { x: number; y: number; z: number }> = new Map();
+    private corkboardJustDragged: Set<string> = new Set();
+    private corkboardPersistTimer: ReturnType<typeof setTimeout> | null = null;
+    private corkboardLoadedProjectFile: string | null = null;
+    private dragToPanCleanup: (() => void) | null = null;
+    private corkboardInteractionCleanup: (() => void) | null = null;
+    private corkboardCamera = { x: 220, y: 140, zoom: 1 };
+    private quickNoteLastCreatedAt = 0;
+    private quickNoteChainIndex = 0;
     /** Active virtual scrollers — cleaned up on re-render */
     private scrollers: VirtualScroller<Scene>[] = [];
 
@@ -40,6 +61,8 @@ export class BoardView extends ItemView {
         this.plugin = plugin;
         this.sceneManager = sceneManager;
         this.cardComponent = new SceneCardComponent(plugin);
+        const preferred = plugin.settings.defaultBoardMode;
+        this.boardMode = preferred === 'kanban' ? 'kanban' : 'corkboard';
     }
 
     getViewType(): string {
@@ -68,13 +91,26 @@ export class BoardView extends ItemView {
     }
 
     async onClose(): Promise<void> {
-        // cleanup
+        if (this.corkboardInteractionCleanup) {
+            this.corkboardInteractionCleanup();
+            this.corkboardInteractionCleanup = null;
+        }
+        if (this.dragToPanCleanup) {
+            this.dragToPanCleanup();
+            this.dragToPanCleanup = null;
+        }
+        if (this.corkboardPersistTimer) {
+            clearTimeout(this.corkboardPersistTimer);
+            this.corkboardPersistTimer = null;
+        }
+        await this.persistCorkboardLayout();
     }
 
     /**
      * Render the entire board view
      */
     private renderView(container: HTMLElement): void {
+        this.ensureCorkboardLayoutLoaded();
         container.empty();
 
         // Toolbar
@@ -86,6 +122,7 @@ export class BoardView extends ItemView {
 
         // Filters
         const filterContainer = mainArea.createDiv('story-line-filters-container');
+        filterContainer.toggleClass('is-corkboard-mode', this.boardMode === 'corkboard');
         this.filtersComponent = new FiltersComponent(
             filterContainer,
             this.sceneManager,
@@ -100,13 +137,13 @@ export class BoardView extends ItemView {
 
         // Board
         this.boardEl = mainArea.createDiv('story-line-board');
-        enableDragToPan(this.boardEl);
+        this.configureDragToPan();
 
         // Bulk action bar (hidden until 2+ selected)
         this.bulkBarEl = mainArea.createDiv('story-line-bulk-bar');
         this.bulkBarEl.style.display = 'none';
 
-        this.renderBoard();
+        this.refreshBoard();
 
         // Inspector sidebar
         const inspectorEl = mainArea.createDiv('story-line-inspector-panel');
@@ -143,31 +180,83 @@ export class BoardView extends ItemView {
 
         const controls = toolbar.createDiv('story-line-toolbar-controls');
 
-        // Group by dropdown
-        const groupContainer = controls.createDiv('story-line-group-control');
-        groupContainer.createSpan({ text: 'Group by: ' });
-        const groupSelect = groupContainer.createEl('select', { cls: 'dropdown' });
-        const groupOptions: { value: BoardGroupBy; label: string }[] = [
-            { value: 'act', label: 'Act' },
-            { value: 'chapter', label: 'Chapter' },
-            { value: 'status', label: 'Status' },
-            { value: 'pov', label: 'POV' },
-        ];
-        groupOptions.forEach(opt => {
-            const option = groupSelect.createEl('option', { text: opt.label, value: opt.value });
-            if (opt.value === this.groupBy) option.selected = true;
+        const modeToggle = controls.createDiv('story-line-board-mode-toggle');
+        const corkboardBtn = modeToggle.createEl('button', {
+            cls: `story-line-board-mode-btn ${this.boardMode === 'corkboard' ? 'active' : ''}`,
+            text: 'Corkboard'
         });
-        groupSelect.addEventListener('change', () => {
-            this.groupBy = groupSelect.value as BoardGroupBy;
-            this.refreshBoard();
+        const kanbanBtn = modeToggle.createEl('button', {
+            cls: `story-line-board-mode-btn ${this.boardMode === 'kanban' ? 'active' : ''}`,
+            text: 'Kanban'
         });
+        corkboardBtn.addEventListener('click', () => {
+            if (this.boardMode !== 'corkboard') {
+                this.boardMode = 'corkboard';
+                this.refresh();
+            }
+        });
+        kanbanBtn.addEventListener('click', () => {
+            if (this.boardMode !== 'kanban') {
+                this.boardMode = 'kanban';
+                this.refresh();
+            }
+        });
+
+        if (this.boardMode === 'corkboard') {
+            const showScenesBtn = controls.createEl('button', {
+                cls: `story-line-show-notes-btn ${this.plugin.settings.showScenesInCorkboard ? 'active' : ''}`,
+                text: this.plugin.settings.showScenesInCorkboard ? 'Scenes: On' : 'Scenes: Off'
+            });
+            showScenesBtn.addEventListener('click', async () => {
+                this.plugin.settings.showScenesInCorkboard = !this.plugin.settings.showScenesInCorkboard;
+                await this.plugin.saveSettings();
+                this.refresh();
+            });
+        }
+
+        if (this.boardMode === 'kanban') {
+            // Group by dropdown
+            const groupContainer = controls.createDiv('story-line-group-control');
+            groupContainer.createSpan({ text: 'Group by: ' });
+            const groupSelect = groupContainer.createEl('select', { cls: 'dropdown' });
+            const groupOptions: { value: BoardGroupBy; label: string }[] = [
+                { value: 'act', label: 'Act' },
+                { value: 'chapter', label: 'Chapter' },
+                { value: 'status', label: 'Status' },
+                { value: 'pov', label: 'POV' },
+            ];
+            groupOptions.forEach(opt => {
+                const option = groupSelect.createEl('option', { text: opt.label, value: opt.value });
+                if (opt.value === this.groupBy) option.selected = true;
+            });
+            groupSelect.addEventListener('change', () => {
+                this.groupBy = groupSelect.value as BoardGroupBy;
+                this.refreshBoard();
+            });
+
+            const showNotesBtn = controls.createEl('button', {
+                cls: `story-line-show-notes-btn ${this.plugin.settings.showNotesInKanban ? 'active' : ''}`,
+                text: this.plugin.settings.showNotesInKanban ? 'Notes: On' : 'Notes: Off'
+            });
+            showNotesBtn.addEventListener('click', async () => {
+                this.plugin.settings.showNotesInKanban = !this.plugin.settings.showNotesInKanban;
+                await this.plugin.saveSettings();
+                this.refresh();
+            });
+        }
 
         // Add scene button
         const addBtn = controls.createEl('button', {
             cls: 'mod-cta story-line-add-btn',
-            text: '+ New Scene'
+            text: this.boardMode === 'corkboard' ? '+ New Note' : '+ New Scene'
         });
-        addBtn.addEventListener('click', () => this.openQuickAdd());
+        addBtn.addEventListener('click', () => {
+            if (this.boardMode === 'corkboard') {
+                void this.openQuickAddIdea();
+            } else {
+                this.openQuickAdd();
+            }
+        });
 
         // Add acts/chapters button
         const structBtn = controls.createEl('button', {
@@ -224,6 +313,7 @@ export class BoardView extends ItemView {
      */
     private renderBoard(): void {
         if (!this.boardEl) return;
+        this.boardEl.removeClass('story-line-corkboard');
         this.boardEl.empty();
 
         // Destroy previous virtual scrollers
@@ -247,9 +337,804 @@ export class BoardView extends ItemView {
         }
 
         for (const key of sortedKeys) {
-            const scenes = groups.get(key) || [];
+            let scenes = groups.get(key) || [];
+            if (!this.plugin.settings.showNotesInKanban) {
+                scenes = scenes.filter(scene => !this.isCorkboardNoteScene(scene));
+                const isNoActColumn = this.groupBy === 'act' && key.trim().toLowerCase() === 'no act';
+                if (isNoActColumn && scenes.length === 0) {
+                    continue;
+                }
+            }
             this.renderColumn(this.boardEl, key, scenes);
         }
+    }
+
+    private renderCorkboard(): void {
+        if (!this.boardEl) return;
+
+        if (this.corkboardInteractionCleanup) {
+            this.corkboardInteractionCleanup();
+            this.corkboardInteractionCleanup = null;
+        }
+
+        this.boardEl.empty();
+        this.boardEl.addClass('story-line-corkboard');
+
+        // Destroy previous virtual scrollers (used by Kanban mode)
+        for (const vs of this.scrollers) vs.destroy();
+        this.scrollers = [];
+
+        let scenes = this.sceneManager.getFilteredScenes(this.currentFilter, this.currentSort);
+        if (!this.plugin.settings.showScenesInCorkboard) {
+            scenes = scenes.filter(scene => this.isCorkboardNoteScene(scene));
+        }
+        const validPaths = new Set(scenes.map(s => s.filePath));
+        for (const key of Array.from(this.corkboardPositions.keys())) {
+            if (!validPaths.has(key)) this.corkboardPositions.delete(key);
+        }
+
+        const currentMaxZ = () => {
+            let max = 0;
+            for (const pos of this.corkboardPositions.values()) {
+                if ((pos.z ?? 0) > max) max = pos.z ?? 0;
+            }
+            return max;
+        };
+
+        if (scenes.length === 0) {
+            const empty = this.boardEl.createDiv('story-line-empty');
+            empty.createEl('p', { text: 'No scenes found.' });
+            empty.createEl('p', { text: 'Click "+ New Scene" to create your first scene, or adjust your filters.' });
+            return;
+        }
+
+        const viewport = this.boardEl.createDiv('story-line-corkboard-viewport');
+        const canvas = viewport.createDiv('story-line-corkboard-canvas');
+
+        this.corkboardInteractionCleanup = this.enableCorkboardCameraInteraction(viewport, canvas);
+        this.applyCorkboardCamera(canvas);
+
+        scenes.forEach((scene, index) => {
+            const existing = this.corkboardPositions.get(scene.filePath);
+            const col = index % 4;
+            const row = Math.floor(index / 4);
+            const pos = existing || {
+                x: col * 320,
+                y: row * 230,
+                z: currentMaxZ() + 1,
+            };
+            if (!existing) {
+                this.corkboardPositions.set(scene.filePath, pos);
+                this.schedulePersistCorkboardLayout();
+            } else if (!Number.isFinite(existing.z)) {
+                pos.z = currentMaxZ() + 1;
+                this.corkboardPositions.set(scene.filePath, pos);
+                this.schedulePersistCorkboardLayout();
+            }
+
+            const node = canvas.createDiv('story-line-corkboard-node');
+            node.style.left = `${pos.x}px`;
+            node.style.top = `${pos.y}px`;
+            node.style.zIndex = String(pos.z ?? 1);
+            if (this.isCorkboardNoteScene(scene)) {
+                node.addClass('story-line-corkboard-note-node');
+            }
+
+            const cardEl = this.cardComponent.render(scene, node, {
+                compact: false,
+                onSelect: (s, event) => {
+                    if (this.isCorkboardNoteScene(s)) return;
+                    if (this.corkboardJustDragged.has(s.filePath)) return;
+                    this.selectScene(s, event);
+                },
+                onDoubleClick: (s) => {
+                    if (this.isCorkboardNoteScene(s)) return;
+                    this.openScene(s);
+                },
+                onContextMenu: (s, event) => {
+                    if (this.isCorkboardNoteScene(s)) {
+                        this.showCorkboardNoteMenu(s, event);
+                    } else {
+                        this.showContextMenu(s, event);
+                    }
+                },
+                draggable: false,
+            });
+            cardEl.addClass('story-line-corkboard-card');
+
+            if (this.selectedScenes.has(scene.filePath)) {
+                cardEl.addClass('selected');
+            }
+
+            this.attachCorkboardNoteEditor(cardEl, scene);
+
+            this.attachCorkboardDrag(node, scene.filePath);
+        });
+    }
+
+    private attachCorkboardNoteEditor(cardEl: HTMLElement, scene: Scene): void {
+        // Only explicit corkboard notes get inline note editor
+        if (!this.isCorkboardNoteScene(scene)) return;
+
+        cardEl.addClass('story-line-corkboard-note-card');
+        this.applyCorkboardNoteColor(cardEl, scene);
+
+        const editorWrap = cardEl.createDiv('story-line-corkboard-note-editor');
+
+        const textarea = editorWrap.createEl('textarea', {
+            cls: 'story-line-corkboard-note-text',
+            attr: {
+                placeholder: 'Write your note…',
+                rows: '6',
+            },
+        });
+        textarea.value = scene.body || '';
+
+        const preview = editorWrap.createDiv('story-line-corkboard-note-preview markdown-rendered');
+        let isEditing = false;
+        let commitInProgress = false;
+        let outsidePointerHandler: ((event: PointerEvent) => void) | null = null;
+
+        const detachOutsideClose = () => {
+            if (!outsidePointerHandler) return;
+            document.removeEventListener('pointerdown', outsidePointerHandler, true);
+            outsidePointerHandler = null;
+        };
+
+        const renderPreview = async () => {
+            preview.empty();
+            const source = textarea.value.trim();
+            if (!source) {
+                preview.createDiv({ cls: 'story-line-corkboard-note-preview-empty', text: 'Write your note…' });
+                return;
+            }
+            await MarkdownRenderer.render(this.app, source, preview, scene.filePath, this);
+        };
+
+        const placeCaretFromClick = (clientX: number, clientY: number) => {
+            const docAny = document as Document & {
+                caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+                caretRangeFromPoint?: (x: number, y: number) => Range | null;
+            };
+
+            let offset: number | null = null;
+            const textNode = textarea.firstChild;
+
+            if (typeof docAny.caretPositionFromPoint === 'function') {
+                const pos = docAny.caretPositionFromPoint(clientX, clientY);
+                if (pos && (pos.offsetNode === textNode || pos.offsetNode === textarea)) {
+                    offset = pos.offset;
+                }
+            }
+
+            if (offset === null && typeof docAny.caretRangeFromPoint === 'function') {
+                const range = docAny.caretRangeFromPoint(clientX, clientY);
+                if (range && (range.startContainer === textNode || range.startContainer === textarea)) {
+                    offset = range.startOffset;
+                }
+            }
+
+            if (offset === null) {
+                const rect = textarea.getBoundingClientRect();
+                const yRatio = Math.max(0, Math.min(1, (clientY - rect.top) / Math.max(1, rect.height)));
+                offset = Math.round(textarea.value.length * yRatio);
+            }
+
+            const clamped = Math.max(0, Math.min(textarea.value.length, offset));
+            textarea.setSelectionRange(clamped, clamped);
+        };
+
+        const setEditing = (editing: boolean, clickPoint?: { x: number; y: number }) => {
+            isEditing = editing;
+            if (editing) {
+                preview.style.display = 'none';
+                textarea.style.display = 'block';
+                autoGrow();
+                textarea.focus();
+                if (clickPoint) {
+                    window.requestAnimationFrame(() => {
+                        placeCaretFromClick(clickPoint.x, clickPoint.y);
+                    });
+                }
+
+                outsidePointerHandler = (event: PointerEvent) => {
+                    const target = event.target as Node | null;
+                    if (!isEditing) return;
+                    if (target && cardEl.contains(target)) return;
+                    void commitAndClose();
+                };
+                window.setTimeout(() => {
+                    if (outsidePointerHandler) {
+                        document.addEventListener('pointerdown', outsidePointerHandler, true);
+                    }
+                }, 0);
+            } else {
+                detachOutsideClose();
+                textarea.style.display = 'none';
+                preview.style.display = 'block';
+            }
+        };
+
+        const autoGrow = () => {
+            textarea.style.height = 'auto';
+            textarea.style.height = `${Math.max(96, textarea.scrollHeight)}px`;
+        };
+        autoGrow();
+
+        const saveBody = async () => {
+            const next = textarea.value;
+            if ((scene.body || '') === next) return;
+            await this.sceneManager.updateScene(scene.filePath, { body: next });
+            scene.body = next;
+        };
+
+        const commitAndClose = async () => {
+            if (!isEditing || commitInProgress) return;
+            commitInProgress = true;
+            await saveBody();
+            await renderPreview();
+            setEditing(false);
+            commitInProgress = false;
+        };
+
+        textarea.addEventListener('input', () => {
+            autoGrow();
+        });
+
+        textarea.addEventListener('blur', () => {
+            void commitAndClose();
+        });
+
+        textarea.addEventListener('keydown', (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                void commitAndClose();
+            }
+        });
+
+        preview.addEventListener('click', (event: MouseEvent) => {
+            setEditing(true, { x: event.clientX, y: event.clientY });
+        });
+
+        void (async () => {
+            await renderPreview();
+            setEditing(false);
+        })();
+
+        const footer = editorWrap.createDiv('story-line-corkboard-note-actions');
+        const convertBtn = footer.createEl('button', {
+            cls: 'story-line-corkboard-convert-btn',
+            attr: {
+                title: 'Convert to scene',
+            },
+        });
+        obsidian.setIcon(convertBtn, 'clapperboard');
+        convertBtn.addEventListener('click', async () => {
+            await saveBody();
+            await this.convertCorkboardNoteToScene(scene);
+        });
+
+        const resizeHandle = cardEl.createDiv('story-line-corkboard-note-resize-handle');
+        resizeHandle.addEventListener('pointerdown', (e: PointerEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const startY = e.clientY;
+            const startHeight = cardEl.getBoundingClientRect().height;
+            const minHeight = 220;
+
+            const onMove = (moveEvent: PointerEvent) => {
+                const nextHeight = Math.max(minHeight, startHeight + (moveEvent.clientY - startY));
+                cardEl.style.height = `${nextHeight}px`;
+            };
+
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+            };
+
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        });
+    }
+
+    private async convertCorkboardNoteToScene(scene: Scene): Promise<void> {
+        await this.sceneManager.updateScene(scene.filePath, {
+            corkboardNote: false,
+        });
+        scene.corkboardNote = false;
+        this.refreshBoard();
+    }
+
+    private isCorkboardNoteScene(scene: Scene): boolean {
+        const value = (scene as Scene & { corkboardNote?: unknown }).corkboardNote;
+        if (value === true) return true;
+        if (value === false || value === undefined || value === null) return false;
+        if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+        if (typeof value === 'number') return value === 1;
+        return false;
+    }
+
+    private attachCorkboardDrag(node: HTMLElement, scenePath: string): void {
+        let dragging = false;
+        let startClientX = 0;
+        let startClientY = 0;
+        let startX = 0;
+        let startY = 0;
+        let moved = false;
+
+        const onPointerMove = (e: PointerEvent) => {
+            if (!dragging) return;
+
+            const dx = e.clientX - startClientX;
+            const dy = e.clientY - startClientY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+
+            const zoom = this.corkboardCamera.zoom || 1;
+            const nextX = startX + dx / zoom;
+            const nextY = startY + dy / zoom;
+
+            node.style.left = `${nextX}px`;
+            node.style.top = `${nextY}px`;
+            const current = this.corkboardPositions.get(scenePath);
+            this.corkboardPositions.set(scenePath, { x: nextX, y: nextY, z: current?.z ?? 1 });
+
+            e.preventDefault();
+            e.stopPropagation();
+        };
+
+        const onPointerUp = (e: PointerEvent) => {
+            if (!dragging) return;
+            dragging = false;
+            node.removeClass('is-dragging');
+            if (node.hasPointerCapture(e.pointerId)) {
+                node.releasePointerCapture(e.pointerId);
+            }
+
+            if (moved) {
+                this.corkboardJustDragged.add(scenePath);
+                window.setTimeout(() => this.corkboardJustDragged.delete(scenePath), 180);
+                this.schedulePersistCorkboardLayout();
+            } else {
+                const scene = this.sceneManager.getScene(scenePath);
+                if (scene && !this.isCorkboardNoteScene(scene)) {
+                    this.selectScene(scene, e);
+                }
+            }
+        };
+
+        node.addEventListener('pointerdown', (e: PointerEvent) => {
+            if (e.button !== 0) return;
+
+            const target = e.target as HTMLElement;
+            if (target.closest('button, a, input, textarea, select')) return;
+            if (target.closest('.story-line-corkboard-note-preview')) return;
+
+            const noteCard = target.closest('.story-line-corkboard-note-card') as HTMLElement | null;
+            if (noteCard) {
+                const rect = noteCard.getBoundingClientRect();
+                const resizeGripSize = 20;
+                const isInResizeCorner = e.clientX >= rect.right - resizeGripSize && e.clientY >= rect.bottom - resizeGripSize;
+                if (isInResizeCorner) return;
+            }
+
+            dragging = true;
+            moved = false;
+            startClientX = e.clientX;
+            startClientY = e.clientY;
+
+            const pos = this.corkboardPositions.get(scenePath) || {
+                x: parseFloat(node.style.left || '0') || 0,
+                y: parseFloat(node.style.top || '0') || 0,
+                z: Number.parseInt(node.style.zIndex || '1', 10) || 1,
+            };
+            startX = pos.x;
+            startY = pos.y;
+
+            node.addClass('is-dragging');
+            node.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        node.addEventListener('pointermove', onPointerMove);
+        node.addEventListener('pointerup', onPointerUp);
+        node.addEventListener('pointercancel', onPointerUp);
+    }
+
+    private applyCorkboardCamera(canvas: HTMLElement): void {
+        canvas.style.transform = `translate(${this.corkboardCamera.x}px, ${this.corkboardCamera.y}px) scale(${this.corkboardCamera.zoom})`;
+    }
+
+    private zoomCorkboardAt(canvas: HTMLElement, viewport: HTMLElement, clientX: number, clientY: number, nextZoom: number): void {
+        const clamped = Math.max(0.35, Math.min(2.8, nextZoom));
+        const rect = viewport.getBoundingClientRect();
+        const vx = clientX - rect.left;
+        const vy = clientY - rect.top;
+
+        const worldX = (vx - this.corkboardCamera.x) / this.corkboardCamera.zoom;
+        const worldY = (vy - this.corkboardCamera.y) / this.corkboardCamera.zoom;
+
+        this.corkboardCamera.zoom = clamped;
+        this.corkboardCamera.x = vx - worldX * clamped;
+        this.corkboardCamera.y = vy - worldY * clamped;
+
+        this.applyCorkboardCamera(canvas);
+    }
+
+    private enableCorkboardCameraInteraction(viewport: HTMLElement, canvas: HTMLElement): () => void {
+        let isPanning = false;
+        let panPointerId: number | null = null;
+        let panStartX = 0;
+        let panStartY = 0;
+        let camStartX = 0;
+        let camStartY = 0;
+
+        const touchPoints = new Map<number, { x: number; y: number }>();
+        let pinchPrevDistance = 0;
+        let pinchPrevCenter: { x: number; y: number } | null = null;
+
+        const isBackgroundTarget = (target: EventTarget | null): boolean => {
+            const el = target as HTMLElement | null;
+            if (!el) return true;
+            return !el.closest('.story-line-corkboard-node, button, a, input, textarea, select');
+        };
+
+        const getTouchPair = (): [{ x: number; y: number }, { x: number; y: number }] | null => {
+            const vals = Array.from(touchPoints.values());
+            if (vals.length < 2) return null;
+            return [vals[0], vals[1]];
+        };
+
+        const onPointerDown = (e: PointerEvent) => {
+            if (!isBackgroundTarget(e.target)) return;
+
+            if (e.pointerType === 'touch') {
+                touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+                if (touchPoints.size === 1) {
+                    isPanning = true;
+                    panPointerId = e.pointerId;
+                    panStartX = e.clientX;
+                    panStartY = e.clientY;
+                    camStartX = this.corkboardCamera.x;
+                    camStartY = this.corkboardCamera.y;
+                    viewport.classList.add('is-panning');
+                } else if (touchPoints.size >= 2) {
+                    isPanning = false;
+                    panPointerId = null;
+                    viewport.classList.remove('is-panning');
+                    const pair = getTouchPair();
+                    if (pair) {
+                        const [a, b] = pair;
+                        pinchPrevDistance = Math.hypot(b.x - a.x, b.y - a.y);
+                        pinchPrevCenter = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+                    }
+                }
+
+                if (!viewport.hasPointerCapture(e.pointerId)) {
+                    viewport.setPointerCapture(e.pointerId);
+                }
+                e.preventDefault();
+                return;
+            }
+
+            const canPanMouse = e.button === 0 || e.button === 1;
+            if (!canPanMouse) return;
+
+            isPanning = true;
+            panPointerId = e.pointerId;
+            panStartX = e.clientX;
+            panStartY = e.clientY;
+            camStartX = this.corkboardCamera.x;
+            camStartY = this.corkboardCamera.y;
+            viewport.classList.add('is-panning');
+
+            viewport.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        };
+
+        const onPointerMove = (e: PointerEvent) => {
+            if (e.pointerType === 'touch' && touchPoints.has(e.pointerId)) {
+                touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            }
+
+            if (touchPoints.size >= 2) {
+                const pair = getTouchPair();
+                if (!pair) return;
+                const [a, b] = pair;
+                const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+                const dist = Math.hypot(b.x - a.x, b.y - a.y);
+
+                if (pinchPrevDistance > 0) {
+                    const zoomFactor = dist / pinchPrevDistance;
+                    this.zoomCorkboardAt(canvas, viewport, center.x, center.y, this.corkboardCamera.zoom * zoomFactor);
+                }
+
+                if (pinchPrevCenter) {
+                    this.corkboardCamera.x += center.x - pinchPrevCenter.x;
+                    this.corkboardCamera.y += center.y - pinchPrevCenter.y;
+                    this.applyCorkboardCamera(canvas);
+                }
+
+                pinchPrevDistance = dist;
+                pinchPrevCenter = center;
+                e.preventDefault();
+                return;
+            }
+
+            if (!isPanning || panPointerId !== e.pointerId) return;
+
+            const dx = e.clientX - panStartX;
+            const dy = e.clientY - panStartY;
+            this.corkboardCamera.x = camStartX + dx;
+            this.corkboardCamera.y = camStartY + dy;
+            this.applyCorkboardCamera(canvas);
+            e.preventDefault();
+        };
+
+        const onPointerUp = (e: PointerEvent) => {
+            touchPoints.delete(e.pointerId);
+
+            if (touchPoints.size < 2) {
+                pinchPrevDistance = 0;
+                pinchPrevCenter = null;
+            }
+
+            if (panPointerId === e.pointerId) {
+                isPanning = false;
+                panPointerId = null;
+                viewport.classList.remove('is-panning');
+            }
+
+            if (viewport.hasPointerCapture(e.pointerId)) {
+                viewport.releasePointerCapture(e.pointerId);
+            }
+        };
+
+        const onWheel = (e: WheelEvent) => {
+            const zoomFactor = Math.exp((-e.deltaY) * 0.0012);
+            this.zoomCorkboardAt(canvas, viewport, e.clientX, e.clientY, this.corkboardCamera.zoom * zoomFactor);
+            e.preventDefault();
+        };
+
+        viewport.addEventListener('pointerdown', onPointerDown);
+        viewport.addEventListener('pointermove', onPointerMove);
+        viewport.addEventListener('pointerup', onPointerUp);
+        viewport.addEventListener('pointercancel', onPointerUp);
+        viewport.addEventListener('wheel', onWheel, { passive: false });
+
+        return () => {
+            viewport.removeEventListener('pointerdown', onPointerDown);
+            viewport.removeEventListener('pointermove', onPointerMove);
+            viewport.removeEventListener('pointerup', onPointerUp);
+            viewport.removeEventListener('pointercancel', onPointerUp);
+            viewport.removeEventListener('wheel', onWheel as EventListener);
+            viewport.classList.remove('is-panning');
+        };
+    }
+
+    private ensureCorkboardLayoutLoaded(): void {
+        const projectPath = this.sceneManager.activeProject?.filePath ?? null;
+        if (projectPath === this.corkboardLoadedProjectFile) return;
+
+        this.corkboardLoadedProjectFile = projectPath;
+        this.corkboardPositions.clear();
+
+        const saved = this.sceneManager.getCorkboardPositions();
+        for (const [path, pos] of Object.entries(saved)) {
+            const x = Number(pos?.x);
+            const y = Number(pos?.y);
+            const z = Number(pos?.z);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+            this.corkboardPositions.set(path, { x, y, z: Number.isFinite(z) ? z : 1 });
+        }
+    }
+
+    private schedulePersistCorkboardLayout(): void {
+        if (this.corkboardPersistTimer) {
+            clearTimeout(this.corkboardPersistTimer);
+        }
+        this.corkboardPersistTimer = setTimeout(() => {
+            this.corkboardPersistTimer = null;
+            void this.persistCorkboardLayout();
+        }, 500);
+    }
+
+    private async persistCorkboardLayout(): Promise<void> {
+        const payload: Record<string, { x: number; y: number; z?: number }> = {};
+        for (const [path, pos] of this.corkboardPositions.entries()) {
+            payload[path] = { x: pos.x, y: pos.y, z: pos.z };
+        }
+        await this.sceneManager.setCorkboardPositions(payload);
+    }
+
+    private showCorkboardNoteMenu(scene: Scene, event: MouseEvent): void {
+        const scenePath = scene.filePath;
+        const menu = new Menu();
+
+        menu.addItem(item => item
+            .setTitle('Top')
+            .setIcon('chevrons-up')
+            .onClick(() => { this.moveCorkboardLayer(scenePath, 'top'); }));
+
+        menu.addItem(item => item
+            .setTitle('Up')
+            .setIcon('arrow-up')
+            .onClick(() => { this.moveCorkboardLayer(scenePath, 'up'); }));
+
+        menu.addItem(item => item
+            .setTitle('Down')
+            .setIcon('arrow-down')
+            .onClick(() => { this.moveCorkboardLayer(scenePath, 'down'); }));
+
+        menu.addItem(item => item
+            .setTitle('Bottom')
+            .setIcon('chevrons-down')
+            .onClick(() => { this.moveCorkboardLayer(scenePath, 'bottom'); }));
+
+        menu.addSeparator();
+
+        CORKBOARD_NOTE_COLOR_PRESETS.forEach((preset) => {
+            menu.addItem(item => item
+                .setTitle(`Color: ${preset.label}`)
+                .setIcon('palette')
+                .onClick(() => { void this.setCorkboardNoteColor(scene, preset.color); }));
+        });
+
+        menu.addItem(item => item
+            .setTitle('Color: Custom…')
+            .setIcon('pipette')
+            .onClick(() => { this.openCorkboardNoteColorModal(scene); }));
+
+        menu.addItem(item => item
+            .setTitle('Color: Default')
+            .setIcon('rotate-ccw')
+            .onClick(() => { void this.setCorkboardNoteColor(scene, undefined); }));
+
+        menu.addSeparator();
+        menu.addItem(item => item
+            .setTitle('Delete Note')
+            .setIcon('trash')
+            .onClick(async () => {
+                await this.deleteScene(scene);
+            }));
+
+        menu.addSeparator();
+        menu.addItem(item => item
+            .setTitle('Convert to Scene')
+            .setIcon('clapperboard')
+            .onClick(() => { void this.convertCorkboardNoteToScene(scene); }));
+
+        menu.showAtMouseEvent(event);
+    }
+
+    private moveCorkboardLayer(scenePath: string, direction: 'top' | 'up' | 'down' | 'bottom'): void {
+        const target = this.corkboardPositions.get(scenePath);
+        if (!target) return;
+
+        const entries = Array.from(this.corkboardPositions.entries());
+        if (entries.length < 2) return;
+
+        entries.sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0));
+        const index = entries.findIndex(([path]) => path === scenePath);
+        if (index < 0) return;
+
+        if (direction === 'top' && index < entries.length - 1) {
+            const [entry] = entries.splice(index, 1);
+            entries.push(entry);
+        } else if (direction === 'bottom' && index > 0) {
+            const [entry] = entries.splice(index, 1);
+            entries.unshift(entry);
+        } else if (direction === 'up' && index < entries.length - 1) {
+            const tmp = entries[index + 1];
+            entries[index + 1] = entries[index];
+            entries[index] = tmp;
+        } else if (direction === 'down' && index > 0) {
+            const tmp = entries[index - 1];
+            entries[index - 1] = entries[index];
+            entries[index] = tmp;
+        } else {
+            return;
+        }
+
+        let z = 1;
+        for (const [path, pos] of entries) {
+            this.corkboardPositions.set(path, { ...pos, z });
+            z += 1;
+        }
+
+        this.schedulePersistCorkboardLayout();
+        this.refreshBoard();
+    }
+
+    private normalizeHexColor(value: string | undefined): string | undefined {
+        if (!value) return undefined;
+        const trimmed = value.trim();
+
+        const short = trimmed.match(/^#([0-9a-fA-F]{3})$/);
+        if (short) {
+            const [r, g, b] = short[1].split('');
+            return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+        }
+
+        const full = trimmed.match(/^#([0-9a-fA-F]{6})$/);
+        if (full) return `#${full[1].toUpperCase()}`;
+
+        return undefined;
+    }
+
+    private darkenHexColor(hex: string, factor: number): string {
+        const normalized = this.normalizeHexColor(hex) ?? '#F6EDB4';
+        const r = Number.parseInt(normalized.slice(1, 3), 16);
+        const g = Number.parseInt(normalized.slice(3, 5), 16);
+        const b = Number.parseInt(normalized.slice(5, 7), 16);
+
+        const scale = Math.max(0, Math.min(1, 1 - factor));
+        const nr = Math.round(r * scale);
+        const ng = Math.round(g * scale);
+        const nb = Math.round(b * scale);
+
+        const toHex = (n: number) => n.toString(16).padStart(2, '0').toUpperCase();
+        return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`;
+    }
+
+    private hexToRgba(hex: string, alpha: number): string {
+        const normalized = this.normalizeHexColor(hex) ?? '#9A9072';
+        const r = Number.parseInt(normalized.slice(1, 3), 16);
+        const g = Number.parseInt(normalized.slice(3, 5), 16);
+        const b = Number.parseInt(normalized.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+    }
+
+    private applyCorkboardNoteColor(cardEl: HTMLElement, scene: Scene): void {
+        const base = this.normalizeHexColor(scene.corkboardNoteColor) ?? '#F6EDB4';
+        const accentSoft = this.darkenHexColor(base, 0.24);
+        const accentStrong = this.darkenHexColor(base, 0.34);
+        cardEl.style.setProperty('--sl-note-bg', base);
+        cardEl.style.setProperty('--sl-note-accent', accentSoft);
+        cardEl.style.setProperty('--sl-note-accent-strong', accentStrong);
+    }
+
+    private async setCorkboardNoteColor(scene: Scene, color: string | undefined): Promise<void> {
+        const normalized = this.normalizeHexColor(color);
+        await this.sceneManager.updateScene(scene.filePath, {
+            corkboardNoteColor: normalized,
+        });
+        scene.corkboardNoteColor = normalized;
+
+        const card = this.boardEl?.querySelector(`[data-path="${CSS.escape(scene.filePath)}"]`) as HTMLElement | null;
+        if (card) {
+            this.applyCorkboardNoteColor(card, scene);
+        }
+    }
+
+    private openCorkboardNoteColorModal(scene: Scene): void {
+        const modal = new Modal(this.app);
+        modal.titleEl.setText('Custom note color');
+
+        const current = this.normalizeHexColor(scene.corkboardNoteColor) ?? '#F6EDB4';
+        const row = modal.contentEl.createDiv('story-line-note-color-modal-row');
+        row.createEl('label', { text: 'Pick color' });
+        const picker = row.createEl('input', {
+            attr: {
+                type: 'color',
+                value: current,
+            },
+        });
+
+        new Setting(modal.contentEl)
+            .addButton(btn => {
+                btn.setButtonText('Cancel').onClick(() => modal.close());
+            })
+            .addButton(btn => {
+                btn.setButtonText('Apply').setCta().onClick(async () => {
+                    await this.setCorkboardNoteColor(scene, picker.value);
+                    modal.close();
+                });
+            });
+
+        modal.open();
     }
 
     /**
@@ -768,6 +1653,30 @@ export class BoardView extends ItemView {
      */
     private showContextMenu(scene: Scene, event: MouseEvent): void {
         const menu = new Menu();
+
+        if (this.boardMode === 'corkboard') {
+            menu.addItem(item => item
+                .setTitle('Top')
+                .setIcon('chevrons-up')
+                .onClick(() => { this.moveCorkboardLayer(scene.filePath, 'top'); }));
+
+            menu.addItem(item => item
+                .setTitle('Up')
+                .setIcon('arrow-up')
+                .onClick(() => { this.moveCorkboardLayer(scene.filePath, 'up'); }));
+
+            menu.addItem(item => item
+                .setTitle('Down')
+                .setIcon('arrow-down')
+                .onClick(() => { this.moveCorkboardLayer(scene.filePath, 'down'); }));
+
+            menu.addItem(item => item
+                .setTitle('Bottom')
+                .setIcon('chevrons-down')
+                .onClick(() => { this.moveCorkboardLayer(scene.filePath, 'bottom'); }));
+
+            menu.addSeparator();
+        }
 
         menu.addItem(item => {
             item.setTitle('Edit Scene')
@@ -1349,11 +2258,56 @@ export class BoardView extends ItemView {
         modal.open();
     }
 
+    private getCurrentMaxCorkboardZ(): number {
+        let max = 0;
+        for (const pos of this.corkboardPositions.values()) {
+            if ((pos.z ?? 0) > max) max = pos.z ?? 0;
+        }
+        return max;
+    }
+
+    private getNextQuickNotePosition(): { x: number; y: number; z: number } {
+        const now = Date.now();
+        if (now - this.quickNoteLastCreatedAt <= 8000) {
+            this.quickNoteChainIndex += 1;
+        } else {
+            this.quickNoteChainIndex = 0;
+        }
+        this.quickNoteLastCreatedAt = now;
+
+        const offset = this.quickNoteChainIndex * 28;
+        const viewport = this.boardEl?.querySelector('.story-line-corkboard-viewport') as HTMLElement | null;
+        const zoom = this.corkboardCamera.zoom || 1;
+
+        let centerWorldX = 0;
+        let centerWorldY = 0;
+
+        if (viewport) {
+            const rect = viewport.getBoundingClientRect();
+            centerWorldX = ((rect.width / 2) - this.corkboardCamera.x) / zoom;
+            centerWorldY = ((rect.height / 2) - this.corkboardCamera.y) / zoom;
+        } else {
+            centerWorldX = (-this.corkboardCamera.x) / zoom;
+            centerWorldY = (-this.corkboardCamera.y) / zoom;
+        }
+
+        return {
+            x: centerWorldX - 140 + offset,
+            y: centerWorldY - 110 + offset,
+            z: this.getCurrentMaxCorkboardZ() + 1,
+        };
+    }
+
     /**
      * Refresh the board display
      */
     refreshBoard(): void {
-        this.renderBoard();
+        this.configureDragToPan();
+        if (this.boardMode === 'corkboard') {
+            this.renderCorkboard();
+        } else {
+            this.renderBoard();
+        }
         // Also refresh inspector if a scene is selected
         if (this.selectedScene) {
             const updated = this.sceneManager.getScene(this.selectedScene.filePath);
@@ -1371,6 +2325,37 @@ export class BoardView extends ItemView {
         if (this.rootContainer) {
             this.renderView(this.rootContainer);
         }
+    }
+
+    private configureDragToPan(): void {
+        if (!this.boardEl) return;
+
+        if (this.boardMode !== 'corkboard' && this.corkboardInteractionCleanup) {
+            this.corkboardInteractionCleanup();
+            this.corkboardInteractionCleanup = null;
+        }
+
+        if (this.dragToPanCleanup) {
+            this.dragToPanCleanup();
+            this.dragToPanCleanup = null;
+        }
+
+        if (this.boardMode === 'kanban') {
+            this.dragToPanCleanup = enableDragToPan(this.boardEl);
+        }
+    }
+
+    private async openQuickAddIdea(): Promise<void> {
+        const file = await this.sceneManager.createScene({
+            status: 'idea',
+            corkboardNote: true,
+        });
+
+        const pos = this.getNextQuickNotePosition();
+        this.corkboardPositions.set(file.path, pos);
+        this.schedulePersistCorkboardLayout();
+
+        this.refreshBoard();
     }
 
     /**

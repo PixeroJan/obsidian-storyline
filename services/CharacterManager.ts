@@ -1,5 +1,5 @@
 import { App, TFile, TFolder, parseYaml, stringifyYaml, normalizePath } from 'obsidian';
-import { Character, CHARACTER_FIELD_KEYS } from '../models/Character';
+import { Character, CharacterRelation, CHARACTER_FIELD_KEYS, LEGACY_RELATION_FIELDS_TO_CLEAN, normalizeCharacterRelations } from '../models/Character';
 
 /**
  * Manages character .md files — loading, saving, creating, and deleting
@@ -197,6 +197,11 @@ export class CharacterManager {
         // Clean up legacy keys
         delete fm['coreBeliefs'];
         delete fm['romanticHistory'];
+        delete fm['customRelationType'];
+        delete fm['customRelationLabel'];
+        for (const key of LEGACY_RELATION_FIELDS_TO_CLEAN) {
+            delete fm[key];
+        }
 
         // Custom fields
         if (character.custom && Object.keys(character.custom).length > 0) {
@@ -263,6 +268,7 @@ export class CharacterManager {
 
         const body = this.extractBody(content);
         const basename = filePath.split('/').pop()?.replace(/\.md$/i, '') ?? filePath;
+        const relations = normalizeCharacterRelations(this.parseRelations(fm.relations) || this.buildLegacyRelations(fm));
 
         const character: Character = {
             filePath,
@@ -274,7 +280,7 @@ export class CharacterManager {
             role: fm.role,
             occupation: fm.occupation,
             residency: fm.residency,
-            locations: Array.isArray(fm.locations) ? fm.locations : (fm.locations ? String(fm.locations).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined),
+            locations: this.parseStringList(fm.locations),
             family: fm.family,
             appearance: fm.appearance,
             distinguishingFeatures: fm.distinguishingFeatures,
@@ -291,11 +297,7 @@ export class CharacterManager {
             formativeMemories: fm.formativeMemories,
             accomplishments: fm.accomplishments,
             secrets: fm.secrets,
-            allies: Array.isArray(fm.allies) ? fm.allies : (fm.allies ? String(fm.allies).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined),
-            enemies: Array.isArray(fm.enemies) ? fm.enemies : (fm.enemies ? String(fm.enemies).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined),
-            romantic: Array.isArray(fm.romantic) ? fm.romantic : (fm.romantic ? String(fm.romantic).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined),
-            mentors: Array.isArray(fm.mentors) ? fm.mentors : (fm.mentors ? String(fm.mentors).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined),
-            otherRelations: Array.isArray(fm.otherRelations) ? fm.otherRelations : (fm.otherRelations ? String(fm.otherRelations).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined),
+            relations: relations.length ? relations : undefined,
             startingPoint: fm.startingPoint,
             goal: fm.goal,
             expectedChange: fm.expectedChange,
@@ -323,6 +325,114 @@ export class CharacterManager {
     private extractBody(content: string): string {
         const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/);
         return match ? match[1].trim() : '';
+    }
+
+    private parseStringList(value: any): string[] | undefined {
+        if (Array.isArray(value)) {
+            const parsed = value.map(v => String(v).trim()).filter(Boolean);
+            return parsed.length ? parsed : undefined;
+        }
+        if (value == null || value === '') return undefined;
+        const parsed = String(value)
+            .split(',')
+            .map((s: string) => s.trim())
+            .filter(Boolean);
+        return parsed.length ? parsed : undefined;
+    }
+
+    private parseRelations(value: any): CharacterRelation[] | undefined {
+        if (!Array.isArray(value)) return undefined;
+        const parsed: CharacterRelation[] = [];
+        for (const item of value) {
+            if (!item || typeof item !== 'object') continue;
+            const category = typeof (item as any).category === 'string' ? (item as any).category : '';
+            const type = typeof (item as any).type === 'string' ? (item as any).type : '';
+            const target = typeof (item as any).target === 'string' ? (item as any).target : '';
+            if (!category || !type || !target) continue;
+            parsed.push({ category: category as any, type, target });
+        }
+        return parsed.length ? parsed : undefined;
+    }
+
+    private buildLegacyRelations(fm: Record<string, any>): CharacterRelation[] {
+        const out: CharacterRelation[] = [];
+        const addMany = (key: keyof Character, category: CharacterRelation['category'], type: string) => {
+            const names = this.parseStringList((fm as any)[key]);
+            if (!names) return;
+            for (const target of names) {
+                out.push({ category, type, target });
+            }
+        };
+
+        addMany('siblings', 'family', 'sibling');
+        addMany('halfSiblings', 'family', 'half-sibling');
+        addMany('twins', 'family', 'twin');
+        addMany('parents', 'family', 'parent');
+        addMany('children', 'family', 'child');
+        addMany('stepParents', 'family', 'step-parent');
+        addMany('stepChildren', 'family', 'step-child');
+        addMany('adoptiveParents', 'family', 'adoptive-parent');
+        addMany('adoptedChildren', 'family', 'adopted-child');
+        addMany('guardians', 'family', 'guardian');
+        addMany('wards', 'family', 'ward');
+        addMany('grandparents', 'family', 'grandparent');
+        addMany('grandchildren', 'family', 'grandchild');
+        addMany('auntsUncles', 'family', 'aunt/uncle');
+        addMany('niecesNephews', 'family', 'niece/nephew');
+        addMany('cousins', 'family', 'cousin');
+        addMany('inLaws', 'family', 'in-law');
+
+        addMany('romantic', 'romantic', 'partner');
+        addMany('spouses', 'romantic', 'spouse');
+        addMany('exPartners', 'romantic', 'ex-partner');
+
+        addMany('allies', 'social', 'ally');
+        addMany('friends', 'social', 'friend');
+        addMany('bestFriends', 'social', 'best-friend');
+        addMany('confidants', 'social', 'confidant');
+        addMany('acquaintances', 'social', 'acquaintance');
+
+        addMany('enemies', 'conflict', 'enemy');
+        addMany('rivals', 'conflict', 'rival');
+        addMany('betrayers', 'conflict', 'betrayer');
+        addMany('avengers', 'conflict', 'avenger');
+
+        addMany('mentors', 'guidance', 'mentor');
+        addMany('mentees', 'guidance', 'mentee');
+        addMany('leaders', 'guidance', 'leader');
+        addMany('followers', 'guidance', 'follower');
+        addMany('bosses', 'guidance', 'boss');
+        addMany('subordinates', 'guidance', 'subordinate');
+        addMany('commanders', 'guidance', 'commander');
+        addMany('secondsInCommand', 'guidance', 'second-in-command');
+        addMany('masters', 'guidance', 'master');
+        addMany('apprentices', 'guidance', 'apprentice');
+
+        addMany('colleagues', 'professional', 'colleague');
+        addMany('businessPartners', 'professional', 'business-partner');
+        addMany('clients', 'professional', 'client');
+        addMany('handlers', 'professional', 'handler');
+        addMany('assets', 'professional', 'asset');
+
+        addMany('protectors', 'story', 'protector');
+        addMany('dependents', 'story', 'dependent');
+        addMany('owesDebtTo', 'story', 'owes-debt-to');
+        addMany('swornTo', 'story', 'sworn-to');
+        addMany('boundByOath', 'story', 'bound-by-oath');
+        addMany('idolizes', 'story', 'idolizes');
+        addMany('fearsPeople', 'story', 'fears');
+        addMany('obsessedWith', 'story', 'obsessed-with');
+
+        const customTypeRaw = typeof fm.customRelationType === 'string' ? fm.customRelationType : (typeof fm.customRelationLabel === 'string' ? fm.customRelationLabel : 'custom');
+        const customType = customTypeRaw.trim().toLowerCase().replace(/\s+/g, '-');
+        const customNames = this.parseStringList(fm.customRelations) || this.parseStringList(fm.otherRelations);
+        if (customNames) {
+            for (const target of customNames) {
+                out.push({ category: 'custom', type: customType || 'custom', target });
+            }
+        }
+
+        return out;
     }
 
     private async ensureFolder(folderPath: string): Promise<void> {

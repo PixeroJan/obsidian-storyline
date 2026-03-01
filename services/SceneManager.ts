@@ -100,19 +100,32 @@ export class SceneManager implements ISceneStore {
             } catch { /* file unreadable — skip */ }
         };
 
-        // Support two layouts:
-        // - Legacy: StoryLine/<Project>.md
-        // - New:    StoryLine/<Project>/<Project>.md
+        // Recursively scan subfolders for project .md files
+        // Supports: StoryLine/Project/Project.md AND StoryLine/Series/Book/Book.md
+        const scanFolder = async (folderPath: string) => {
+            try {
+                const listing = await adapter.list(folderPath);
+                for (const f of listing.files) {
+                    await tryParse(f);
+                }
+                for (const sub of listing.folders) {
+                    // Skip internal folders that never contain project files
+                    const folderName = sub.split('/').pop() ?? '';
+                    if (['System', 'Scenes', 'Characters', 'Locations'].includes(folderName)) continue;
+                    await scanFolder(sub);
+                }
+            } catch { /* folder unreadable — skip */ }
+        };
+
+        // Root-level .md files (legacy layout)
         for (const f of rootListing.files) {
             await tryParse(f);
         }
+        // Subfolder scan (handles both single projects and series)
         for (const folder of rootListing.folders) {
-            try {
-                const sub = await adapter.list(folder);
-                for (const f of sub.files) {
-                    await tryParse(f);
-                }
-            } catch { /* folder unreadable — skip */ }
+            const folderName = folder.split('/').pop() ?? '';
+            if (['System'].includes(folderName)) continue;
+            await scanFolder(folder);
         }
 
         // ── Vault-wide discovery ──────────────────────────────────
@@ -138,7 +151,10 @@ export class SceneManager implements ISceneStore {
             this._activeProject = this.projects.values().next().value ?? null;
             if (this._activeProject) {
                 this.plugin.settings.activeProjectFile = this._activeProject.filePath;
-                await this.plugin.saveSettings();
+                // Persist only the activeProjectFile — avoid a full saveSettings()
+                // here because it strips per-project keys from data.json before
+                // the migration code has had a chance to move them to System/ files.
+                await this.plugin.saveData(this.plugin.settings);
             }
         }
 
@@ -178,12 +194,16 @@ export class SceneManager implements ISceneStore {
             await this.ensureFolder(folders.characterFolder);
             await this.ensureFolder(folders.locationFolder);
 
-            // Create default view files inside project root
-            const viewFiles = ['plotgrid.json', 'timeline.json', 'board.json', 'plotlines.json', 'stats.json'];
+            // Create System folder for project data files
+            const systemFolder = normalizePath(`${baseFolder}/System`);
+            await this.ensureFolder(systemFolder);
+
+            // Create default data files inside System/
+            const viewFiles = ['plotgrid.json', 'timeline.json', 'board.json', 'plotlines.json', 'stats.json', 'characters.json'];
             const createdFiles: string[] = [];
             const updatedFiles: string[] = [];
             for (const vf of viewFiles) {
-                const vfPath = normalizePath(`${baseFolder}/${vf}`);
+                const vfPath = normalizePath(`${systemFolder}/${vf}`);
                 const contents = JSON.stringify({}, null, 2);
                 const existing = this.app.vault.getAbstractFileByPath(vfPath) as TFile | null;
                 if (!existing) {
@@ -210,6 +230,7 @@ export class SceneManager implements ISceneStore {
                 actLabels: {},
                 chapterLabels: {},
                 filterPresets: [],
+                corkboardPositions: {},
             };
 
             this.projects.set(filePath, project);
@@ -225,8 +246,17 @@ export class SceneManager implements ISceneStore {
      * Switch to a different active project and re-index scenes.
      */
     async setActiveProject(project: StoryLineProject): Promise<void> {
+        // Save per-project data for the previous project before switching
+        await this.plugin.saveProjectSystemData();
+
         this._activeProject = project;
         this.plugin.settings.activeProjectFile = project.filePath;
+
+        // Load per-project data from the new project's System/ folder BEFORE
+        // saveSettings (which also calls saveProjectSystemData — with the new
+        // project's data already loaded this is a harmless round-trip).
+        await this.plugin.loadProjectSystemData();
+        await this.loadCorkboardPositions();
         await this.plugin.saveSettings();
         await this.initialize();
         // Ask the plugin to refresh any open StoryLine views so the UI updates
@@ -298,6 +328,7 @@ export class SceneManager implements ISceneStore {
                 actLabels: (fm.actLabels && typeof fm.actLabels === 'object') ? Object.fromEntries(Object.entries(fm.actLabels).map(([k, v]) => [Number(k), String(v)])) : {},
                 chapterLabels: (fm.chapterLabels && typeof fm.chapterLabels === 'object') ? Object.fromEntries(Object.entries(fm.chapterLabels).map(([k, v]) => [Number(k), String(v)])) : {},
                 filterPresets: Array.isArray(fm.filterPresets) ? fm.filterPresets : [],
+                corkboardPositions: {},
             };
         } catch {
             return null;
@@ -777,6 +808,69 @@ export class SceneManager implements ISceneStore {
         await this.saveProjectFrontmatter(this._activeProject);
     }
 
+    /** Get persisted corkboard positions from System/board.json */
+    getCorkboardPositions(): Record<string, { x: number; y: number; z?: number }> {
+        // Return the in-memory cache (populated by loadCorkboardPositions)
+        return this._activeProject?.corkboardPositions ?? {};
+    }
+
+    /** Load corkboard positions from System/board.json into the active project */
+    async loadCorkboardPositions(): Promise<void> {
+        if (!this._activeProject) return;
+        try {
+            const adapter = this.plugin.app.vault.adapter;
+            const sysFolder = this.plugin.getProjectSystemFolder();
+            const path = `${sysFolder}/board.json`;
+            if (!await adapter.exists(path)) {
+                this._activeProject.corkboardPositions = {};
+                return;
+            }
+            const raw = JSON.parse(await adapter.read(path));
+            const positions: Record<string, { x: number; y: number; z?: number }> = {};
+            if (raw.corkboardPositions && typeof raw.corkboardPositions === 'object') {
+                for (const [key, value] of Object.entries(raw.corkboardPositions)) {
+                    const v = value as any;
+                    const x = Number(v?.x);
+                    const y = Number(v?.y);
+                    const z = Number(v?.z);
+                    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+                    positions[key] = Number.isFinite(z) ? { x, y, z } : { x, y };
+                }
+            }
+            this._activeProject.corkboardPositions = positions;
+        } catch {
+            if (this._activeProject) this._activeProject.corkboardPositions = {};
+        }
+    }
+
+    /** Persist corkboard positions to System/board.json */
+    async setCorkboardPositions(positions: Record<string, { x: number; y: number; z?: number }>): Promise<void> {
+        if (!this._activeProject) return;
+
+        const cleaned: Record<string, { x: number; y: number; z?: number }> = {};
+        for (const [path, pos] of Object.entries(positions)) {
+            const x = Number(pos?.x);
+            const y = Number(pos?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+            const z = Number(pos?.z);
+            cleaned[path] = Number.isFinite(z) ? { x, y, z } : { x, y };
+        }
+
+        this._activeProject.corkboardPositions = cleaned;
+
+        // Write to System/board.json
+        try {
+            const adapter = this.plugin.app.vault.adapter;
+            const sysFolder = this.plugin.getProjectSystemFolder();
+            if (!await adapter.exists(sysFolder)) {
+                await this.plugin.app.vault.createFolder(sysFolder);
+            }
+            await adapter.write(`${sysFolder}/board.json`, JSON.stringify({ corkboardPositions: cleaned }, null, 2));
+        } catch (e) {
+            console.error('[StoryLine] Failed to save corkboard positions:', e);
+        }
+    }
+
     // ────────────────────────────────────
     //  Project frontmatter persistence
     // ────────────────────────────────────
@@ -840,6 +934,9 @@ export class SceneManager implements ISceneStore {
         } else {
             delete existingFm.filterPresets;
         }
+
+        // corkboardPositions no longer stored in frontmatter — lives in System/board.json
+        delete existingFm.corkboardPositions;
 
         const newContent = `---\n${stringifyYaml(existingFm)}---${body}`;
         await this.app.vault.modify(file, newContent);

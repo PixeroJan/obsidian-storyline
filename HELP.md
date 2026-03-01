@@ -1,6 +1,6 @@
 # StoryLine — Obsidian Plugin for Writers
 
-**Version 1.1.0** · By Jan Sandström
+**Version 1.3.0** · By Jan Sandström
 
 StoryLine transforms your Obsidian vault into a full-featured book planning and writing tool. Organize scenes, build rich character profiles, manage worlds and locations, track plotlines, and monitor your progress — all without leaving Obsidian. Fully theme-aware with dark and light mode support.
 
@@ -12,6 +12,7 @@ StoryLine transforms your Obsidian vault into a full-featured book planning and 
 - [Getting Started](#getting-started)
 - [Views](#views)
   - [Board View](#board-view)
+  - [Corkboard Mode](#corkboard-mode)
   - [Plotgrid View](#plotgrid-view)
   - [Timeline View](#timeline-view)
   - [Plotlines View](#plotlines-view)
@@ -100,6 +101,15 @@ The main workspace — a Kanban-style board that displays your scenes as cards.
 - **Search** — type in the search bar to filter scenes by title, content, characters, or tags.
 - **Beat Sheet Templates** — apply a beat sheet template (Save the Cat, 3-Act, Hero's Journey) from the Structure modal.
 - **Act labels** — custom labels on act dividers (e.g., beat names); inline-editable.
+
+### Corkboard Mode
+
+Toggle between the standard Kanban column layout and a freeform **corkboard** canvas using the toggle button in the Board toolbar.
+
+- **Sticky notes** — create color-coded sticky notes to brainstorm and capture your first ideas. Notes support markdown formatting.
+- **Convert to scene** — when an idea is ready, convert a sticky note into a full scene with one click.
+- **Freeform positioning** — drag scene cards and sticky notes anywhere on the spatial canvas.
+- **Positions saved per project** — your corkboard layout is stored in `System/board.json` and syncs across devices.
 
 ### Plotgrid View
 
@@ -761,7 +771,7 @@ Values in the Locations field create character → location edges in the Story G
 
 ## Export
 
-Export your project in four formats. Access via the **Export** button in the view switcher toolbar (download icon) or `Ctrl+Shift+E`.
+Export your project in six formats. Access via the **Export** button in the view switcher toolbar (download icon) or `Ctrl+Shift+E`.
 
 ### Scope Options
 
@@ -777,31 +787,33 @@ Export your project in four formats. Access via the **Export** button in the vie
 | **Markdown (.md)** | Saved to `ProjectName/Exports/` folder |
 | **JSON (.json)** | Structured data, saved to `ProjectName/Exports/` folder |
 | **CSV (.csv)** | Spreadsheet-ready data, saved to `ProjectName/Exports/` folder |
-| **PDF (.html)** | Saved as HTML to Exports folder + opens browser print dialog for PDF |
+| **HTML (.html)** | Standalone web page with embedded styles. Works on desktop and mobile |
+| **PDF (.pdf)** | Rendered via the built-in print engine. Desktop only |
+| **DOCX (.docx)** | Word document ready for editors, agents, or print. Works on desktop and mobile |
 
 ### Exported Fields
 
 **Outline exports** include all scene metadata:
 
-| Field | MD | JSON | CSV | PDF |
-|-------|:--:|:----:|:---:|:---:|
-| Sequence | ✓ | ✓ | ✓ | ✓ |
-| Chronological Order | ✓ | ✓ | ✓ | ✓ |
-| Title | ✓ | ✓ | ✓ | ✓ |
-| Act / Chapter | ✓ | ✓ | ✓ | ✓ |
-| Status | ✓ | ✓ | ✓ | ✓ |
-| POV | ✓ | ✓ | ✓ | ✓ |
-| Location | ✓ | ✓ | ✓ | ✓ |
-| Characters | — | ✓ | ✓ | — |
-| Emotion | ✓ | ✓ | ✓ | ✓ |
-| Intensity | ✓ | ✓ | ✓ | — |
-| Word Count | ✓ | ✓ | ✓ | ✓ |
-| Target Word Count | — | ✓ | ✓ | — |
-| Conflict | ✓ | ✓ | ✓ | ✓ |
-| Tags | ✓ | ✓ | ✓ | — |
-| Story Date / Time | — | ✓ | ✓ | — |
-| Notes | ✓ | ✓ | ✓ | — |
-| Setup / Payoff | — | ✓ | ✓ | — |
+| Field | MD | JSON | CSV | HTML | PDF | DOCX |
+|-------|:--:|:----:|:---:|:----:|:---:|:----:|
+| Sequence | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Chronological Order | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Title | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Act / Chapter | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Status | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| POV | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Location | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Characters | — | ✓ | ✓ | — | — | — |
+| Emotion | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Intensity | ✓ | ✓ | ✓ | — | — | — |
+| Word Count | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Target Word Count | — | ✓ | ✓ | — | — | — |
+| Conflict | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Tags | ✓ | ✓ | ✓ | — | — | — |
+| Story Date / Time | — | ✓ | ✓ | — | — | — |
+| Notes | ✓ | ✓ | ✓ | — | — | — |
+| Setup / Payoff | — | ✓ | ✓ | — | — | — |
 
 **Manuscript exports** include: title, act, chapter, sequence, chronological order, and full scene body.
 
@@ -888,7 +900,12 @@ YourVault/
         Eryndor/                  ← Locations in this world
           The Iron Citadel.md
           Port Veyra.md
-      Exports/                    ← Exported files (MD, JSON, CSV, HTML)
+      System/                     ← Per-project settings (auto-managed)
+        settings.json             ← Tag colors, aliases, overrides
+        plotgrid.json             ← Plotgrid layout data
+        board.json                ← Corkboard positions
+        tracker.json              ← Writing tracker history
+      Exports/                    ← Exported files (MD, JSON, CSV, HTML, PDF, DOCX)
     Another Book.md               ← Another project
     Another Book/
       Scenes/
@@ -927,4 +944,4 @@ MIT
 
 ---
 
-*StoryLine v1.1.0 — Transform your vault into a powerful book planning tool.*
+*StoryLine v1.3.0 — Transform your vault into a powerful book planning tool.*

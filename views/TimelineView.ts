@@ -75,6 +75,15 @@ export class TimelineView extends ItemView {
 
     async onClose(): Promise<void> {}
 
+    private isNoteScene(scene: Scene): boolean {
+        const value = (scene as Scene & { corkboardNote?: unknown }).corkboardNote;
+        if (value === true) return true;
+        if (value === false || value === undefined || value === null) return false;
+        if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+        if (typeof value === 'number') return value === 1;
+        return false;
+    }
+
     private renderView(container: HTMLElement): void {
         container.empty();
 
@@ -233,7 +242,7 @@ export class TimelineView extends ItemView {
         const scenes = this.sceneManager.getFilteredScenes(
             undefined,
             { field: sortField, direction: 'asc' }
-        );
+        ).filter(scene => !this.isNoteScene(scene));
 
         // Precompute date/time validation flags for each scene index so rendering is consistent
         // Scenes with non-linear timeline modes (flashback, dream, mythic, etc.) are exempt from
@@ -421,7 +430,7 @@ export class TimelineView extends ItemView {
         const scenes = this.sceneManager.getFilteredScenes(
             undefined,
             { field: sortField, direction: 'asc' }
-        );
+        ).filter(scene => !this.isNoteScene(scene));
 
         if (scenes.length === 0) {
             const empty = timelineEl.createDiv('story-line-empty');

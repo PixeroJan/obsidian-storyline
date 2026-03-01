@@ -36,6 +36,8 @@ import { LinkScanner } from './services/LinkScanner';
 export default class SceneCardsPlugin extends Plugin {
     settings: SceneCardsSettings = DEFAULT_SETTINGS;
     sceneManager: SceneManager;
+    /** Set to true once System/ migration is confirmed — guards saveSettings stripping */
+    private _systemMigrationDone = false;
     locationManager: LocationManager;
     characterManager: CharacterManager;
     writingTracker: WritingTracker = new WritingTracker();
@@ -43,6 +45,8 @@ export default class SceneCardsPlugin extends Plugin {
     linkScanner: LinkScanner;
     /** The leaf currently hosting a StoryLine view */
     storyLeaf: WorkspaceLeaf | null = null;
+    /** Removes native browser tooltips (`title`) inside StoryLine UI */
+    private nativeTooltipObserver: MutationObserver | null = null;
 
     async onload(): Promise<void> {
         await this.loadSettings();
@@ -60,32 +64,32 @@ export default class SceneCardsPlugin extends Plugin {
             this.refreshOpenViews();
         };
 
-        // Best-effort: register the `.json` extension so view files are visible in the Vault.
+        // Best-effort: register file extensions so exported files are visible in the Vault.
         // We check several possible locations for an existing registration and safely
         // call a registration API if available. This uses `any` casts because the
         // API surface varies between Obsidian versions.
-        try {
-            const pluginAny: any = this;
-            let alreadyRegistered = false;
+        for (const ext of ['json', 'docx']) {
+            try {
+                const pluginAny: any = this;
+                let alreadyRegistered = false;
 
-            // Some Obsidian builds may expose registered extensions on the plugin or app
-            const regOnPlugin = pluginAny.registeredExtensions;
-            const regOnVault = (this.app as any)?.vault?.registeredExtensions;
-            if (Array.isArray(regOnPlugin)) alreadyRegistered = regOnPlugin.includes('json');
-            if (!alreadyRegistered && Array.isArray(regOnVault)) alreadyRegistered = regOnVault.includes('json');
+                const regOnPlugin = pluginAny.registeredExtensions;
+                const regOnVault = (this.app as any)?.vault?.registeredExtensions;
+                if (Array.isArray(regOnPlugin)) alreadyRegistered = regOnPlugin.includes(ext);
+                if (!alreadyRegistered && Array.isArray(regOnVault)) alreadyRegistered = regOnVault.includes(ext);
 
-            if (!alreadyRegistered) {
-                if (typeof pluginAny.registerExtensions === 'function') {
-                    pluginAny.registerExtensions(['json']);
-                } else if (typeof (this.app as any).registerExtensions === 'function') {
-                    (this.app as any).registerExtensions(['json']);
+                if (!alreadyRegistered) {
+                    if (typeof pluginAny.registerExtensions === 'function') {
+                        pluginAny.registerExtensions([ext]);
+                    } else if (typeof (this.app as any).registerExtensions === 'function') {
+                        (this.app as any).registerExtensions([ext]);
+                    }
                 }
-                // else: API not available — fall back to creating visible .md files instead when needed
+            } catch (e) {
+                // non-fatal
+                // eslint-disable-next-line no-console
+                console.error(`StoryLine: failed to register .${ext} extension`, e);
             }
-        } catch (e) {
-            // non-fatal
-            // eslint-disable-next-line no-console
-            console.error('StoryLine: failed to register .json extension', e);
         }
 
         // Register views
@@ -116,6 +120,7 @@ export default class SceneCardsPlugin extends Plugin {
 
         // Wait for the workspace layout to be ready, then bootstrap projects
         this.app.workspace.onLayoutReady(async () => {
+            try {
             // Apply frontmatter visibility setting
             if (this.settings.hideFrontmatter) {
                 (this.app.vault as any).setConfig?.('propertiesInDocument', 'hidden');
@@ -124,6 +129,10 @@ export default class SceneCardsPlugin extends Plugin {
             await this.bootstrapProjects();
             // Migrate legacy data from data.json into project frontmatter
             await this.migrateProjectDataFromSettings();
+            // Load per-project data from System/ files (tagColors, aliases, etc.)
+            await this.loadProjectSystemData();
+            // Load corkboard layout from System/board.json
+            await this.sceneManager.loadCorkboardPositions();
             // Load locations and characters for the active project
             try {
                 const locFolder = this.sceneManager.getLocationFolder();
@@ -137,8 +146,7 @@ export default class SceneCardsPlugin extends Plugin {
             // Ensure a plotgrid file exists for the active project (or default location)", "oldString": "        this.app.workspace.onLayoutReady(async () => {\n            await this.bootstrapProjects();\n            // Ensure a plotgrid file exists for the active project (or default location)
             // (removed — createPlotGridIfMissing was causing race-condition overwrites)
 
-            // Initialize writing tracker with persisted history & baseline
-            this.writingTracker.importData((this.settings as any).writingTrackerData);
+            // Initialize writing tracker from per-project System/stats.json
             const stats = this.sceneManager.getStatistics();
             this.writingTracker.startSession(stats.totalWords);
 
@@ -146,6 +154,9 @@ export default class SceneCardsPlugin extends Plugin {
             // PlotGrid and other views that opened before bootstrapProjects reload
             // their data from the correct project folder.
             this.refreshOpenViews();
+            } catch (startupErr) {
+                console.error('[StoryLine] Startup error:', startupErr);
+            }
         });
 
         // Ribbon icons — open project chooser (load/create) so users can switch projects
@@ -257,6 +268,9 @@ export default class SceneCardsPlugin extends Plugin {
         // Settings tab
         this.addSettingTab(new SceneCardsSettingTab(this.app, this));
 
+        // Suppress native (browser) title tooltips inside StoryLine UI.
+        this.enableNativeTooltipSuppression();
+
         // File watchers for reactive updates
         // We debounce the async refresh pipeline so multiple rapid edits
         // only trigger one re-render after the index has finished updating.
@@ -293,22 +307,98 @@ export default class SceneCardsPlugin extends Plugin {
     }
 
     onunload(): void {
-        // Flush writing session into daily history and persist
+        // Flush writing session into daily history and persist to System/stats.json
         try {
             const stats = this.sceneManager.getStatistics();
             this.writingTracker.flushSession(stats.totalWords);
-            (this.settings as any).writingTrackerData = this.writingTracker.exportData();
-            this.saveData(this.settings);
+            this.saveProjectSystemData();
         } catch { /* best effort */ }
+
+        if (this.nativeTooltipObserver) {
+            this.nativeTooltipObserver.disconnect();
+            this.nativeTooltipObserver = null;
+        }
+    }
+
+    private enableNativeTooltipSuppression(): void {
+        const isInStoryLineUi = (el: HTMLElement): boolean => {
+            let node: HTMLElement | null = el;
+            while (node) {
+                for (const cls of Array.from(node.classList)) {
+                    if (cls.startsWith('story-line-')) return true;
+                }
+                node = node.parentElement;
+            }
+            return false;
+        };
+
+        const stripTitles = (root: ParentNode): void => {
+            if (!(root instanceof HTMLElement || root instanceof Document || root instanceof DocumentFragment)) return;
+            const candidates = (root as ParentNode).querySelectorAll?.('[title]') || [];
+            for (const node of Array.from(candidates)) {
+                if (!(node instanceof HTMLElement)) continue;
+                if (isInStoryLineUi(node)) {
+                    node.removeAttribute('title');
+                }
+            }
+            if (root instanceof HTMLElement && root.hasAttribute('title') && isInStoryLineUi(root)) {
+                root.removeAttribute('title');
+            }
+        };
+
+        stripTitles(document.body);
+
+        this.nativeTooltipObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'attributes') {
+                    const target = mutation.target;
+                    if (target instanceof HTMLElement && target.hasAttribute('title') && isInStoryLineUi(target)) {
+                        target.removeAttribute('title');
+                    }
+                    continue;
+                }
+                for (const node of Array.from(mutation.addedNodes)) {
+                    if (node instanceof HTMLElement) stripTitles(node);
+                }
+            }
+        });
+
+        this.nativeTooltipObserver.observe(document.body, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            attributeFilter: ['title'],
+        });
     }
 
     async loadSettings(): Promise<void> {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     }
 
+    /** Per-project field keys that live in System/ files, not data.json */
+    private static readonly PROJECT_DATA_KEYS: string[] = [
+        'tagColors', 'tagTypeOverrides', 'characterAliases', 'ignoredCharacters',
+        'writingTrackerData',
+        // Legacy plotgrid data stored directly in data.json (before file-based storage)
+        'rows', 'columns', 'cells', 'zoom', 'stickyHeaders',
+        // Legacy / per-project keys that don't belong in global settings
+        'filterPresets',
+    ];
+
     async saveSettings(): Promise<void> {
         this.applyImageSizingVariables();
-        await this.saveData(this.settings);
+        const toSave: Record<string, any> = { ...this.settings };
+        if (this._systemMigrationDone) {
+            // Strip per-project data from the global data.json payload
+            for (const key of SceneCardsPlugin.PROJECT_DATA_KEYS) {
+                delete toSave[key];
+            }
+        }
+        await this.saveData(toSave);
+        // Persist per-project data to System/ files (only after migration)
+        if (this._systemMigrationDone) {
+            await this.saveProjectSystemData();
+        }
     }
 
     private applyImageSizingVariables(): void {
@@ -381,23 +471,133 @@ export default class SceneCardsPlugin extends Plugin {
         return { characters, locations, tags };
     }
 
+    // ────────────────────────────────────
+    //  Project System folder helpers
+    // ────────────────────────────────────
+
     /**
-     * Save the plot grid data inside the plugin persisted object under `plotGrid` key.
+     * Return the base folder for the active project (parent of /Scenes).
+     * Falls back to the configured StoryLine root when no project is active.
+     */
+    getProjectBaseFolder(): string {
+        const project = this.sceneManager?.activeProject ?? null;
+        if (project) {
+            return project.sceneFolder.replace(/\\/g, '/').replace(/\/Scenes\/?$/, '');
+        }
+        return this.settings.storyLineRoot.replace(/\\/g, '/');
+    }
+
+    /**
+     * Return the System/ subfolder path for the active project.
+     */
+    getProjectSystemFolder(): string {
+        return `${this.getProjectBaseFolder()}/System`;
+    }
+
+    /**
+     * Read a JSON file from the current project's System/ folder.
+     * Returns an empty object if the file doesn't exist or is invalid.
+     */
+    private async readSystemJson(filename: string): Promise<Record<string, any>> {
+        try {
+            const adapter = this.app.vault.adapter;
+            const filePath = `${this.getProjectSystemFolder()}/${filename}`;
+            if (!await adapter.exists(filePath)) return {};
+            const txt = await adapter.read(filePath);
+            return JSON.parse(txt);
+        } catch {
+            return {};
+        }
+    }
+
+    /**
+     * Write a JSON object to a file in the current project's System/ folder.
+     * Creates the System/ folder if it doesn't exist.
+     */
+    private async writeSystemJson(filename: string, data: Record<string, any>): Promise<void> {
+        try {
+            const adapter = this.app.vault.adapter;
+            const systemFolder = this.getProjectSystemFolder();
+            if (!await adapter.exists(systemFolder)) {
+                await this.app.vault.createFolder(systemFolder);
+            }
+            await adapter.write(`${systemFolder}/${filename}`, JSON.stringify(data, null, 2));
+        } catch (e) {
+            console.error(`[StoryLine] writeSystemJson(${filename}):`, e);
+        }
+    }
+
+    /**
+     * Load per-project data from System/ files into the in-memory settings.
+     * Called after a project is loaded or switched.
+     */
+    async loadProjectSystemData(): Promise<void> {
+        const plotlines = await this.readSystemJson('plotlines.json');
+        const characters = await this.readSystemJson('characters.json');
+        const stats = await this.readSystemJson('stats.json');
+
+        // Overlay per-project data onto settings (used as working copy)
+        if (plotlines.tagColors && typeof plotlines.tagColors === 'object') {
+            this.settings.tagColors = plotlines.tagColors;
+        } else {
+            this.settings.tagColors = {};
+        }
+        if (plotlines.tagTypeOverrides && typeof plotlines.tagTypeOverrides === 'object') {
+            this.settings.tagTypeOverrides = plotlines.tagTypeOverrides;
+        } else {
+            this.settings.tagTypeOverrides = {};
+        }
+
+        if (characters.characterAliases && typeof characters.characterAliases === 'object') {
+            this.settings.characterAliases = characters.characterAliases;
+        } else {
+            this.settings.characterAliases = {};
+        }
+        if (Array.isArray(characters.ignoredCharacters)) {
+            this.settings.ignoredCharacters = characters.ignoredCharacters;
+        } else {
+            this.settings.ignoredCharacters = [];
+        }
+
+        // Writing tracker data
+        if (stats.writingTrackerData) {
+            this.writingTracker.importData(stats.writingTrackerData);
+        }
+
+        // System files are now the source of truth
+        this._systemMigrationDone = true;
+    }
+
+    /**
+     * Save per-project data from in-memory settings to System/ files.
+     * Called when settings are saved or before switching projects.
+     */
+    async saveProjectSystemData(): Promise<void> {
+        if (!this.sceneManager?.activeProject) return;
+
+        await this.writeSystemJson('plotlines.json', {
+            tagColors: this.settings.tagColors || {},
+            tagTypeOverrides: this.settings.tagTypeOverrides || {},
+        });
+
+        await this.writeSystemJson('characters.json', {
+            characterAliases: this.settings.characterAliases || {},
+            ignoredCharacters: this.settings.ignoredCharacters || [],
+        });
+
+        // Save writing tracker data
+        await this.writeSystemJson('stats.json', {
+            writingTrackerData: this.writingTracker.exportData(),
+        });
+    }
+
+    /**
+     * Save the plot grid data to the System/ folder under the active project.
      * This centralizes persistence and avoids views overwriting settings.
      */
     async savePlotGrid(data: PlotGridData): Promise<void> {
-        // Preferred: save as a vault file under the active project's folder (if any),
-        // otherwise under the configured StoryLine root + plotGridFolder.
         try {
-            const project = this.sceneManager?.activeProject ?? null;
-            let folder: string;
-            if (project) {
-                // project.sceneFolder ends with '/Scenes' — take its parent as the project base
-                folder = project.sceneFolder.replace(/\\/g, '/').replace(/\/Scenes\/?$/, '');
-            } else {
-                folder = `${this.settings.storyLineRoot.replace(/\\/g, '/')}/Plotgrid`;
-            }
-
+            const folder = this.getProjectSystemFolder();
             const filePath = `${folder}/plotgrid.json`;
             const adapter = this.app.vault.adapter;
 
@@ -428,39 +628,31 @@ export default class SceneCardsPlugin extends Plugin {
     }
 
     /**
-     * Load the plot grid data previously saved under `plotGrid` key.
+     * Load the plot grid data from the System/ folder.
      */
     async loadPlotGrid(): Promise<PlotGridData | null> {
-        // Load from project-specific location (if active project), otherwise from
-        // configured StoryLine root + plotGridFolder. Return null if missing or unreadable.
         try {
-            const project = this.sceneManager?.activeProject ?? null;
-            let folder: string;
-            if (project) {
-                folder = project.sceneFolder.replace(/\\/g, '/').replace(/\/Scenes\/?$/, '');
-            } else {
-                folder = `${this.settings.storyLineRoot.replace(/\\/g, '/')}/Plotgrid`;
-            }
+            const folder = this.getProjectSystemFolder();
             const adapter = this.app.vault.adapter;
 
             // ── Import-file mechanism ──────────────────────────────────
-            // If a plotgrid-import.json exists, adopt it: persist as the
-            // real plotgrid.json and delete the import file.  This lets
-            // external scripts (gen_plotgrid.ps1) write data without
+            // If a plotgrid-import.json exists in the project root, adopt it:
+            // persist as the real plotgrid.json in System/ and delete the import file.
+            // This lets external scripts (gen_plotgrid.ps1) write data without
             // Obsidian overwriting it before the plugin can load it.
-            const importPath = `${folder}/plotgrid-import.json`;
+            const baseFolder = this.getProjectBaseFolder();
+            const importPath = `${baseFolder}/plotgrid-import.json`;
             if (await adapter.exists(importPath)) {
                 try {
                     let importTxt = await adapter.read(importPath);
                     // Strip BOM if present (PowerShell 5.1 writes UTF-8 with BOM)
                     if (importTxt.charCodeAt(0) === 0xFEFF) importTxt = importTxt.slice(1);
                     const imported = JSON.parse(importTxt) as PlotGridData;
-                    // Persist to plotgrid.json
-                    const filePath = `${folder}/plotgrid.json`;
+                    // Persist to System/plotgrid.json
                     if (!await adapter.exists(folder)) {
                         await this.app.vault.createFolder(folder);
                     }
-                    await adapter.write(filePath, JSON.stringify(imported, null, 2));
+                    await adapter.write(`${folder}/plotgrid.json`, JSON.stringify(imported, null, 2));
                     // Remove the import file so it isn't re-imported next time
                     await adapter.remove(importPath);
                     console.log('[StoryLine] loadPlotGrid: imported data from plotgrid-import.json');
@@ -649,26 +841,30 @@ export default class SceneCardsPlugin extends Plugin {
     // ────────────────────────────────────
 
     /**
-     * Migrate legacy project-specific data from data.json into project frontmatter.
+     * Migrate legacy project-specific data from data.json into project frontmatter
+     * and System/ files.
      *
-     * Handles: definedActs, definedChapters, filterPresets.
-     * These fields used to live in the global plugin settings but now belong
-     * in each project's .md frontmatter. After successful migration the
-     * legacy keys are removed from data.json.
+     * Handles:
+     *  - definedActs, definedChapters, filterPresets → project frontmatter
+     *  - JSON files at project root → System/ subfolder
+     *  - tagColors, tagTypeOverrides → System/plotlines.json
+     *  - characterAliases, ignoredCharacters → System/characters.json
+     *  - writingTrackerData → System/stats.json
+     *
+     * After successful migration the legacy keys are removed from data.json.
      */
     private async migrateProjectDataFromSettings(): Promise<void> {
-        // Load raw persisted data to check for legacy keys
         const raw: any = await this.loadData();
         if (!raw) return;
 
         let dirty = false;
+        const adapter = this.app.vault.adapter;
 
-        // Migrate definedActs & definedChapters (keyed by project filePath)
+        // ── Phase 1: legacy frontmatter migrations (definedActs, etc.) ──
         if (raw.definedActs && typeof raw.definedActs === 'object') {
             for (const [projectPath, acts] of Object.entries(raw.definedActs)) {
                 if (!Array.isArray(acts) || acts.length === 0) continue;
-                const projects = this.sceneManager.getProjects();
-                const project = projects.find(p => p.filePath === projectPath);
+                const project = this.sceneManager.getProjects().find(p => p.filePath === projectPath);
                 if (project && project.definedActs.length === 0) {
                     project.definedActs = (acts as number[]).map(Number).filter(n => !isNaN(n));
                     await this.sceneManager.saveProjectFrontmatter(project);
@@ -681,8 +877,7 @@ export default class SceneCardsPlugin extends Plugin {
         if (raw.definedChapters && typeof raw.definedChapters === 'object') {
             for (const [projectPath, chapters] of Object.entries(raw.definedChapters)) {
                 if (!Array.isArray(chapters) || chapters.length === 0) continue;
-                const projects = this.sceneManager.getProjects();
-                const project = projects.find(p => p.filePath === projectPath);
+                const project = this.sceneManager.getProjects().find(p => p.filePath === projectPath);
                 if (project && project.definedChapters.length === 0) {
                     project.definedChapters = (chapters as number[]).map(Number).filter(n => !isNaN(n));
                     await this.sceneManager.saveProjectFrontmatter(project);
@@ -692,23 +887,152 @@ export default class SceneCardsPlugin extends Plugin {
             dirty = true;
         }
 
-        // Migrate filterPresets (global → active project)
         if (Array.isArray(raw.filterPresets) && raw.filterPresets.length > 0) {
             const activeProject = this.sceneManager.activeProject;
             if (activeProject && activeProject.filterPresets.length === 0) {
                 activeProject.filterPresets = raw.filterPresets;
                 await this.sceneManager.saveProjectFrontmatter(activeProject);
             }
-            delete raw.filterPresets;
-            dirty = true;
         }
 
-        // Clean up other legacy folder keys that are no longer in the settings interface
         for (const legacyKey of ['sceneFolder', 'characterFolder', 'locationFolder', 'plotGridFolder']) {
-            if (legacyKey in raw) {
-                delete raw[legacyKey];
-                dirty = true;
+            if (legacyKey in raw) { delete raw[legacyKey]; dirty = true; }
+        }
+
+        // ── Phase 2: move JSON files from project root → System/ ──
+        try {
+            await this.migrateJsonFilesToSystem();
+        } catch (e) {
+            console.error('[StoryLine] migrateJsonFilesToSystem error:', e);
+        }
+
+        // ── Phase 3: migrate per-project data from data.json → System/ files ──
+        // Derive the System folder from the active project path.
+        // If no active project, try to derive from activeProjectFile setting.
+        let sysFolder: string | null = null;
+        const activeProject = this.sceneManager?.activeProject;
+        if (activeProject) {
+            const base = activeProject.sceneFolder.replace(/\\/g, '/').replace(/\/Scenes\/?$/, '');
+            sysFolder = `${base}/System`;
+        } else if (raw.activeProjectFile) {
+            // Derive from file path: StoryLine/Foo/Foo.md → StoryLine/Foo/System
+            const base = String(raw.activeProjectFile).replace(/\/[^\/]+\.md$/i, '');
+            if (base) sysFolder = `${base}/System`;
+        }
+
+        // Check if there's actually any per-project data to migrate
+        const hasLegacyData = SceneCardsPlugin.PROJECT_DATA_KEYS.some(k => k in raw);
+
+        if (sysFolder && hasLegacyData) {
+            // Ensure System folder exists
+            try {
+                if (!await adapter.exists(sysFolder)) {
+                    await this.app.vault.createFolder(sysFolder);
+                }
+            } catch (e) {
+                console.error('[StoryLine] Migration: failed to create System folder:', e);
             }
+
+            // ── plotgrid.json (rows/columns/cells/zoom/stickyHeaders) ──
+            // Only write legacy plotgrid data if System/plotgrid.json is empty.
+            // If it already has data (e.g. from gen_plotgrid.ps1), keep it.
+            if ('rows' in raw || 'columns' in raw || 'cells' in raw) {
+                try {
+                    const pgPath = `${sysFolder}/plotgrid.json`;
+                    let existingHasData = false;
+                    if (await adapter.exists(pgPath)) {
+                        try {
+                            const existing = JSON.parse(await adapter.read(pgPath));
+                            existingHasData = Array.isArray(existing.rows) && existing.rows.length > 0;
+                        } catch { /* unreadable — allow overwrite */ }
+                    }
+                    if (!existingHasData) {
+                        const pgData: Record<string, any> = {};
+                        if (Array.isArray(raw.rows)) pgData.rows = raw.rows;
+                        if (Array.isArray(raw.columns)) pgData.columns = raw.columns;
+                        if (raw.cells && typeof raw.cells === 'object') pgData.cells = raw.cells;
+                        if (raw.zoom !== undefined) pgData.zoom = raw.zoom;
+                        if (raw.stickyHeaders !== undefined) pgData.stickyHeaders = raw.stickyHeaders;
+                        await adapter.write(pgPath, JSON.stringify(pgData, null, 2));
+                    } else {
+                    }
+                } catch (e) {
+                    console.error('[StoryLine] Migration: plotgrid write failed:', e);
+                }
+            }
+
+            // ── plotlines.json (tagColors, tagTypeOverrides) ──
+            // Write from this.settings (the in-memory copy) which has values
+            // regardless of whether these keys exist in data.json.
+            {
+                try {
+                    const path = `${sysFolder}/plotlines.json`;
+                    let existing: Record<string, any> = {};
+                    if (await adapter.exists(path)) {
+                        try { existing = JSON.parse(await adapter.read(path)); } catch { /* */ }
+                    }
+                    // Merge: use raw (data.json) values if present, else keep existing System file values,
+                    // else fall back to in-memory settings (which have defaults).
+                    const merged: Record<string, any> = {
+                        tagColors: raw.tagColors ?? existing.tagColors ?? this.settings.tagColors ?? {},
+                        tagTypeOverrides: raw.tagTypeOverrides ?? existing.tagTypeOverrides ?? this.settings.tagTypeOverrides ?? {},
+                    };
+                    await adapter.write(path, JSON.stringify(merged, null, 2));
+                } catch (e) {
+                    console.error('[StoryLine] Migration: plotlines write failed:', e);
+                }
+            }
+
+            // ── characters.json (characterAliases, ignoredCharacters) ──
+            {
+                try {
+                    const path = `${sysFolder}/characters.json`;
+                    let existing: Record<string, any> = {};
+                    if (await adapter.exists(path)) {
+                        try { existing = JSON.parse(await adapter.read(path)); } catch { /* */ }
+                    }
+                    const merged: Record<string, any> = {
+                        characterAliases: raw.characterAliases ?? existing.characterAliases ?? this.settings.characterAliases ?? {},
+                        ignoredCharacters: raw.ignoredCharacters ?? existing.ignoredCharacters ?? this.settings.ignoredCharacters ?? [],
+                    };
+                    await adapter.write(path, JSON.stringify(merged, null, 2));
+                } catch (e) {
+                    console.error('[StoryLine] Migration: characters write failed:', e);
+                }
+            }
+
+            // ── stats.json (writingTrackerData) ──
+            {
+                try {
+                    const path = `${sysFolder}/stats.json`;
+                    let existing: Record<string, any> = {};
+                    if (await adapter.exists(path)) {
+                        try { existing = JSON.parse(await adapter.read(path)); } catch { /* */ }
+                    }
+                    const merged: Record<string, any> = {
+                        writingTrackerData: raw.writingTrackerData ?? existing.writingTrackerData ?? null,
+                    };
+                    if (merged.writingTrackerData) {
+                        await adapter.write(path, JSON.stringify(merged, null, 2));
+                    }
+                } catch (e) {
+                    console.error('[StoryLine] Migration: stats write failed:', e);
+                }
+            }
+
+            // ── Strip migrated keys from raw and save ──
+            for (const key of SceneCardsPlugin.PROJECT_DATA_KEYS) {
+                if (key in raw) { delete raw[key]; dirty = true; }
+            }
+            // Do NOT set _systemMigrationDone here — that happens in
+            // loadProjectSystemData() which runs next and loads the System
+            // file contents into this.settings. Setting the flag here would
+            // allow an intervening saveSettings() call to overwrite System
+            // files with empty defaults before they're loaded into memory.
+        } else if (!sysFolder) {
+            console.warn('[StoryLine] Migration: no active project, skipping System/ writes');
+        } else {
+            // No legacy data to migrate — flag set by loadProjectSystemData()
         }
 
         if (dirty) {
@@ -717,11 +1041,72 @@ export default class SceneCardsPlugin extends Plugin {
     }
 
     /**
+     * Move legacy JSON files from each project's root folder into its System/ subfolder.
+     * Runs once per project; harmless if System/ files already exist.
+     */
+    private async migrateJsonFilesToSystem(): Promise<void> {
+        const adapter = this.app.vault.adapter;
+        const jsonFiles = ['plotgrid.json', 'timeline.json', 'board.json', 'plotlines.json', 'stats.json'];
+
+        for (const project of this.sceneManager.getProjects()) {
+            const baseFolder = project.sceneFolder
+                .replace(/\\/g, '/').replace(/\/Scenes\/?$/, '');
+            const sysFolder = `${baseFolder}/System`;
+
+            for (const filename of jsonFiles) {
+                const oldPath = `${baseFolder}/${filename}`;
+                const newPath = `${sysFolder}/${filename}`;
+
+                try {
+                    if (!await adapter.exists(oldPath)) continue;
+                    // If System/ file already exists, skip (already migrated)
+                    if (await adapter.exists(newPath)) {
+                        // Delete the old file since System/ version exists
+                        const oldFile = this.app.vault.getAbstractFileByPath(oldPath);
+                        if (oldFile) await this.app.vault.delete(oldFile);
+                        continue;
+                    }
+
+                    // Ensure System/ folder exists
+                    if (!await adapter.exists(sysFolder)) {
+                        await this.app.vault.createFolder(sysFolder);
+                    }
+
+                    // Read old file content and write to new location
+                    const content = await adapter.read(oldPath);
+                    await adapter.write(newPath, content);
+
+                    // Delete old file
+                    const oldFile = this.app.vault.getAbstractFileByPath(oldPath);
+                    if (oldFile) await this.app.vault.delete(oldFile);
+
+                    console.log(`[StoryLine] Migrated ${oldPath} → ${newPath}`);
+                } catch (e) {
+                    console.warn(`[StoryLine] Failed to migrate ${oldPath} → ${newPath}:`, e);
+                }
+            }
+        }
+    }
+
+    /**
      * Scan for existing StoryLine projects.
-     * If none are found, prompt the user to create their first project.
+     * If none are found, retry a few times in case the vault / metadata cache
+     * hasn't finished indexing (common on mobile and after laptop wake).
+     * Only prompt for a new project if retries are exhausted.
      */
     private async bootstrapProjects(): Promise<void> {
-        const projects = await this.sceneManager.scanProjects();
+        let projects = await this.sceneManager.scanProjects();
+
+        // If nothing found but we expect a project, retry after short delays
+        // to let the vault / metadata cache finish indexing.
+        if (projects.length === 0 && this.settings.activeProjectFile) {
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                await new Promise(r => setTimeout(r, attempt * 1000));
+                projects = await this.sceneManager.scanProjects();
+                if (projects.length > 0) break;
+            }
+        }
+
         if (projects.length === 0) {
             // Prompt user to name their first project instead of auto-creating "Default"
             const project = await this.openNewProjectModal();
@@ -897,6 +1282,104 @@ class ProjectSelectModal extends Modal {
         const cancel = actions.createEl('button', { text: 'Cancel', cls: 'mod-quiet' });
         cancel.setAttr('type', 'button');
         cancel.addEventListener('click', () => this.close());
+
+        // "Browse" button — manually pick a .md file as a StoryLine project
+        const browseBtn = actions.createEl('button', { text: 'Browse for Project…' });
+        browseBtn.setAttr('type', 'button');
+        browseBtn.addEventListener('click', async () => {
+            // Build a list of all .md files in the vault for the user to pick from
+            const browseModal = new Modal(this.app);
+            browseModal.titleEl.setText('Select a StoryLine project file');
+            const container = browseModal.contentEl.createDiv({ cls: 'project-browse-list' });
+            const fileList = container.createDiv();
+            fileList.style.maxHeight = '300px';
+            fileList.style.overflowY = 'auto';
+            fileList.createDiv({ text: 'Scanning…' });
+
+            // Scan StoryLine root and one level deep, filtering to only
+            // files with type: storyline frontmatter (actual project files).
+            const rootPath = this.plugin.settings.storyLineRoot.replace(/\\/g, '/');
+            const projectFiles: { path: string; title: string }[] = [];
+            try {
+                const adapter = this.app.vault.adapter;
+
+                const checkFile = async (filePath: string) => {
+                    if (!filePath.endsWith('.md')) return;
+                    try {
+                        const content = await adapter.read(filePath);
+                        const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+                        if (!fmMatch) return;
+                        if (!/^type:\s*storyline/m.test(fmMatch[1])) return;
+                        // Extract title from frontmatter
+                        const titleMatch = fmMatch[1].match(/^title:\s*(.+)/m);
+                        const title = titleMatch ? titleMatch[1].trim() : filePath.split('/').pop()?.replace(/\.md$/i, '') ?? filePath;
+                        projectFiles.push({ path: filePath, title });
+                    } catch { /* unreadable */ }
+                };
+
+                // Recursively scan all subfolders for project .md files
+                const scanFolder = async (folderPath: string) => {
+                    try {
+                        const listing = await adapter.list(folderPath);
+                        for (const f of listing.files) {
+                            await checkFile(f);
+                        }
+                        for (const sub of listing.folders) {
+                            // Skip System, Scenes, Characters, Locations folders
+                            const folderName = sub.split('/').pop() ?? '';
+                            if (['System', 'Scenes', 'Characters', 'Locations'].includes(folderName)) continue;
+                            await scanFolder(sub);
+                        }
+                    } catch { /* skip unreadable */ }
+                };
+                await scanFolder(rootPath);
+            } catch { /* root folder may not exist */ }
+            projectFiles.sort((a, b) => a.title.localeCompare(b.title));
+
+            // Render the project list
+            fileList.empty();
+            if (projectFiles.length === 0) {
+                fileList.createDiv({ text: 'No StoryLine projects found.' });
+            }
+            for (const pf of projectFiles) {
+                const row = fileList.createDiv({ cls: 'project-browse-row' });
+                row.style.padding = '4px 8px';
+                row.style.cursor = 'pointer';
+                row.style.borderRadius = '4px';
+                row.textContent = `${pf.title}  (${pf.path})`;
+                row.addEventListener('mouseenter', () => { row.style.background = 'var(--background-modifier-hover)'; });
+                row.addEventListener('mouseleave', () => { row.style.background = ''; });
+                row.addEventListener('click', async () => {
+                    try {
+                        const adapter = this.app.vault.adapter;
+                        const content = await adapter.read(pf.path);
+                        // Re-scan and try to find / adopt this project
+                        await this.plugin.sceneManager.scanProjects();
+                        let project = this.plugin.sceneManager.getProjects().find((p: any) => p.filePath === pf.path);
+                        if (!project) {
+                            const parsed = (this.plugin.sceneManager as any).parseProjectContent(content, pf.path);
+                            if (parsed) {
+                                (this.plugin.sceneManager as any).projects.set(pf.path, parsed);
+                                project = parsed;
+                            }
+                        }
+                        if (project) {
+                            await this.plugin.sceneManager.setActiveProject(project);
+                            this.plugin.refreshOpenViews();
+                            try { await this.plugin.activateView(BOARD_VIEW_TYPE); } catch { /* */ }
+                            browseModal.close();
+                            this.close();
+                        } else {
+                            new Notice('Could not parse file as a StoryLine project');
+                        }
+                    } catch (err) {
+                        new Notice('Failed to open project: ' + String(err));
+                    }
+                });
+            }
+
+            browseModal.open();
+        });
 
         // initial population
         (async () => {

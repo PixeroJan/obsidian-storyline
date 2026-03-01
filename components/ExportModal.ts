@@ -3,7 +3,7 @@ import { ExportService, ExportFormat, ExportScope } from '../services/ExportServ
 import type SceneCardsPlugin from '../main';
 
 /**
- * Modal that lets the user pick format (MD / JSON / PDF) and scope
+ * Modal that lets the user pick format (MD / JSON / HTML) and scope
  * (manuscript / outline), then triggers the export.
  */
 export class ExportModal extends Modal {
@@ -11,12 +11,20 @@ export class ExportModal extends Modal {
     private exportService: ExportService;
 
     private format: ExportFormat = 'md';
-    private exportScope: ExportScope = 'outline';
+    private exportScope: ExportScope = 'manuscript';
 
     constructor(plugin: SceneCardsPlugin) {
         super(plugin.app);
         this.plugin = plugin;
         this.exportService = new ExportService(plugin.app, plugin.sceneManager, plugin.characterManager, plugin.locationManager);
+        // Pass DOCX settings to the export service
+        if (plugin.settings.docxSettings) {
+            this.exportService.setDocxSettings(plugin.settings.docxSettings);
+        }
+        // Pass PDF settings to the export service
+        if (plugin.settings.pdfSettings) {
+            this.exportService.setPdfSettings(plugin.settings.pdfSettings);
+        }
     }
 
     onOpen(): void {
@@ -38,10 +46,12 @@ export class ExportModal extends Modal {
         });
 
         // Scope selection
+        let scopeDropdown: any;
         new Setting(contentEl)
             .setName('Content')
             .setDesc('What to include in the export')
             .addDropdown(dd => {
+                scopeDropdown = dd;
                 dd.addOption('outline', 'Outline (metadata, stats, table)');
                 dd.addOption('manuscript', 'Manuscript (scene text in order)');
                 dd.setValue(this.exportScope);
@@ -53,11 +63,20 @@ export class ExportModal extends Modal {
             .setName('Format')
             .addDropdown(dd => {
                 dd.addOption('md', 'Markdown (.md)');
-                dd.addOption('json', 'JSON (.json)');
+                dd.addOption('docx', 'Word (.docx)');
+                dd.addOption('pdf', 'PDF (.pdf)');
+                dd.addOption('html', 'HTML (.html)');
                 dd.addOption('csv', 'CSV (.csv)');
-                dd.addOption('pdf', 'PDF (print dialog)');
+                dd.addOption('json', 'JSON (.json)');
                 dd.setValue(this.format);
-                dd.onChange(v => { this.format = v as ExportFormat; });
+                dd.onChange(v => {
+                    this.format = v as ExportFormat;
+                    // Auto-switch to Manuscript when DOCX or PDF is selected
+                    if ((v === 'docx' || v === 'pdf') && this.exportScope !== 'manuscript') {
+                        this.exportScope = 'manuscript';
+                        scopeDropdown?.setValue('manuscript');
+                    }
+                });
             });
 
         // Actions
