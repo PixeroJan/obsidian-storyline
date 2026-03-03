@@ -902,14 +902,11 @@ export class InspectorComponent {
         });
         textarea.value = scene.notes || '';
 
-        let saveTimer: ReturnType<typeof setTimeout>;
-        textarea.addEventListener('input', () => {
-            clearTimeout(saveTimer);
-            saveTimer = setTimeout(async () => {
-                const val = textarea.value.trim();
-                await this.sceneManager.updateScene(scene.filePath, { notes: val || undefined } as any);
-                scene.notes = val || undefined;
-            }, 600);
+        // Save on blur (when the user leaves the field) so typing isn't interrupted
+        textarea.addEventListener('change', async () => {
+            const val = textarea.value.trim();
+            await this.sceneManager.updateScene(scene.filePath, { notes: val || undefined } as any);
+            scene.notes = val || undefined;
         });
     }
 
