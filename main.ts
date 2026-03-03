@@ -41,6 +41,8 @@ export default class SceneCardsPlugin extends Plugin {
     sceneManager: SceneManager;
     /** Set to true once System/ migration is confirmed — guards saveSettings stripping */
     private _systemMigrationDone = false;
+    /** Set to true after initial bootstrap — prevents navigator auto-open on startup */
+    private _startupComplete = false;
     /** Snapshot of colour settings from data.json (global defaults) */
     private _globalColorDefaults: Record<string, any> = {};
     locationManager: LocationManager;
@@ -164,6 +166,7 @@ export default class SceneCardsPlugin extends Plugin {
             // PlotGrid and other views that opened before bootstrapProjects reload
             // their data from the correct project folder.
             this.refreshOpenViews();
+            this._startupComplete = true;
             } catch (startupErr) {
                 console.error('[StoryLine] Startup error:', startupErr);
             }
@@ -894,7 +897,8 @@ export default class SceneCardsPlugin extends Plugin {
         }
 
         // Auto-open the Navigator sidebar if enabled and a project is active
-        if (this.settings.autoOpenNavigator && this.sceneManager.activeProject) {
+        // Skip during initial plugin load — only open on explicit user action
+        if (this._startupComplete && this.settings.autoOpenNavigator && this.sceneManager.activeProject) {
             const navLeaves = this.app.workspace.getLeavesOfType(NAVIGATOR_VIEW_TYPE);
             if (navLeaves.length === 0) {
                 // Use setTimeout so we don't block the current refresh cycle
