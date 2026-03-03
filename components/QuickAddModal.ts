@@ -147,11 +147,11 @@ export class QuickAddModal extends Modal {
                 area.inputEl.addClass('story-line-wide-input');
             });
 
-        // Description (becomes body text)
+        // Scene Draft (becomes body text)
         new Setting(contentEl)
-            .setName('Description')
+            .setName('Scene Draft')
             .addTextArea(area => {
-                area.setPlaceholder('Describe the scene...')
+                area.setPlaceholder('Write your scene draft here…')
                     .onChange(value => this.result.description = value || undefined);
                 area.inputEl.rows = 3;
                 area.inputEl.addClass('story-line-wide-input');

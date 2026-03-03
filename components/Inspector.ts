@@ -527,13 +527,13 @@ export class InspectorComponent {
         };
         renderTagChips();
 
-        // ── Description (body text — editable) ──
+        // ── Scene Draft (body text — editable) ──
         {
             const descSection = this.container.createDiv('inspector-section');
-            descSection.createSpan({ cls: 'inspector-label', text: 'Description:' });
+            descSection.createSpan({ cls: 'inspector-label', text: 'Scene Draft:' });
             const descInput = descSection.createEl('textarea', {
                 cls: 'inspector-description-input',
-                attr: { placeholder: 'Scene description / body text…', rows: '12' },
+                attr: { placeholder: 'Write your scene draft here…', rows: '12' },
             });
             descInput.value = scene.body || '';
             styleInput(descInput);
