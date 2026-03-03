@@ -1,7 +1,7 @@
 import { Scene, STATUS_CONFIG, SceneStatus, ColorCodingMode, TIMELINE_MODE_LABELS, TIMELINE_MODE_ICONS, TimelineMode } from '../models/Scene';
 import * as obsidian from 'obsidian';
 import type SceneCardsPlugin from '../main';
-import { resolveTagColor } from '../settings';
+import { resolveTagColor, getPlotlineHSL } from '../settings';
 import type { LinkScanResult } from '../services/LinkScanner';
 
 /**
@@ -250,7 +250,7 @@ export class SceneCardComponent {
         const scheme = this.plugin.settings.colorScheme;
         const allTagsSorted = (this.plugin.sceneManager?.getAllTags() || []).sort();
         for (const tag of tags) {
-            const color = resolveTagColor(tag, Math.max(0, allTagsSorted.indexOf(tag)), scheme, tagColors);
+            const color = resolveTagColor(tag, Math.max(0, allTagsSorted.indexOf(tag)), scheme, tagColors, getPlotlineHSL(this.plugin.settings));
             if (color && color !== '#888888') return color;
         }
         // Fallback: deterministic color from first tag string

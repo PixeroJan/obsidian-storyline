@@ -293,23 +293,226 @@ export function getSchemeColors(scheme: ColorScheme): string[] | undefined {
     return COLOR_PALETTES[scheme];
 }
 
+// ── Sticky Note Color System ────────────────────────────────
+
+/** 14 named base colors for sticky notes */
+export const STICKY_NOTE_COLOR_NAMES = [
+    'Yellow', 'Gold', 'Orange', 'Coral', 'Pink', 'Rose', 'Lavender',
+    'Violet', 'Blue', 'Sky', 'Teal', 'Mint', 'Green', 'Sage',
+] as const;
+
+export type StickyNoteThemeId = 'classic' | 'pastel' | 'warm' | 'cool' | 'earth' | 'vivid';
+
+export const STICKY_NOTE_THEME_LABELS: Record<StickyNoteThemeId, string> = {
+    classic: 'Classic',
+    pastel:  'Pastel',
+    warm:    'Warm',
+    cool:    'Cool',
+    earth:   'Earth',
+    vivid:   'Vivid',
+};
+
+export const STICKY_NOTE_THEME_HINTS: Record<StickyNoteThemeId, string> = {
+    classic: 'Traditional sticky note tones',
+    pastel:  'Very light & airy',
+    warm:    'Sunny, warm-shifted tones',
+    cool:    'Crisp, cool-shifted tones',
+    earth:   'Muted, natural colours',
+    vivid:   'Brighter, punchy pastels',
+};
+
+/** 14 harmonized colours per theme (order matches STICKY_NOTE_COLOR_NAMES) */
+export const STICKY_NOTE_THEMES: Record<StickyNoteThemeId, string[]> = {
+    classic: [
+        '#F5EDAA', // Yellow
+        '#F0DDA0', // Gold
+        '#F5D3A6', // Orange
+        '#F5C4B8', // Coral
+        '#F5C4D4', // Pink
+        '#F0BBDA', // Rose
+        '#DDBEF0', // Lavender
+        '#C8BCF0', // Violet
+        '#B8CBF5', // Blue
+        '#B0DAF5', // Sky
+        '#B0E0DA', // Teal
+        '#B8E8C8', // Mint
+        '#C8E8B8', // Green
+        '#D8E0B0', // Sage
+    ],
+    pastel: [
+        '#FDF6C8', // Yellow
+        '#FAE8B8', // Gold
+        '#FADED0', // Orange
+        '#FAD6D6', // Coral
+        '#FAD2E4', // Pink
+        '#F5CCE6', // Rose
+        '#E8D4F8', // Lavender
+        '#DCD2F8', // Violet
+        '#CEDAF8', // Blue
+        '#C8E6FA', // Sky
+        '#C4EAE4', // Teal
+        '#CCF0DA', // Mint
+        '#D6F0CC', // Green
+        '#E4EABC', // Sage
+    ],
+    warm: [
+        '#F5E8A0', // Yellow
+        '#F0D498', // Gold
+        '#F0C4A0', // Orange
+        '#F0B4AA', // Coral
+        '#F0B0C4', // Pink
+        '#E8AAC8', // Rose
+        '#D8B0D8', // Lavender
+        '#C8ACD8', // Violet
+        '#B8C0D8', // Blue
+        '#B0CFD8', // Sky
+        '#B0D4CA', // Teal
+        '#B8DABB', // Mint
+        '#C6D8AA', // Green
+        '#D4D4A0', // Sage
+    ],
+    cool: [
+        '#ECE8B0', // Yellow
+        '#E0DAB0', // Gold
+        '#E0D0C0', // Orange
+        '#E0C8CC', // Coral
+        '#E0C2DA', // Pink
+        '#D6BEE0', // Rose
+        '#C8C2F0', // Lavender
+        '#B8BCF0', // Violet
+        '#A8C4F5', // Blue
+        '#A0D4F5', // Sky
+        '#A0DCD8', // Teal
+        '#A8E4CA', // Mint
+        '#B8E4B8', // Green
+        '#CCD8AA', // Sage
+    ],
+    earth: [
+        '#E0D8A0', // Yellow
+        '#D6C898', // Gold
+        '#D6BA9C', // Orange
+        '#D4ACA8', // Coral
+        '#D0A8B8', // Pink
+        '#C8A0BA', // Rose
+        '#BAA4C8', // Lavender
+        '#AEA0C8', // Violet
+        '#A0ACC8', // Blue
+        '#9CBAC8', // Sky
+        '#9CC0BC', // Teal
+        '#A0C8AF', // Mint
+        '#ACC8A0', // Green
+        '#BCC098', // Sage
+    ],
+    vivid: [
+        '#F8EC88', // Yellow
+        '#F4D680', // Gold
+        '#F8C490', // Orange
+        '#F8B0A0', // Coral
+        '#F8A8C0', // Pink
+        '#F0A0CA', // Rose
+        '#D8A8F0', // Lavender
+        '#C4A2F4', // Violet
+        '#A0BAF8', // Blue
+        '#90D0F8', // Sky
+        '#90DCD4', // Teal
+        '#98E8BC', // Mint
+        '#B0E8A0', // Green
+        '#CCE090', // Sage
+    ],
+};
+
+// ── HSL helpers ─────────────────────────────────────────────
+
+function hexToHSL(hex: string): [number, number, number] {
+    const h = hex.replace('#', '');
+    const r = Number.parseInt(h.slice(0, 2), 16) / 255;
+    const g = Number.parseInt(h.slice(2, 4), 16) / 255;
+    const b = Number.parseInt(h.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    if (max === min) return [0, 0, l * 100];
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    let hue = 0;
+    if (max === r) hue = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) hue = ((b - r) / d + 2) / 6;
+    else hue = ((r - g) / d + 4) / 6;
+    return [hue * 360, s * 100, l * 100];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+    h = ((h % 360) + 360) % 360;
+    s = Math.max(0, Math.min(100, s)) / 100;
+    l = Math.max(0, Math.min(100, l)) / 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => {
+        const k = (n + h / 30) % 12;
+        const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+        return Math.round(c * 255).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`.toUpperCase();
+}
+
+/**
+ * Apply hue-shift, saturation and lightness adjustments to a hex colour.
+ * Adjustments are additive on the 0-100 / 0-360 scales.
+ */
+export function adjustHSL(hex: string, hueShift: number, satShift: number, lightShift: number): string {
+    const [h, s, l] = hexToHSL(hex);
+    return hslToHex(h + hueShift, s + satShift, l + lightShift);
+}
+
+/**
+ * Resolve the final 14 sticky-note colours, applying:
+ *  1. Theme base → 2. Per-index override → 3. Global HSL adjustments
+ */
+export function resolveStickyNoteColors(settings: {
+    stickyNoteTheme: StickyNoteThemeId;
+    stickyNoteOverrides: Record<number, string>;
+    stickyNoteHue: number;
+    stickyNoteSaturation: number;
+    stickyNoteLightness: number;
+}): Array<{ label: string; color: string }> {
+    const base = STICKY_NOTE_THEMES[settings.stickyNoteTheme] ?? STICKY_NOTE_THEMES.classic;
+    return base.map((c, i) => {
+        const overridden = settings.stickyNoteOverrides[i] ?? c;
+        const final = (settings.stickyNoteHue === 0 && settings.stickyNoteSaturation === 0 && settings.stickyNoteLightness === 0)
+            ? overridden
+            : adjustHSL(overridden, settings.stickyNoteHue, settings.stickyNoteSaturation, settings.stickyNoteLightness);
+        return { label: STICKY_NOTE_COLOR_NAMES[i], color: final };
+    });
+}
+
 /**
  * Resolve the effective color for a tag.
  * Priority: custom tagColors override > scheme auto-assignment > fallback.
+ * HSL adjustments are applied to scheme-assigned colours (not custom overrides).
  */
 export function resolveTagColor(
     tag: string,
     tagIndex: number,
     scheme: ColorScheme,
     tagColors: Record<string, string>,
+    hslAdj?: { hue: number; sat: number; light: number },
 ): string {
-    // Custom override always wins
+    // Custom override always wins (no HSL applied — user chose exact colour)
     if (tagColors[tag]) return tagColors[tag];
     // Scheme auto-assign
     const palette = getSchemeColors(scheme);
-    if (palette) return palette[tagIndex % palette.length];
+    if (palette) {
+        const base = palette[tagIndex % palette.length];
+        if (hslAdj && (hslAdj.hue !== 0 || hslAdj.sat !== 0 || hslAdj.light !== 0)) {
+            return adjustHSL(base, hslAdj.hue, hslAdj.sat, hslAdj.light);
+        }
+        return base;
+    }
     // Fallback grey
     return '#888888';
+}
+
+/** Build the HSL adjustment object from plugin settings (for pass to resolveTagColor) */
+export function getPlotlineHSL(settings: { plotlineHue: number; plotlineSaturation: number; plotlineLightness: number }): { hue: number; sat: number; light: number } {
+    return { hue: settings.plotlineHue, sat: settings.plotlineSaturation, light: settings.plotlineLightness };
 }
 
 /**
@@ -328,6 +531,7 @@ export interface SceneCardsSettings {
     // Display
     defaultView: ViewType;
     defaultBoardMode: 'corkboard' | 'kanban';
+    autoOpenNavigator: boolean;
     showNotesInKanban: boolean;
     showScenesInCorkboard: boolean;
     colorCoding: ColorCodingMode;
@@ -357,6 +561,11 @@ export interface SceneCardsSettings {
     // Tag / plotline color assignments (custom overrides)
     tagColors: Record<string, string>;
 
+    // Plotline colour HSL adjustments (applied to scheme colours)
+    plotlineHue: number;
+    plotlineSaturation: number;
+    plotlineLightness: number;
+
     // Manual tag-type overrides (tag name lowercased → 'prop' | 'location' | 'character' | 'other')
     tagTypeOverrides: Record<string, string>;
 
@@ -378,6 +587,20 @@ export interface SceneCardsSettings {
 
     // PDF export settings (using pdf-lib)
     pdfSettings: SLPdfSettings;
+
+    // Sticky note colour theme
+    stickyNoteTheme: StickyNoteThemeId;
+    // Per-index colour overrides (index 0–13 → hex)
+    stickyNoteOverrides: Record<number, string>;
+    // Global HSL adjustments applied on top of theme + overrides
+    stickyNoteHue: number;
+    stickyNoteSaturation: number;
+    stickyNoteLightness: number;
+
+    // Per-project colour override flag
+    // When true, colorScheme, plotline HSL, stickyNote theme/HSL/overrides
+    // are saved into/loaded from the project’s System/plotlines.json
+    useProjectColors: boolean;
 }
 
 /**
@@ -393,6 +616,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
 
     defaultView: 'board',
     defaultBoardMode: 'corkboard',
+    autoOpenNavigator: true,
     showNotesInKanban: false,
     showScenesInCorkboard: true,
     colorCoding: 'status',
@@ -417,6 +641,10 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
 
     tagColors: {},
 
+    plotlineHue: 0,
+    plotlineSaturation: 0,
+    plotlineLightness: 0,
+
     tagTypeOverrides: {},
 
     characterAliases: {},
@@ -430,6 +658,14 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     docxSettings: { ...SL_DEFAULT_DOCX_SETTINGS },
 
     pdfSettings: { ...SL_DEFAULT_PDF_SETTINGS },
+
+    stickyNoteTheme: 'classic' as StickyNoteThemeId,
+    stickyNoteOverrides: {},
+    stickyNoteHue: 0,
+    stickyNoteSaturation: 0,
+    stickyNoteLightness: 0,
+
+    useProjectColors: false,
 };
 
 /**
@@ -543,6 +779,16 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     this.plugin.refreshOpenViews();
                 });
             });
+
+        new Setting(containerEl)
+            .setName('Auto-open Navigator')
+            .setDesc('Automatically open the StoryLine Navigator sidebar when a project loads')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.autoOpenNavigator ?? true)
+                .onChange(async (value) => {
+                    this.plugin.settings.autoOpenNavigator = value;
+                    await this.plugin.saveSettings();
+                }));
 
         new Setting(containerEl)
             .setName('Show notes in Kanban')
@@ -780,6 +1026,38 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         const colorBody = colorDetails.createDiv();
         colorBody.style.padding = '8px 0';
 
+        // Per-project colour override toggle
+        const projName = this.plugin.sceneManager?.activeProject?.title;
+        if (projName) {
+            new Setting(colorBody)
+                .setName('Use project-specific colors')
+                .setDesc(`Save color settings into "${projName}" instead of using the global defaults.`)
+                .addToggle(toggle => toggle
+                    .setValue(this.plugin.settings.useProjectColors)
+                    .onChange(async (value) => {
+                        this.plugin.settings.useProjectColors = value;
+                        if (!value) {
+                            // Turning OFF: restore global colour defaults,
+                            // then remove projectColors from plotlines.json
+                            const g = (this.plugin as any)._globalColorDefaults;
+                            if (g && Object.keys(g).length > 0) {
+                                this.plugin.settings.colorScheme = g.colorScheme;
+                                this.plugin.settings.plotlineHue = g.plotlineHue;
+                                this.plugin.settings.plotlineSaturation = g.plotlineSaturation;
+                                this.plugin.settings.plotlineLightness = g.plotlineLightness;
+                                this.plugin.settings.stickyNoteTheme = g.stickyNoteTheme;
+                                this.plugin.settings.stickyNoteHue = g.stickyNoteHue;
+                                this.plugin.settings.stickyNoteSaturation = g.stickyNoteSaturation;
+                                this.plugin.settings.stickyNoteLightness = g.stickyNoteLightness;
+                                this.plugin.settings.stickyNoteOverrides = { ...(g.stickyNoteOverrides || {}) };
+                            }
+                        }
+                        await this.plugin.saveSettings();
+                        this.plugin.refreshOpenViews();
+                        this.display(); // re-render to update swatch previews
+                    }));
+        }
+
         // Compact scheme picker: grouped radio-style cards
         const schemeContainer = colorBody.createDiv();
 
@@ -886,6 +1164,105 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         helpText.style.marginTop = '8px';
         helpText.textContent = 'Colors are auto-assigned to plotline tags. To override a specific tag color, use the color picker in the Plotlines view.';
 
+        // ── Plotline HSL sliders ──
+        const plotSliderLabel = colorBody.createDiv();
+        plotSliderLabel.style.fontSize = '11px';
+        plotSliderLabel.style.fontWeight = '600';
+        plotSliderLabel.style.color = 'var(--text-muted)';
+        plotSliderLabel.style.textTransform = 'uppercase';
+        plotSliderLabel.style.letterSpacing = '0.05em';
+        plotSliderLabel.style.marginTop = '12px';
+        plotSliderLabel.style.marginBottom = '6px';
+        plotSliderLabel.textContent = 'Global Adjustments';
+
+        // Preview swatch row
+        const plotPreviewRow = colorBody.createDiv();
+        plotPreviewRow.style.display = 'flex';
+        plotPreviewRow.style.gap = '4px';
+        plotPreviewRow.style.flexWrap = 'wrap';
+        plotPreviewRow.style.marginBottom = '8px';
+
+        const updatePlotPreview = () => {
+            plotPreviewRow.empty();
+            const palette = getSchemeColors(this.plugin.settings.colorScheme);
+            if (!palette) return;
+            const adj = getPlotlineHSL(this.plugin.settings);
+            const hasAdj = adj.hue !== 0 || adj.sat !== 0 || adj.light !== 0;
+            for (let ci = 0; ci < Math.min(palette.length, 14); ci++) {
+                const col = hasAdj ? adjustHSL(palette[ci], adj.hue, adj.sat, adj.light) : palette[ci];
+                const dot = plotPreviewRow.createDiv();
+                dot.style.width = '20px';
+                dot.style.height = '20px';
+                dot.style.borderRadius = '4px';
+                dot.style.background = col;
+                dot.style.border = '1px solid var(--background-modifier-border)';
+            }
+        };
+        updatePlotPreview();
+
+        const createPlotSlider = (
+            label: string,
+            value: number,
+            min: number,
+            max: number,
+            onChange: (v: number) => void,
+        ) => {
+            const row = colorBody.createDiv();
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.gap = '8px';
+            row.style.marginBottom = '6px';
+
+            const lbl = row.createSpan();
+            lbl.style.fontSize = '12px';
+            lbl.style.minWidth = '75px';
+            lbl.textContent = label;
+
+            const slider = row.createEl('input', {
+                type: 'range',
+                attr: { min: String(min), max: String(max), step: '1' },
+            });
+            slider.value = String(value);
+            slider.style.flex = '1';
+
+            const valEl = row.createSpan();
+            valEl.style.fontSize = '11px';
+            valEl.style.minWidth = '30px';
+            valEl.style.textAlign = 'right';
+            valEl.textContent = String(value);
+
+            let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+            slider.addEventListener('input', () => {
+                const v = Number.parseInt(slider.value, 10);
+                valEl.textContent = String(v);
+                onChange(v);
+                updatePlotPreview();
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                }, 300);
+            });
+        };
+
+        const ps = this.plugin.settings;
+        createPlotSlider('Hue shift', ps.plotlineHue, -30, 30, (v) => { ps.plotlineHue = v; });
+        createPlotSlider('Saturation', ps.plotlineSaturation, -50, 50, (v) => { ps.plotlineSaturation = v; });
+        createPlotSlider('Lightness', ps.plotlineLightness, -30, 30, (v) => { ps.plotlineLightness = v; });
+
+        const plotResetRow = colorBody.createDiv();
+        plotResetRow.style.marginBottom = '12px';
+        const plotResetBtn = plotResetRow.createEl('button', { text: 'Reset adjustments' });
+        plotResetBtn.style.fontSize = '11px';
+        plotResetBtn.style.padding = '2px 10px';
+        plotResetBtn.addEventListener('click', async () => {
+            ps.plotlineHue = 0;
+            ps.plotlineSaturation = 0;
+            ps.plotlineLightness = 0;
+            await this.plugin.saveSettings();
+            this.display();
+        });
+
         // Per-tag overrides summary (compact — only show if there ARE overrides)
         const overrides = Object.entries(this.plugin.settings.tagColors || {});
         if (overrides.length > 0) {
@@ -930,6 +1307,13 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 });
             }
         }
+
+        // --- Sticky Note Colors (collapsible) ---
+        const noteColorDetails = containerEl.createEl('details', { cls: 'story-line-color-section' });
+        noteColorDetails.createEl('summary', { text: 'Sticky Note Colors' });
+        const noteColorBody = noteColorDetails.createDiv();
+        noteColorBody.style.padding = '8px 0';
+        this.renderStickyNoteSettings(noteColorBody);
 
         // --- Scene Templates ---
         containerEl.createEl('h2', { text: 'Scene Templates' });
@@ -996,7 +1380,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         for (let ti = 0; ti < combinedTags.length; ti++) {
             const tag = combinedTags[ti];
             const customColor = tagColors[tag] || '';
-            const schemeColor = resolveTagColor(tag, ti, scheme, {});
+            const schemeColor = resolveTagColor(tag, ti, scheme, {}, getPlotlineHSL(this.plugin.settings));
             const effectiveColor = customColor || schemeColor;
             const isOverridden = !!customColor;
 
@@ -1045,6 +1429,260 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     this.renderTagColorList(container);
                     this.plugin.refreshOpenViews();
                 }));
+        }
+    }
+
+    /** Render the sticky-note colour settings panel */
+    private renderStickyNoteSettings(container: HTMLElement): void {
+        const rerender = () => {
+            container.empty();
+            this.renderStickyNoteSettings(container);
+            this.plugin.refreshOpenViews();
+        };
+
+        const settings = this.plugin.settings;
+
+        // ── Theme picker — card grid ──
+        const themeLabel = container.createDiv();
+        themeLabel.style.fontSize = '11px';
+        themeLabel.style.fontWeight = '600';
+        themeLabel.style.color = 'var(--text-muted)';
+        themeLabel.style.textTransform = 'uppercase';
+        themeLabel.style.letterSpacing = '0.05em';
+        themeLabel.style.marginBottom = '6px';
+        themeLabel.textContent = 'Theme';
+
+        const themeRow = container.createDiv();
+        themeRow.style.display = 'flex';
+        themeRow.style.gap = '8px';
+        themeRow.style.flexWrap = 'wrap';
+        themeRow.style.marginBottom = '12px';
+
+        const themeIds: StickyNoteThemeId[] = ['classic', 'pastel', 'warm', 'cool', 'earth', 'vivid'];
+        for (const tid of themeIds) {
+            const card = themeRow.createDiv();
+            card.style.cursor = 'pointer';
+            card.style.padding = '6px 10px';
+            card.style.borderRadius = '8px';
+            card.style.border = tid === settings.stickyNoteTheme
+                ? '2px solid var(--interactive-accent)'
+                : '2px solid var(--background-modifier-border)';
+            card.style.background = tid === settings.stickyNoteTheme
+                ? 'var(--background-modifier-hover)'
+                : 'transparent';
+            card.style.minWidth = '90px';
+            card.style.textAlign = 'center';
+            card.style.transition = 'border-color 0.15s';
+
+            const nameEl = card.createDiv();
+            nameEl.style.fontSize = '11px';
+            nameEl.style.fontWeight = '600';
+            nameEl.style.marginBottom = '2px';
+            nameEl.textContent = STICKY_NOTE_THEME_LABELS[tid];
+
+            const hint = card.createDiv();
+            hint.style.fontSize = '9px';
+            hint.style.color = 'var(--text-faint)';
+            hint.style.marginBottom = '4px';
+            hint.textContent = STICKY_NOTE_THEME_HINTS[tid];
+
+            // Mini swatches
+            const swatchRow = card.createDiv();
+            swatchRow.style.display = 'flex';
+            swatchRow.style.gap = '2px';
+            swatchRow.style.justifyContent = 'center';
+            swatchRow.style.flexWrap = 'wrap';
+            const themeColors = STICKY_NOTE_THEMES[tid];
+            for (let i = 0; i < 7; i++) {
+                const dot = swatchRow.createDiv();
+                dot.style.width = '10px';
+                dot.style.height = '10px';
+                dot.style.borderRadius = '50%';
+                dot.style.background = themeColors[i];
+            }
+
+            card.addEventListener('click', async () => {
+                settings.stickyNoteTheme = tid;
+                settings.stickyNoteOverrides = {};
+                await this.plugin.saveSettings();
+                rerender();
+            });
+        }
+
+        // ── Global HSL sliders ──
+        const sliderLabel = container.createDiv();
+        sliderLabel.style.fontSize = '11px';
+        sliderLabel.style.fontWeight = '600';
+        sliderLabel.style.color = 'var(--text-muted)';
+        sliderLabel.style.textTransform = 'uppercase';
+        sliderLabel.style.letterSpacing = '0.05em';
+        sliderLabel.style.marginTop = '8px';
+        sliderLabel.style.marginBottom = '6px';
+        sliderLabel.textContent = 'Global Adjustments';
+
+        const createSlider = (
+            label: string,
+            value: number,
+            min: number,
+            max: number,
+            onChange: (v: number) => void,
+        ) => {
+            const row = container.createDiv();
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.gap = '8px';
+            row.style.marginBottom = '6px';
+
+            const lbl = row.createSpan();
+            lbl.style.fontSize = '12px';
+            lbl.style.minWidth = '75px';
+            lbl.textContent = label;
+
+            const slider = row.createEl('input', {
+                type: 'range',
+                attr: { min: String(min), max: String(max), step: '1' },
+            });
+            slider.value = String(value);
+            slider.style.flex = '1';
+
+            const valEl = row.createSpan();
+            valEl.style.fontSize = '11px';
+            valEl.style.minWidth = '30px';
+            valEl.style.textAlign = 'right';
+            valEl.textContent = String(value);
+
+            let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+            slider.addEventListener('input', () => {
+                const v = Number.parseInt(slider.value, 10);
+                valEl.textContent = String(v);
+                onChange(v);
+                // Instant swatch preview
+                updateSwatches();
+                // Debounce the heavier save + view refresh
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                }, 300);
+            });
+        };
+
+        createSlider('Hue shift', settings.stickyNoteHue, -30, 30, (v) => { settings.stickyNoteHue = v; });
+        createSlider('Saturation', settings.stickyNoteSaturation, -50, 50, (v) => { settings.stickyNoteSaturation = v; });
+        createSlider('Lightness', settings.stickyNoteLightness, -30, 30, (v) => { settings.stickyNoteLightness = v; });
+
+        // Reset sliders button
+        const resetRow = container.createDiv();
+        resetRow.style.marginBottom = '12px';
+        const resetBtn = resetRow.createEl('button', { text: 'Reset adjustments' });
+        resetBtn.style.fontSize = '11px';
+        resetBtn.style.padding = '2px 10px';
+        resetBtn.addEventListener('click', async () => {
+            settings.stickyNoteHue = 0;
+            settings.stickyNoteSaturation = 0;
+            settings.stickyNoteLightness = 0;
+            await this.plugin.saveSettings();
+            rerender();
+        });
+
+        // ── Colour swatches with per-colour overrides ──
+        const swatchLabel = container.createDiv();
+        swatchLabel.style.fontSize = '11px';
+        swatchLabel.style.fontWeight = '600';
+        swatchLabel.style.color = 'var(--text-muted)';
+        swatchLabel.style.textTransform = 'uppercase';
+        swatchLabel.style.letterSpacing = '0.05em';
+        swatchLabel.style.marginBottom = '6px';
+        swatchLabel.textContent = 'Preview & Individual Overrides';
+
+        const swatchGrid = container.createDiv();
+        swatchGrid.style.display = 'flex';
+        swatchGrid.style.gap = '6px';
+        swatchGrid.style.flexWrap = 'wrap';
+        swatchGrid.style.marginBottom = '8px';
+
+        const updateSwatches = () => {
+            swatchGrid.empty();
+            const resolved = resolveStickyNoteColors(settings);
+            for (let i = 0; i < resolved.length; i++) {
+                const { label, color } = resolved[i];
+                const isOverridden = settings.stickyNoteOverrides[i] !== undefined;
+
+                const cell = swatchGrid.createDiv();
+                cell.style.display = 'flex';
+                cell.style.flexDirection = 'column';
+                cell.style.alignItems = 'center';
+                cell.style.gap = '2px';
+                cell.style.width = '52px';
+
+                const dot = cell.createDiv();
+                dot.style.width = '32px';
+                dot.style.height = '32px';
+                dot.style.borderRadius = '6px';
+                dot.style.background = color;
+                dot.style.border = isOverridden
+                    ? '2px solid var(--interactive-accent)'
+                    : '1px solid var(--background-modifier-border)';
+                dot.style.cursor = 'pointer';
+                dot.title = `${label}: ${color}${isOverridden ? ' (custom)' : ''}\nClick to change`;
+
+                // Hidden colour picker
+                const picker = cell.createEl('input', {
+                    type: 'color',
+                    attr: { value: color },
+                });
+                picker.style.position = 'absolute';
+                picker.style.opacity = '0';
+                picker.style.pointerEvents = 'none';
+                picker.style.width = '0';
+                picker.style.height = '0';
+
+                dot.addEventListener('click', () => picker.click());
+                picker.addEventListener('input', () => {
+                    settings.stickyNoteOverrides[i] = picker.value.toUpperCase();
+                    dot.style.background = picker.value;
+                    dot.style.border = '2px solid var(--interactive-accent)';
+                    this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                });
+
+                // Right-click to reset
+                dot.addEventListener('contextmenu', async (e) => {
+                    e.preventDefault();
+                    if (isOverridden) {
+                        delete settings.stickyNoteOverrides[i];
+                        await this.plugin.saveSettings();
+                        this.plugin.refreshOpenViews();
+                        updateSwatches();
+                    }
+                });
+
+                const nameEl = cell.createDiv();
+                nameEl.style.fontSize = '9px';
+                nameEl.style.color = 'var(--text-muted)';
+                nameEl.style.textAlign = 'center';
+                nameEl.style.lineHeight = '1.1';
+                nameEl.textContent = label;
+            }
+        };
+        updateSwatches();
+
+        const helpText = container.createEl('p', { cls: 'setting-item-description' });
+        helpText.style.marginTop = '4px';
+        helpText.textContent = 'Click a swatch to override that colour. Right-click to reset it. Sliders tint all 14 colours at once.';
+
+        // Clear all overrides
+        if (Object.keys(settings.stickyNoteOverrides).length > 0) {
+            const clearRow = container.createDiv();
+            clearRow.style.marginTop = '4px';
+            const clearBtn = clearRow.createEl('button', { text: 'Clear all colour overrides' });
+            clearBtn.style.fontSize = '11px';
+            clearBtn.style.padding = '2px 10px';
+            clearBtn.addEventListener('click', async () => {
+                settings.stickyNoteOverrides = {};
+                await this.plugin.saveSettings();
+                rerender();
+            });
         }
     }
 

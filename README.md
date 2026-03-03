@@ -1,6 +1,6 @@
 # StoryLine — Obsidian Plugin for Writers
 
-**Version 1.3.0** · By Jan Sandström
+**Version 1.3.2** · By Jan Sandström
 
 StoryLine transforms your Obsidian vault into a complete book planning and writing tool. Organize scenes, build characters, manage locations, track plotlines, and monitor your progress — all inside Obsidian.
 
@@ -24,7 +24,6 @@ A freeform spatial canvas inside the Board view. Use sticky notes to brainstorm 
 
 ---
 
-
 ### Board View
 
 Kanban-style scene cards organized by act, chapter, or status. Drag & drop scenes between columns. Color-coded by status, POV, emotion, or tag. Multi-select for bulk edits.
@@ -32,7 +31,6 @@ Kanban-style scene cards organized by act, chapter, or status. Drag & drop scene
 ![Board View](screenshots/01.Board.jpg)
 
 ---
-
 
 ### Plotgrid View
 
@@ -86,6 +84,14 @@ Hierarchical worldbuilding with worlds as top-level containers and locations nes
 
 ---
 
+### Navigator View
+
+A compact sidebar panel for quick scene navigation. Search, sort, and filter your scenes without leaving your current view. Includes plotline filtering with color-coded dots and scene counts, five sort modes (sequence, status, recent, words, title), act grouping with collapsible sections, pinned scenes for quick access, and a progress bar. Opens automatically when a project loads (configurable) or via the command palette.
+
+![Navigator View](screenshots/StoryLine_Navigator.jpg)
+
+---
+
 ### Stats View
 
 Dashboard with word counts, writing progress, pacing analysis (average scene length by act, word count distribution), plot hole detection, and a built-in writing sprint timer.
@@ -124,7 +130,10 @@ Six export formats: Markdown, JSON, CSV, HTML, PDF, and DOCX. Export either an o
 - **Plot Hole Detection** — Automated validation across six categories.
 - **Pacing Analysis** — Bar charts and histograms for scene length and distribution.
 - **Writing Sprint** — Built-in countdown timer for focused writing sessions.
-- **Color Coding** — Color by status, POV, emotion, act, or tag. **16 built-in color schemes** (4 Catppuccin + 12 mood-based palettes) or custom. Per-tag overrides from Plotlines view or Settings. Dark/light mode aware.
+- **Story Navigator** — Compact sidebar panel with search, sort, plotline filter, act grouping, pinned scenes, and progress bar. Auto-opens on project load.
+- **Color Coding** — Color by status, POV, emotion, act, or tag. **16 built-in color schemes** (4 Catppuccin + 12 mood-based palettes) or custom. Per-tag overrides from Plotlines view or Settings. HSL fine-tuning sliders for plotline and sticky note palettes. Dark/light mode aware.
+- **Per-Project Colors** — Optionally save color scheme, HSL adjustments, and sticky note theme per project so each book can have its own look.
+- **Sticky Note Themes** — Six built-in sticky note color themes (Classic, Pastel, Earth, Jewel, Neon, Mono) with per-note overrides and HSL sliders.
 - **Plotline Subway Map** — Transit-style SVG visualization with gradient connectors, act dividers, scene labels, and drag-to-pan.
 - **Portrait Images** — Add images to characters and locations. Import from computer or choose from vault.
 - **Undo / Redo** — `Ctrl+Z` / `Ctrl+Shift+Z` with a 50-action stack.
@@ -133,12 +142,12 @@ Six export formats: Markdown, JSON, CSV, HTML, PDF, and DOCX. Export either an o
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Shift+1–7` | Switch between views |
-| `Ctrl+Shift+N` | Quick-add a new scene |
-| `Ctrl+Shift+E` | Export project |
-| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo |
+| Shortcut                  | Action                |
+| ------------------------- | --------------------- |
+| `Ctrl+Shift+1–7`          | Switch between views  |
+| `Ctrl+Shift+N`            | Quick-add a new scene |
+| `Ctrl+Shift+E`            | Export project        |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo           |
 
 ---
 

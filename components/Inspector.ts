@@ -6,7 +6,7 @@ import { SplitSceneModal } from './SplitMergeModals';
 import { isMobile } from './MobileAdapter';
 import { SceneManager } from '../services/SceneManager';
 import type SceneCardsPlugin from '../main';
-import { resolveTagColor } from '../settings';
+import { resolveTagColor, getPlotlineHSL } from '../settings';
 import { LocationManager } from '../services/LocationManager';
 import type { SnapshotManager, SceneSnapshot } from '../services/SnapshotManager';
 import { LinkScanner, LinkScanResult } from '../services/LinkScanner';
@@ -485,7 +485,7 @@ export class InspectorComponent {
                 chip.style.display = 'inline-flex';
                 chip.style.alignItems = 'center';
                 chip.style.gap = '4px';
-                const chipColor = resolveTagColor(t, Math.max(0, allTagsSorted.indexOf(t)), scheme, tagColors);
+                const chipColor = resolveTagColor(t, Math.max(0, allTagsSorted.indexOf(t)), scheme, tagColors, getPlotlineHSL(this.plugin.settings));
                 chip.style.background = chipColor;
                 chip.style.color = '#fff';
                 const removeBtn = chip.createSpan({ text: '×', cls: 'inspector-chip-remove' });

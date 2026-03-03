@@ -13,7 +13,7 @@ import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { enableDragToPan } from '../components/DragToPan';
 import { isMobile } from '../components/MobileAdapter';
 import { PLOTGRID_VIEW_TYPE } from '../constants';
-import { resolveTagColor } from '../settings';
+import { resolveTagColor, getPlotlineHSL } from '../settings';
 import type SceneCardsPlugin from '../main';
 
 // Use the shared view-type constant from `constants.ts` so the ViewSwitcher
@@ -2389,7 +2389,7 @@ export class PlotgridView extends ItemView {
                 chip.style.padding = '2px 8px';
                 chip.style.borderRadius = '10px';
                 chip.style.fontSize = '12px';
-                const chipColor = resolveTagColor(tag, allTagsSorted.indexOf(tag), scheme, tagColors);
+                const chipColor = resolveTagColor(tag, allTagsSorted.indexOf(tag), scheme, tagColors, getPlotlineHSL(this.plugin.settings));
                 chip.style.background = chipColor;
                 chip.style.color = '#fff';
             }

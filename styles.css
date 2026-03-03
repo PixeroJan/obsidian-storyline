@@ -6051,3 +6051,299 @@ body.theme-dark {
     font-size: 0.8em;
     gap: 2px;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Story Navigator — compact sidebar panel
+   ═══════════════════════════════════════════════════════════ */
+
+.sl-navigator {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    font-size: 13px;
+}
+
+/* ── Toolbar ── */
+.sl-nav-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    flex-shrink: 0;
+}
+
+.sl-nav-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    background: var(--background-modifier-form-field);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 2px 6px;
+}
+
+.sl-nav-search-icon {
+    flex-shrink: 0;
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+}
+.sl-nav-search-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.sl-nav-search {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 12px;
+    color: var(--text-normal);
+    width: 100%;
+    padding: 2px 0;
+}
+
+.sl-nav-sort-btn {
+    flex-shrink: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    color: var(--text-muted);
+    transition: background 0.15s, color 0.15s;
+}
+.sl-nav-sort-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+.sl-nav-sort-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ── Plotline filter (collapsible list) ── */
+.sl-nav-chip-section {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding: 4px 0;
+}
+
+.sl-nav-chip-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    user-select: none;
+    transition: color 0.15s;
+}
+.sl-nav-chip-toggle:hover {
+    color: var(--text-muted);
+}
+.sl-nav-chip-toggle.has-filter .sl-nav-chip-toggle-label {
+    color: var(--interactive-accent);
+}
+.sl-nav-chip-toggle-icon {
+    font-size: 9px;
+    width: 10px;
+    text-align: center;
+}
+
+.sl-nav-plotline-list {
+    padding: 2px 0 4px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.sl-nav-plotline-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 14px;
+    cursor: pointer;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    border-radius: 4px;
+    margin: 0 4px;
+    transition: background 0.1s, color 0.1s;
+}
+.sl-nav-plotline-item:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+.sl-nav-plotline-item.is-active {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+    font-weight: 600;
+}
+
+.sl-nav-plotline-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+.sl-nav-plotline-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sl-nav-plotline-count {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Scene list ── */
+.sl-nav-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 2px 0;
+}
+
+.sl-nav-empty {
+    padding: 20px 12px;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 12px;
+}
+
+/* Act group header */
+.sl-nav-act-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    user-select: none;
+}
+.sl-nav-act-header:hover {
+    color: var(--text-normal);
+}
+.sl-nav-act-toggle {
+    font-size: 10px;
+    width: 12px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.sl-nav-act-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sl-nav-act-count {
+    font-size: 10px;
+    color: var(--text-faint);
+    font-weight: 400;
+}
+
+/* Scene row */
+.sl-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin: 0 4px;
+    transition: background 0.1s;
+    min-height: 26px;
+}
+.sl-nav-row:hover {
+    background: var(--background-modifier-hover);
+}
+.sl-nav-row:active {
+    background: var(--background-modifier-active-hover, var(--background-modifier-hover));
+}
+.sl-nav-row.is-pinned {
+    border-left: 2px solid var(--interactive-accent);
+    padding-left: 8px;
+}
+
+.sl-nav-status-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.sl-nav-seq {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--text-faint);
+    min-width: 18px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.sl-nav-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-normal);
+    font-size: 12.5px;
+}
+
+.sl-nav-wc {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Bottom progress bar ── */
+.sl-nav-bottom {
+    flex-shrink: 0;
+    padding: 6px 10px 8px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.sl-nav-progress-bar {
+    height: 4px;
+    background: var(--background-modifier-border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.sl-nav-progress-fill {
+    height: 100%;
+    background: var(--interactive-accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.sl-nav-progress-label {
+    font-size: 10px;
+    color: var(--text-faint);
+    text-align: center;
+}

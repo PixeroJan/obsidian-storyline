@@ -10,6 +10,7 @@ import {
     PLOTGRID_VIEW_TYPE,
     LOCATION_VIEW_TYPE,
     HELP_VIEW_TYPE,
+    NAVIGATOR_VIEW_TYPE,
 } from './constants';
 import { PlotgridView } from './views/PlotgridView';
 import type { PlotGridData } from './models/PlotGridData';
@@ -20,6 +21,7 @@ import { CharacterView } from './views/CharacterView';
 import { StatsView } from './views/StatsView';
 import { LocationView } from './views/LocationView';
 import { HelpView } from './views/HelpView';
+import { NavigatorView } from './views/NavigatorView';
 import { LocationManager } from './services/LocationManager';
 import { CharacterManager } from './services/CharacterManager';
 import { QuickAddModal } from './components/QuickAddModal';
@@ -39,6 +41,8 @@ export default class SceneCardsPlugin extends Plugin {
     sceneManager: SceneManager;
     /** Set to true once System/ migration is confirmed — guards saveSettings stripping */
     private _systemMigrationDone = false;
+    /** Snapshot of colour settings from data.json (global defaults) */
+    private _globalColorDefaults: Record<string, any> = {};
     locationManager: LocationManager;
     characterManager: CharacterManager;
     writingTracker: WritingTracker = new WritingTracker();
@@ -119,6 +123,9 @@ export default class SceneCardsPlugin extends Plugin {
         );
         this.registerView(HELP_VIEW_TYPE, (leaf) =>
             new HelpView(leaf, this)
+        );
+        this.registerView(NAVIGATOR_VIEW_TYPE, (leaf) =>
+            new NavigatorView(leaf, this, this.sceneManager)
         );
 
         // Wait for the workspace layout to be ready, then bootstrap projects
@@ -268,6 +275,12 @@ export default class SceneCardsPlugin extends Plugin {
             callback: () => this.openHelp(),
         });
 
+        this.addCommand({
+            id: 'open-navigator',
+            name: 'Open StoryLine Navigator',
+            callback: () => this.openNavigator(),
+        });
+
         // Settings tab
         this.addSettingTab(new SceneCardsSettingTab(this.app, this));
 
@@ -376,12 +389,25 @@ export default class SceneCardsPlugin extends Plugin {
 
     async loadSettings(): Promise<void> {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        // Snapshot the global colour settings so we can restore them when
+        // switching to a project that has no per-project overrides.
+        this._globalColorDefaults = {
+            colorScheme: this.settings.colorScheme,
+            plotlineHue: this.settings.plotlineHue,
+            plotlineSaturation: this.settings.plotlineSaturation,
+            plotlineLightness: this.settings.plotlineLightness,
+            stickyNoteTheme: this.settings.stickyNoteTheme,
+            stickyNoteHue: this.settings.stickyNoteHue,
+            stickyNoteSaturation: this.settings.stickyNoteSaturation,
+            stickyNoteLightness: this.settings.stickyNoteLightness,
+            stickyNoteOverrides: { ...(this.settings.stickyNoteOverrides || {}) },
+        };
     }
 
     /** Per-project field keys that live in System/ files, not data.json */
     private static readonly PROJECT_DATA_KEYS: string[] = [
         'tagColors', 'tagTypeOverrides', 'characterAliases', 'ignoredCharacters',
-        'writingTrackerData',
+        'writingTrackerData', 'useProjectColors',
         // Legacy plotgrid data stored directly in data.json (before file-based storage)
         'rows', 'columns', 'cells', 'zoom', 'stickyHeaders',
         // Legacy / per-project keys that don't belong in global settings
@@ -395,6 +421,21 @@ export default class SceneCardsPlugin extends Plugin {
             // Strip per-project data from the global data.json payload
             for (const key of SceneCardsPlugin.PROJECT_DATA_KEYS) {
                 delete toSave[key];
+            }
+            // When using per-project colours, restore global defaults into
+            // data.json so the global values are not overwritten by the
+            // project-specific ones currently in memory.
+            if (this.settings.useProjectColors && Object.keys(this._globalColorDefaults).length > 0) {
+                const g = this._globalColorDefaults;
+                toSave.colorScheme = g.colorScheme;
+                toSave.plotlineHue = g.plotlineHue;
+                toSave.plotlineSaturation = g.plotlineSaturation;
+                toSave.plotlineLightness = g.plotlineLightness;
+                toSave.stickyNoteTheme = g.stickyNoteTheme;
+                toSave.stickyNoteHue = g.stickyNoteHue;
+                toSave.stickyNoteSaturation = g.stickyNoteSaturation;
+                toSave.stickyNoteLightness = g.stickyNoteLightness;
+                toSave.stickyNoteOverrides = g.stickyNoteOverrides ?? {};
             }
         }
         await this.saveData(toSave);
@@ -551,6 +592,39 @@ export default class SceneCardsPlugin extends Plugin {
             this.settings.tagTypeOverrides = {};
         }
 
+        // Per-project colour overrides (if the project has them stored)
+        if (plotlines.projectColors && typeof plotlines.projectColors === 'object') {
+            const pc = plotlines.projectColors;
+            // Flag this project as having per-project colours
+            this.settings.useProjectColors = true;
+            if (pc.colorScheme) this.settings.colorScheme = pc.colorScheme;
+            if (typeof pc.plotlineHue === 'number') this.settings.plotlineHue = pc.plotlineHue;
+            if (typeof pc.plotlineSaturation === 'number') this.settings.plotlineSaturation = pc.plotlineSaturation;
+            if (typeof pc.plotlineLightness === 'number') this.settings.plotlineLightness = pc.plotlineLightness;
+            if (pc.stickyNoteTheme) this.settings.stickyNoteTheme = pc.stickyNoteTheme;
+            if (typeof pc.stickyNoteHue === 'number') this.settings.stickyNoteHue = pc.stickyNoteHue;
+            if (typeof pc.stickyNoteSaturation === 'number') this.settings.stickyNoteSaturation = pc.stickyNoteSaturation;
+            if (typeof pc.stickyNoteLightness === 'number') this.settings.stickyNoteLightness = pc.stickyNoteLightness;
+            if (pc.stickyNoteOverrides && typeof pc.stickyNoteOverrides === 'object') {
+                this.settings.stickyNoteOverrides = pc.stickyNoteOverrides;
+            }
+        } else {
+            // No per-project overrides — restore the global colour defaults
+            this.settings.useProjectColors = false;
+            const g = this._globalColorDefaults;
+            if (g && Object.keys(g).length > 0) {
+                this.settings.colorScheme = g.colorScheme;
+                this.settings.plotlineHue = g.plotlineHue;
+                this.settings.plotlineSaturation = g.plotlineSaturation;
+                this.settings.plotlineLightness = g.plotlineLightness;
+                this.settings.stickyNoteTheme = g.stickyNoteTheme;
+                this.settings.stickyNoteHue = g.stickyNoteHue;
+                this.settings.stickyNoteSaturation = g.stickyNoteSaturation;
+                this.settings.stickyNoteLightness = g.stickyNoteLightness;
+                this.settings.stickyNoteOverrides = { ...(g.stickyNoteOverrides || {}) };
+            }
+        }
+
         if (characters.characterAliases && typeof characters.characterAliases === 'object') {
             this.settings.characterAliases = characters.characterAliases;
         } else {
@@ -578,10 +652,26 @@ export default class SceneCardsPlugin extends Plugin {
     async saveProjectSystemData(): Promise<void> {
         if (!this.sceneManager?.activeProject) return;
 
-        await this.writeSystemJson('plotlines.json', {
+        const plotlinesPayload: Record<string, any> = {
             tagColors: this.settings.tagColors || {},
             tagTypeOverrides: this.settings.tagTypeOverrides || {},
-        });
+        };
+
+        if (this.settings.useProjectColors) {
+            plotlinesPayload.projectColors = {
+                colorScheme: this.settings.colorScheme,
+                plotlineHue: this.settings.plotlineHue,
+                plotlineSaturation: this.settings.plotlineSaturation,
+                plotlineLightness: this.settings.plotlineLightness,
+                stickyNoteTheme: this.settings.stickyNoteTheme,
+                stickyNoteHue: this.settings.stickyNoteHue,
+                stickyNoteSaturation: this.settings.stickyNoteSaturation,
+                stickyNoteLightness: this.settings.stickyNoteLightness,
+                stickyNoteOverrides: this.settings.stickyNoteOverrides || {},
+            };
+        }
+
+        await this.writeSystemJson('plotlines.json', plotlinesPayload);
 
         await this.writeSystemJson('characters.json', {
             characterAliases: this.settings.characterAliases || {},
@@ -718,6 +808,24 @@ export default class SceneCardsPlugin extends Plugin {
     }
 
     /**
+     * Open the Story Navigator in the left sidebar.
+     * If already open, just reveal it.
+     */
+    async openNavigator(): Promise<void> {
+        const { workspace } = this.app;
+        const existing = workspace.getLeavesOfType(NAVIGATOR_VIEW_TYPE);
+        if (existing.length > 0) {
+            workspace.revealLeaf(existing[0]);
+            return;
+        }
+        const leaf = workspace.getLeftLeaf(false);
+        if (leaf) {
+            await leaf.setViewState({ type: NAVIGATOR_VIEW_TYPE, active: true });
+            workspace.revealLeaf(leaf);
+        }
+    }
+
+    /**
      * Switch the current StoryLine leaf in-place to a different view type.
      * Kept as a utility; the ViewSwitcher now uses the leaf reference directly.
      */
@@ -772,6 +880,7 @@ export default class SceneCardsPlugin extends Plugin {
             CHARACTER_VIEW_TYPE,
             LOCATION_VIEW_TYPE,
             STATS_VIEW_TYPE,
+            NAVIGATOR_VIEW_TYPE,
         ];
 
         for (const viewType of viewTypes) {
@@ -781,6 +890,15 @@ export default class SceneCardsPlugin extends Plugin {
                 if (view && 'refresh' in view && typeof (view as Record<string, unknown>).refresh === 'function') {
                     (view as unknown as { refresh(): void }).refresh();
                 }
+            }
+        }
+
+        // Auto-open the Navigator sidebar if enabled and a project is active
+        if (this.settings.autoOpenNavigator && this.sceneManager.activeProject) {
+            const navLeaves = this.app.workspace.getLeavesOfType(NAVIGATOR_VIEW_TYPE);
+            if (navLeaves.length === 0) {
+                // Use setTimeout so we don't block the current refresh cycle
+                setTimeout(() => this.openNavigator(), 100);
             }
         }
     }

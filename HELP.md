@@ -1,6 +1,6 @@
 # StoryLine — Obsidian Plugin for Writers
 
-**Version 1.3.0** · By Jan Sandström
+**Version 1.3.2** · By Jan Sandström
 
 StoryLine transforms your Obsidian vault into a full-featured book planning and writing tool. Organize scenes, build rich character profiles, manage worlds and locations, track plotlines, and monitor your progress — all without leaving Obsidian. Fully theme-aware with dark and light mode support.
 
@@ -19,6 +19,7 @@ StoryLine transforms your Obsidian vault into a full-featured book planning and 
   - [Characters View](#characters-view)
   - [Locations View](#locations-view)
   - [Stats View](#stats-view)
+  - [Navigator View](#navigator-view)
 - [Scene Cards](#scene-cards)
 - [Inspector Panel](#inspector-panel)
 - [Filtering & Presets](#filtering--presets)
@@ -32,6 +33,9 @@ StoryLine transforms your Obsidian vault into a full-featured book planning and 
 - [Scene Snapshots](#scene-snapshots)
 - [Scene Templates](#scene-templates)
 - [Color Coding & Tag Colors](#color-coding--tag-colors)
+- [Plotline HSL Sliders](#plotline-hsl-sliders)
+- [Sticky Note Themes](#sticky-note-themes)
+- [Per-Project Color Overrides](#per-project-color-overrides)
 - [Timeline Swimlanes](#timeline-swimlanes)
 - [Timeline Modes](#timeline-modes)
 - [Pacing Analysis](#pacing-analysis)
@@ -86,7 +90,7 @@ StoryLine transforms your Obsidian vault into a full-featured book planning and 
 
 ## Views
 
-StoryLine provides seven interconnected views. Switch between them using the tab bar or keyboard shortcuts.
+StoryLine provides seven interconnected views plus a sidebar navigator. Switch between them using the tab bar or keyboard shortcuts.
 
 ### Board View
 
@@ -231,6 +235,32 @@ A statistics dashboard with at-a-glance project health.
 - **Plot hole detection** — automated warnings grouped by category (see below).
 - **Pacing Analysis** — see [Pacing Analysis](#pacing-analysis).
 - **Writing Sprint** — see [Writing Sprint](#writing-sprint).
+
+### Navigator View
+
+A compact sidebar panel for quick scene navigation without leaving your current view.
+
+#### Toolbar
+- **Search** — type to filter scenes by title.
+- **Sort** — five modes: Sequence (default), Status, Recently Modified, Word Count, and Title (A–Z).
+
+#### Plotline Filter
+- Collapsible section listing all plotline tags in the project.
+- Each plotline shows a **color dot** (matching your color scheme) and a **scene count**.
+- Click a plotline to filter scenes to only those tagged with it. Click again to clear.
+
+#### Scene List
+- Scenes grouped by **act** with collapsible act headers.
+- Each row shows: sequence number, title, status badge, and word count.
+- **Pinned scenes** appear at the top in a dedicated section for quick access.
+- Click a scene to select it in the main view. Right-click for a context menu: pin/unpin and change status.
+
+#### Progress Bar
+- A bottom bar showing overall word count progress toward your project goal.
+
+#### Auto-Open
+- The Navigator opens automatically when a project loads (configurable via **Settings → Auto-open Navigator**).
+- You can also open it manually via the command palette: **Open StoryLine Navigator**.
 
 ---
 
@@ -504,6 +534,57 @@ Override individual tag colors without changing the whole scheme:
 Overrides persist across sessions and take priority over the active scheme.
 
 All color coding is **theme-aware** — colors automatically adapt to your current Obsidian theme (dark or light mode).
+
+---
+
+## Plotline HSL Sliders
+
+Fine-tune your plotline color palette without switching schemes. In **Settings → Plotline Color Scheme**, three sliders let you adjust the entire palette at once:
+
+| Slider | Range | Effect |
+|--------|-------|--------|
+| **Hue Shift** | −180 … +180 | Rotates all palette colors around the color wheel |
+| **Saturation** | −100 … +100 | Makes colors more vivid (positive) or muted (negative) |
+| **Lightness** | −100 … +100 | Makes colors lighter (positive) or darker (negative) |
+
+Changes apply in real time with a live swatch preview. The adjustments stack on top of the active color scheme and per-tag overrides.
+
+---
+
+## Sticky Note Themes
+
+Corkboard sticky notes have their own independent color system. Choose a theme in **Settings → Sticky Note Colors**:
+
+| Theme | Description |
+|-------|-------------|
+| **Classic** | Warm yellows, pinks, greens, and blues |
+| **Pastel** | Soft, low-saturation tones |
+| **Earth** | Warm browns, olive, terracotta, and sage |
+| **Jewel** | Rich, saturated gemstone colors |
+| **Neon** | Bright, high-energy fluorescent tones |
+| **Mono** | Greyscale neutrals |
+
+Each theme provides 14 colors. Like plotline colors, sticky notes also have **HSL sliders** (hue shift, saturation, lightness) for fine-tuning and **per-note color overrides** — right-click a sticky note to assign a specific color.
+
+---
+
+## Per-Project Color Overrides
+
+By default, color scheme, HSL adjustments, and sticky note theme are global settings shared across all projects. You can optionally save them per project so each book has its own look.
+
+### Enabling
+
+1. Open **Settings → Plotline Color Scheme**.
+2. Toggle **Use project-specific colors** (visible only when a project is loaded).
+3. Any changes you make to the color scheme, HSL sliders, or sticky note theme will now be saved into the active project's `System/plotlines.json` file.
+
+### Behavior
+
+- **Toggle ON** — color settings are stored in the project and override the global defaults whenever that project is active.
+- **Toggle OFF** — removes per-project overrides and restores the global color settings.
+- **Switching projects** — when you open a project with per-project colors, those colors load automatically. When you open a project without them, the global defaults are restored.
+
+This is useful when you want a dark moody palette for a thriller and bright pastels for a romance, without manually switching schemes every time you change projects.
 
 ---
 
@@ -944,4 +1025,4 @@ MIT
 
 ---
 
-*StoryLine v1.3.0 — Transform your vault into a powerful book planning tool.*
+*StoryLine v1.3.2 — Transform your vault into a powerful book planning tool.*

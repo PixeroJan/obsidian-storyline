@@ -13,18 +13,10 @@ import { enableDragToPan } from '../components/DragToPan';
 import { SplitSceneModal, MergeSceneModal } from '../components/SplitMergeModals';
 import { isMobile, applyMobileClass, enableTouchDrag } from '../components/MobileAdapter';
 import { BOARD_VIEW_TYPE } from '../constants';
+import { resolveStickyNoteColors } from '../settings';
 import type SceneCardsPlugin from '../main';
 
 type BoardMode = 'kanban' | 'corkboard';
-
-const CORKBOARD_NOTE_COLOR_PRESETS: Array<{ label: string; color: string }> = [
-    { label: 'Yellow', color: '#F6EDB4' },
-    { label: 'Pink', color: '#F9D7DC' },
-    { label: 'Blue', color: '#DDEBFA' },
-    { label: 'Green', color: '#E1F1D9' },
-    { label: 'Orange', color: '#F9E0BF' },
-    { label: 'Lavender', color: '#E8DEF8' },
-];
 
 /**
  * Board View - Kanban-style scene card board
@@ -51,6 +43,10 @@ export class BoardView extends ItemView {
     private dragToPanCleanup: (() => void) | null = null;
     private corkboardInteractionCleanup: (() => void) | null = null;
     private corkboardCamera = { x: 220, y: 140, zoom: 1 };
+    /** Inertia animation frame handle */
+    private corkboardInertiaRaf: number | null = null;
+    /** Smooth zoom animation frame handle */
+    private corkboardZoomRaf: number | null = null;
     private quickNoteLastCreatedAt = 0;
     private quickNoteChainIndex = 0;
     /** Active virtual scrollers — cleaned up on re-render */
@@ -663,6 +659,17 @@ export class BoardView extends ItemView {
         let startX = 0;
         let startY = 0;
         let moved = false;
+        let dragRaf: number | null = null;
+        let pendingX = 0;
+        let pendingY = 0;
+
+        const applyDragPosition = () => {
+            dragRaf = null;
+            node.style.left = `${pendingX}px`;
+            node.style.top = `${pendingY}px`;
+            const current = this.corkboardPositions.get(scenePath);
+            this.corkboardPositions.set(scenePath, { x: pendingX, y: pendingY, z: current?.z ?? 1 });
+        };
 
         const onPointerMove = (e: PointerEvent) => {
             if (!dragging) return;
@@ -672,13 +679,12 @@ export class BoardView extends ItemView {
             if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
 
             const zoom = this.corkboardCamera.zoom || 1;
-            const nextX = startX + dx / zoom;
-            const nextY = startY + dy / zoom;
+            pendingX = startX + dx / zoom;
+            pendingY = startY + dy / zoom;
 
-            node.style.left = `${nextX}px`;
-            node.style.top = `${nextY}px`;
-            const current = this.corkboardPositions.get(scenePath);
-            this.corkboardPositions.set(scenePath, { x: nextX, y: nextY, z: current?.z ?? 1 });
+            if (dragRaf === null) {
+                dragRaf = requestAnimationFrame(applyDragPosition);
+            }
 
             e.preventDefault();
             e.stopPropagation();
@@ -690,6 +696,12 @@ export class BoardView extends ItemView {
             node.removeClass('is-dragging');
             if (node.hasPointerCapture(e.pointerId)) {
                 node.releasePointerCapture(e.pointerId);
+            }
+            // Flush any pending rAF
+            if (dragRaf !== null) {
+                cancelAnimationFrame(dragRaf);
+                dragRaf = null;
+                applyDragPosition();
             }
 
             if (moved) {
@@ -747,20 +759,47 @@ export class BoardView extends ItemView {
         canvas.style.transform = `translate(${this.corkboardCamera.x}px, ${this.corkboardCamera.y}px) scale(${this.corkboardCamera.zoom})`;
     }
 
+    /**
+     * Animate zoom smoothly toward targetZoom over ~80ms.
+     * Keeps the world point under the cursor stationary.
+     */
     private zoomCorkboardAt(canvas: HTMLElement, viewport: HTMLElement, clientX: number, clientY: number, nextZoom: number): void {
-        const clamped = Math.max(0.35, Math.min(2.8, nextZoom));
+        const targetZoom = Math.max(0.35, Math.min(2.8, nextZoom));
         const rect = viewport.getBoundingClientRect();
         const vx = clientX - rect.left;
         const vy = clientY - rect.top;
 
-        const worldX = (vx - this.corkboardCamera.x) / this.corkboardCamera.zoom;
-        const worldY = (vy - this.corkboardCamera.y) / this.corkboardCamera.zoom;
+        // Cancel any running zoom animation
+        if (this.corkboardZoomRaf !== null) {
+            cancelAnimationFrame(this.corkboardZoomRaf);
+            this.corkboardZoomRaf = null;
+        }
 
-        this.corkboardCamera.zoom = clamped;
-        this.corkboardCamera.x = vx - worldX * clamped;
-        this.corkboardCamera.y = vy - worldY * clamped;
+        const startZoom = this.corkboardCamera.zoom;
+        const startX = this.corkboardCamera.x;
+        const startY = this.corkboardCamera.y;
+        const startTime = performance.now();
+        const duration = 80; // ms — subtle ease
 
-        this.applyCorkboardCamera(canvas);
+        const worldX = (vx - startX) / startZoom;
+        const worldY = (vy - startY) / startZoom;
+
+        const step = (now: number) => {
+            const t = Math.min(1, (now - startTime) / duration);
+            // Ease-out quad
+            const ease = 1 - (1 - t) * (1 - t);
+            const z = startZoom + (targetZoom - startZoom) * ease;
+            this.corkboardCamera.zoom = z;
+            this.corkboardCamera.x = vx - worldX * z;
+            this.corkboardCamera.y = vy - worldY * z;
+            this.applyCorkboardCamera(canvas);
+            if (t < 1) {
+                this.corkboardZoomRaf = requestAnimationFrame(step);
+            } else {
+                this.corkboardZoomRaf = null;
+            }
+        };
+        this.corkboardZoomRaf = requestAnimationFrame(step);
     }
 
     private enableCorkboardCameraInteraction(viewport: HTMLElement, canvas: HTMLElement): () => void {
@@ -787,8 +826,51 @@ export class BoardView extends ItemView {
             return [vals[0], vals[1]];
         };
 
+        // Velocity tracking for subtle inertia
+        let lastMoveTime = 0;
+        let velocityX = 0;
+        let velocityY = 0;
+        const VELOCITY_DECAY = 0.88;   // how quickly inertia fades (lower = faster stop)
+        const VELOCITY_THRESHOLD = 0.3; // stop when velocity is negligible
+
+        const recordVelocity = (dx: number, dy: number) => {
+            const now = performance.now();
+            const dt = now - lastMoveTime;
+            lastMoveTime = now;
+            if (dt > 0 && dt < 100) {
+                velocityX = dx / dt * 16; // normalize to ~16ms frame
+                velocityY = dy / dt * 16;
+            }
+        };
+
+        const startInertia = () => {
+            if (Math.abs(velocityX) < VELOCITY_THRESHOLD && Math.abs(velocityY) < VELOCITY_THRESHOLD) return;
+            const inertiaStep = () => {
+                velocityX *= VELOCITY_DECAY;
+                velocityY *= VELOCITY_DECAY;
+                if (Math.abs(velocityX) < VELOCITY_THRESHOLD && Math.abs(velocityY) < VELOCITY_THRESHOLD) {
+                    this.corkboardInertiaRaf = null;
+                    return;
+                }
+                this.corkboardCamera.x += velocityX;
+                this.corkboardCamera.y += velocityY;
+                this.applyCorkboardCamera(canvas);
+                this.corkboardInertiaRaf = requestAnimationFrame(inertiaStep);
+            };
+            this.corkboardInertiaRaf = requestAnimationFrame(inertiaStep);
+        };
+
         const onPointerDown = (e: PointerEvent) => {
             if (!isBackgroundTarget(e.target)) return;
+
+            // Stop any running inertia when user grabs the canvas
+            if (this.corkboardInertiaRaf !== null) {
+                cancelAnimationFrame(this.corkboardInertiaRaf);
+                this.corkboardInertiaRaf = null;
+            }
+            velocityX = 0;
+            velocityY = 0;
+            lastMoveTime = performance.now();
 
             if (e.pointerType === 'touch') {
                 touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -868,8 +950,12 @@ export class BoardView extends ItemView {
 
             const dx = e.clientX - panStartX;
             const dy = e.clientY - panStartY;
+            const prevCamX = this.corkboardCamera.x;
+            const prevCamY = this.corkboardCamera.y;
             this.corkboardCamera.x = camStartX + dx;
             this.corkboardCamera.y = camStartY + dy;
+            // Track velocity for inertia
+            recordVelocity(this.corkboardCamera.x - prevCamX, this.corkboardCamera.y - prevCamY);
             this.applyCorkboardCamera(canvas);
             e.preventDefault();
         };
@@ -886,6 +972,8 @@ export class BoardView extends ItemView {
                 isPanning = false;
                 panPointerId = null;
                 viewport.classList.remove('is-panning');
+                // Kick off subtle inertia
+                startInertia();
             }
 
             if (viewport.hasPointerCapture(e.pointerId)) {
@@ -912,6 +1000,14 @@ export class BoardView extends ItemView {
             viewport.removeEventListener('pointercancel', onPointerUp);
             viewport.removeEventListener('wheel', onWheel as EventListener);
             viewport.classList.remove('is-panning');
+            if (this.corkboardInertiaRaf !== null) {
+                cancelAnimationFrame(this.corkboardInertiaRaf);
+                this.corkboardInertiaRaf = null;
+            }
+            if (this.corkboardZoomRaf !== null) {
+                cancelAnimationFrame(this.corkboardZoomRaf);
+                this.corkboardZoomRaf = null;
+            }
         };
     }
 
@@ -976,7 +1072,8 @@ export class BoardView extends ItemView {
 
         menu.addSeparator();
 
-        CORKBOARD_NOTE_COLOR_PRESETS.forEach((preset) => {
+        const notePresets = resolveStickyNoteColors(this.plugin.settings);
+        notePresets.forEach((preset) => {
             menu.addItem(item => item
                 .setTitle(`Color: ${preset.label}`)
                 .setIcon('palette')
@@ -1089,7 +1186,9 @@ export class BoardView extends ItemView {
     }
 
     private applyCorkboardNoteColor(cardEl: HTMLElement, scene: Scene): void {
-        const base = this.normalizeHexColor(scene.corkboardNoteColor) ?? '#F6EDB4';
+        const presets = resolveStickyNoteColors(this.plugin.settings);
+        const defaultColor = presets.length > 0 ? presets[0].color : '#F6EDB4';
+        const base = this.normalizeHexColor(scene.corkboardNoteColor) ?? defaultColor;
         const accentSoft = this.darkenHexColor(base, 0.24);
         const accentStrong = this.darkenHexColor(base, 0.34);
         cardEl.style.setProperty('--sl-note-bg', base);

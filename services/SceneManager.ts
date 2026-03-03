@@ -425,8 +425,8 @@ export class SceneManager implements ISceneStore {
             await this.ensureFolder(targetFolder);
         }
 
-        // Auto-generate sequence if enabled
-        if (this.plugin.settings.autoGenerateSequence) {
+        // Auto-generate sequence if enabled (skip when caller already set one)
+        if (this.plugin.settings.autoGenerateSequence && sceneData.sequence === undefined) {
             sceneData.sequence = this.getNextSequence(afterScene);
         }
 

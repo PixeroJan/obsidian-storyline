@@ -8,7 +8,7 @@ import type SceneCardsPlugin from '../main';
 import { STORYLINE_VIEW_TYPE } from '../constants';
 import { applyMobileClass } from '../components/MobileAdapter';
 import { enableDragToPan } from '../components/DragToPan';
-import { resolveTagColor } from '../settings';
+import { resolveTagColor, getPlotlineHSL } from '../settings';
 
 type SortMode = 'alpha' | 'scenes-desc' | 'scenes-asc' | 'book-order';
 type PlotlineViewMode = 'list' | 'subway';
@@ -296,8 +296,9 @@ export class StorylineView extends ItemView {
         const numCols = orderedScenes.length;
         const numLanes = plotlineKeys.length;
 
+        const hslAdj = getPlotlineHSL(this.plugin.settings);
         const laneColor = (idx: number, plotline: string): string =>
-            resolveTagColor(plotline, idx, scheme, tagColors);
+            resolveTagColor(plotline, idx, scheme, tagColors, hslAdj);
 
         // ── SVG dimensions ──
         const svgWidth = TRACK_LEFT + numCols * SCENE_SPACING + 60;
@@ -545,7 +546,7 @@ export class StorylineView extends ItemView {
 
                     for (const { tag, width } of pillData) {
                         const pillIdx = plotlineKeys.indexOf(tag);
-                        const pillColor = resolveTagColor(tag, Math.max(0, pillIdx), scheme, tagColors);
+                        const pillColor = resolveTagColor(tag, Math.max(0, pillIdx), scheme, tagColors, hslAdj);
                         const rect = document.createElementNS(svgNS, 'rect');
                         rect.setAttribute('x', String(px));
                         rect.setAttribute('y', String(pillY - 8));
@@ -584,7 +585,7 @@ export class StorylineView extends ItemView {
             (s.tags || []).forEach(t => { if (!tags.includes(t)) tags.push(t); });
             return tags;
         }, [] as string[]).sort().indexOf(plotline);
-        const plotlineColor = resolveTagColor(plotline, Math.max(0, plotlineIdx), scheme, tagColors);
+        const plotlineColor = resolveTagColor(plotline, Math.max(0, plotlineIdx), scheme, tagColors, getPlotlineHSL(this.plugin.settings));
 
         // Collapsible header
         const header = section.createDiv('storyline-header');
@@ -787,7 +788,7 @@ export class StorylineView extends ItemView {
             const allTagsSorted = this.sceneManager.getAllTags().sort();
             scene.tags.forEach(tag => {
                 const badge = tagsEl.createSpan({ cls: 'storyline-tag-badge', text: tag });
-                const badgeColor = resolveTagColor(tag, Math.max(0, allTagsSorted.indexOf(tag)), scheme, tagColors);
+                const badgeColor = resolveTagColor(tag, Math.max(0, allTagsSorted.indexOf(tag)), scheme, tagColors, getPlotlineHSL(this.plugin.settings));
                 badge.style.backgroundColor = badgeColor;
             });
         }
