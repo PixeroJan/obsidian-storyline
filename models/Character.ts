@@ -15,6 +15,8 @@ export interface Character {
     tagline?: string;
     /** Vault-relative path to a portrait/avatar image */
     image?: string;
+    /** Image gallery (max 5 images with captions) */
+    gallery?: Array<{ path: string; caption: string }>;
     /** Nicknames or aliases */
     nickname?: string;
     /** Age or date of birth */
@@ -163,6 +165,8 @@ export interface Character {
     props?: string;
     /** User-defined custom fields */
     custom?: Record<string, string>;
+    /** Universal field values keyed by template ID (from field-templates.json) */
+    universalFields?: Record<string, string>;
 
     // ── Meta ───────────────────────────────────────────
     /** Created date */
@@ -252,11 +256,11 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
         fields: [
             { key: 'name', label: 'Name', placeholder: 'Full name of the character' },
             { key: 'tagline', label: 'Tagline', placeholder: 'Choose which field to show on the card' },
-            { key: 'nickname', label: 'Nickname / Alias', placeholder: 'Alternative names and their origins' },
+            { key: 'nickname', label: 'Nickname / Alias', placeholder: 'Alternative names and their origins', multiline: true },
             { key: 'age', label: 'Age', placeholder: 'Date of birth, current life stage' },
             { key: 'role', label: 'Role in Story', placeholder: 'Protagonist, antagonist, mentor, sidekick…' },
             { key: 'occupation', label: 'Occupation', placeholder: 'Current job, income level, career history' },
-            { key: 'residency', label: 'Residency', placeholder: 'Where they are from and where they currently live' },
+            { key: 'residency', label: 'Residency', placeholder: 'Where they are from and where they currently live', multiline: true },
             { key: 'locations', label: 'Locations', placeholder: 'Story locations they appear at (e.g. The Tavern, Castle Ruins)' },
         ],
     },
@@ -273,8 +277,8 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
         icon: 'scan-face',
         fields: [
             { key: 'appearance', label: 'Appearance', placeholder: 'Height, weight, body type, hair, eye color, skin tone', multiline: true },
-            { key: 'distinguishingFeatures', label: 'Distinguishing Features', placeholder: 'Scars, tattoos, birthmarks, or unique marks' },
-            { key: 'style', label: 'Style', placeholder: 'Clothing style, accessories, posture' },
+            { key: 'distinguishingFeatures', label: 'Distinguishing Features', placeholder: 'Scars, tattoos, birthmarks, or unique marks', multiline: true },
+            { key: 'style', label: 'Style', placeholder: 'Clothing style, accessories, posture', multiline: true },
             { key: 'quirks', label: 'Quirks', placeholder: 'Specific habits like tapping fingers, stuttering when nervous…', multiline: true },
         ],
     },
@@ -283,12 +287,12 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
         icon: 'brain',
         fields: [
             { key: 'personality', label: 'Personality', placeholder: 'Three to five words to describe them' },
-            { key: 'internalMotivation', label: 'Internal Motivation', placeholder: 'What they need — their deepest unspoken drive' },
-            { key: 'externalMotivation', label: 'External Motivation', placeholder: 'What they want — their stated or visible goal' },
-            { key: 'strengths', label: 'Strengths', placeholder: 'Their best qualities' },
-            { key: 'flaws', label: 'Flaws', placeholder: 'Their fatal flaws' },
-            { key: 'fears', label: 'Fears', placeholder: 'What they are most afraid of — the thing stopping them from going after their desire' },
-            { key: 'belief', label: 'Belief', placeholder: 'What they believe about themselves and their identity' },
+            { key: 'internalMotivation', label: 'Internal Motivation', placeholder: 'What they need — their deepest unspoken drive', multiline: true },
+            { key: 'externalMotivation', label: 'External Motivation', placeholder: 'What they want — their stated or visible goal', multiline: true },
+            { key: 'strengths', label: 'Strengths', placeholder: 'Their best qualities', multiline: true },
+            { key: 'flaws', label: 'Flaws', placeholder: 'Their fatal flaws', multiline: true },
+            { key: 'fears', label: 'Fears', placeholder: 'What they are most afraid of — the thing stopping them from going after their desire', multiline: true },
+            { key: 'belief', label: 'Belief', placeholder: 'What they believe about themselves and their identity', multiline: true },
             { key: 'misbelief', label: 'Misbelief', placeholder: 'The thing they believe is true about the world (but isn\'t)', multiline: true },
         ],
     },
@@ -306,7 +310,7 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
         icon: 'trending-up',
         fields: [
             { key: 'startingPoint', label: 'Starting Point', placeholder: 'How they are at the beginning of the story', multiline: true },
-            { key: 'goal', label: 'Goal', placeholder: 'What they want to achieve' },
+            { key: 'goal', label: 'Goal', placeholder: 'What they want to achieve', multiline: true },
             { key: 'expectedChange', label: 'Expected Change', placeholder: 'How they will change by the end of the story', multiline: true },
         ],
     },
@@ -315,7 +319,7 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
         icon: 'more-horizontal',
         fields: [
             { key: 'habits', label: 'Habits', placeholder: 'Hobbies, favorite foods, daily routines', multiline: true },
-            { key: 'props', label: 'Props', placeholder: 'Items they frequently use or carry' },
+            { key: 'props', label: 'Props', placeholder: 'Items they frequently use or carry', multiline: true },
         ],
     },
 ];
@@ -324,7 +328,7 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
  * Frontmatter keys that map to Character fields (excludes computed/meta keys)
  */
 export const CHARACTER_FIELD_KEYS: (keyof Character)[] = [
-    'name', 'tagline', 'image', 'nickname', 'age', 'role', 'occupation', 'residency', 'locations', 'family', 'relations',
+    'name', 'tagline', 'image', 'gallery', 'nickname', 'age', 'role', 'occupation', 'residency', 'locations', 'family', 'relations',
     'appearance', 'distinguishingFeatures', 'style', 'quirks',
     'personality', 'internalMotivation', 'externalMotivation', 'strengths', 'flaws', 'fears', 'belief', 'misbelief',
     'formativeMemories', 'accomplishments', 'secrets',

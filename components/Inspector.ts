@@ -10,6 +10,7 @@ import { resolveTagColor, getPlotlineHSL } from '../settings';
 import { LocationManager } from '../services/LocationManager';
 import type { SnapshotManager, SceneSnapshot } from '../services/SnapshotManager';
 import { LinkScanner, LinkScanResult } from '../services/LinkScanner';
+import { renderTagPillInput, renderAutocompleteInput } from './InlineSuggest';
 
 /**
  * Scene inspector sidebar component
@@ -273,111 +274,75 @@ export class InspectorComponent {
             setTimeout(() => document.addEventListener('click', closeMenu), 0);
         });
 
-        // ── POV (editable dropdown) ──
+        // ── POV (autocomplete input) ──
         const povSection = this.container.createDiv('inspector-section');
         povSection.createSpan({ cls: 'inspector-label', text: 'POV: ' });
-        const povSelect = povSection.createEl('select');
-        styleSelect(povSelect);
-        povSelect.createEl('option', { text: 'None', value: '' });
-        const allCharNames = this.sceneManager.getAllCharacters();
-        const charSet = new Set<string>();
-        for (const c of allCharNames) {
-            const key = c.toLowerCase();
-            if (!charSet.has(key)) { charSet.add(key); const opt = povSelect.createEl('option', { text: c, value: c }); if (scene.pov === c) opt.selected = true; }
-        }
-        // Add current POV if not in list
-        if (scene.pov && !charSet.has(scene.pov.toLowerCase())) {
-            const opt = povSelect.createEl('option', { text: scene.pov, value: scene.pov });
-            opt.selected = true;
-        }
-        povSelect.addEventListener('change', async () => {
-            const val = povSelect.value || undefined;
-            await this.sceneManager.updateScene(scene.filePath, { pov: val } as any);
-            scene.pov = val;
+        const povContainer = povSection.createDiv('inspector-pov-autocomplete');
+        renderAutocompleteInput({
+            container: povContainer,
+            value: scene.pov || '',
+            getSuggestions: () => {
+                const allCharNames = this.sceneManager.getAllCharacters();
+                // Also include characters from CharacterManager
+                const cm = this.plugin.characterManager;
+                const names = new Map<string, string>();
+                for (const c of allCharNames) names.set(c.toLowerCase(), c);
+                if (cm) {
+                    for (const ch of cm.getAllCharacters()) {
+                        if (!names.has(ch.name.toLowerCase())) names.set(ch.name.toLowerCase(), ch.name);
+                    }
+                }
+                return Array.from(names.values()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            },
+            onChange: async (val) => {
+                await this.sceneManager.updateScene(scene.filePath, { pov: val } as any);
+                scene.pov = val;
+            },
+            placeholder: 'Search characters…',
         });
 
-        // ── Characters (editable chip list) ──
+        // ── Characters (autocomplete tag-pill input) ──
         const charSection = this.container.createDiv('inspector-section');
         charSection.createSpan({ cls: 'inspector-label', text: 'Characters:' });
-        const charChips = charSection.createDiv('inspector-chip-list');
-        charChips.style.display = 'flex';
-        charChips.style.flexWrap = 'wrap';
-        charChips.style.gap = '4px';
-        charChips.style.marginTop = '4px';
+        const charPillContainer = charSection.createDiv('inspector-chip-list');
 
-        const renderCharChips = () => {
-            charChips.empty();
-            (scene.characters || []).forEach((c, idx) => {
-                const chip = charChips.createSpan({ cls: 'inspector-chip', text: c });
-                chip.style.padding = '2px 8px';
-                chip.style.borderRadius = '10px';
-                chip.style.fontSize = '12px';
-                chip.style.background = 'var(--background-modifier-border)';
-                chip.style.display = 'inline-flex';
-                chip.style.alignItems = 'center';
-                chip.style.gap = '4px';
-                if (c === scene.pov) {
-                    chip.createSpan({ cls: 'inspector-pov-badge', text: ' (POV)' });
-                    chip.style.background = 'var(--interactive-accent)';
-                    chip.style.color = 'var(--text-on-accent)';
-                }
-                const removeBtn = chip.createSpan({ text: '×', cls: 'inspector-chip-remove' });
-                removeBtn.style.cursor = 'pointer';
-                removeBtn.style.marginLeft = '2px';
-                removeBtn.addEventListener('click', async () => {
-                    const updated = (scene.characters || []).filter((_, i) => i !== idx);
-                    await this.sceneManager.updateScene(scene.filePath, { characters: updated } as any);
-                    scene.characters = updated;
-                    renderCharChips();
-                });
-            });
-            // Add button
-            const addChip = charChips.createSpan({ cls: 'inspector-chip inspector-chip-add', text: '+' });
-            addChip.style.padding = '2px 8px';
-            addChip.style.borderRadius = '10px';
-            addChip.style.fontSize = '12px';
-            addChip.style.background = 'var(--background-modifier-border)';
-            addChip.style.cursor = 'pointer';
-            addChip.style.opacity = '0.7';
-            addChip.addEventListener('click', () => {
-                const input = charSection.createEl('input', { attr: { type: 'text', placeholder: 'Character name…' } });
-                styleInput(input);
-                input.focus();
-                const commitAdd = async () => {
-                    const val = input.value.trim();
-                    if (val && !(scene.characters || []).includes(val)) {
-                        const updated = [...(scene.characters || []), val];
-                        await this.sceneManager.updateScene(scene.filePath, { characters: updated } as any);
-                        scene.characters = updated;
+        renderTagPillInput({
+            container: charPillContainer,
+            values: scene.characters || [],
+            getSuggestions: () => {
+                const allCharNames = this.sceneManager.getAllCharacters();
+                const cm = this.plugin.characterManager;
+                const names = new Map<string, string>();
+                for (const c of allCharNames) names.set(c.toLowerCase(), c);
+                if (cm) {
+                    for (const ch of cm.getAllCharacters()) {
+                        if (!names.has(ch.name.toLowerCase())) names.set(ch.name.toLowerCase(), ch.name);
                     }
-                    input.remove();
-                    renderCharChips();
-                };
-                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') { input.remove(); } });
-                input.addEventListener('blur', commitAdd);
-            });
-        };
-        renderCharChips();
+                }
+                return Array.from(names.values()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            },
+            onChange: async (values) => {
+                await this.sceneManager.updateScene(scene.filePath, { characters: values } as any);
+                scene.characters = values;
+            },
+            placeholder: 'Add character…',
+            highlightValue: scene.pov,
+            highlightLabel: '(POV)',
+        });
 
-        // ── Location (editable dropdown) ──
+        // ── Location (autocomplete input) ──
         const locSection = this.container.createDiv('inspector-section');
         locSection.createSpan({ cls: 'inspector-label', text: 'Location: ' });
-        const locSelect = locSection.createEl('select', { cls: 'inspector-location-select' });
-        styleSelect(locSelect);
-        locSelect.createEl('option', { text: 'None', value: '' });
-        const locationNames = this.getLocationNames();
-        for (const name of locationNames) {
-            const opt = locSelect.createEl('option', { text: name, value: name });
-            if (scene.location === name) opt.selected = true;
-        }
-        if (scene.location && !locationNames.includes(scene.location)) {
-            const opt = locSelect.createEl('option', { text: scene.location, value: scene.location });
-            opt.selected = true;
-        }
-        locSelect.addEventListener('change', async () => {
-            const newLoc = locSelect.value || undefined;
-            await this.sceneManager.updateScene(scene.filePath, { location: newLoc } as any);
-            scene.location = newLoc;
+        const locContainer = locSection.createDiv('inspector-location-autocomplete');
+        renderAutocompleteInput({
+            container: locContainer,
+            value: scene.location || '',
+            getSuggestions: () => this.getLocationNames(),
+            onChange: async (val) => {
+                await this.sceneManager.updateScene(scene.filePath, { location: val } as any);
+                scene.location = val;
+            },
+            placeholder: 'Search locations…',
         });
 
         // ── Timeline Mode / Strand ──

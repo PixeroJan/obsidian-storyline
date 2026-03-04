@@ -1260,6 +1260,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             ps.plotlineSaturation = 0;
             ps.plotlineLightness = 0;
             await this.plugin.saveSettings();
+            this.plugin.refreshOpenViews();
             this.display();
         });
 
@@ -1432,8 +1433,53 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         }
     }
 
+    /**
+     * When the sticky-note theme changes, remap any notes whose explicit
+     * corkboardNoteColor matches an old preset to the corresponding new preset.
+     * Notes with truly custom colours (not matching a preset) are left untouched.
+     */
+    private async migrateCorkboardNoteColors(
+        oldPresets: Array<{ label: string; color: string }>,
+        newPresets: Array<{ label: string; color: string }>,
+    ): Promise<void> {
+        const sm = this.plugin.sceneManager;
+        if (!sm) return;
+        // Build a map: normalised old hex → new hex (by index)
+        const migration = new Map<string, string>();
+        const len = Math.min(oldPresets.length, newPresets.length);
+        for (let i = 0; i < len; i++) {
+            const oldHex = oldPresets[i].color.toUpperCase();
+            const newHex = newPresets[i].color.toUpperCase();
+            if (oldHex !== newHex) migration.set(oldHex, newHex);
+        }
+        if (migration.size === 0) return;
+
+        for (const scene of sm.getAllScenes()) {
+            if (!scene.corkboardNoteColor) continue;
+            const norm = scene.corkboardNoteColor.toUpperCase();
+            const replacement = migration.get(norm);
+            if (replacement) {
+                await sm.updateScene(scene.filePath, { corkboardNoteColor: replacement });
+                scene.corkboardNoteColor = replacement;
+            }
+        }
+    }
+
     /** Render the sticky-note colour settings panel */
     private renderStickyNoteSettings(container: HTMLElement): void {
+        // Snapshot of preset colors at the time this panel renders.
+        // Used to detect which note colors should be migrated when
+        // HSL sliders, per-swatch overrides, or reset/clear are used.
+        let presetsSnapshot = resolveStickyNoteColors(this.plugin.settings);
+
+        /** Migrate any notes whose stored color matches an old preset
+         *  to the corresponding new preset, then update the snapshot. */
+        const migrateAndUpdate = async () => {
+            const newPresets = resolveStickyNoteColors(this.plugin.settings);
+            await this.migrateCorkboardNoteColors(presetsSnapshot, newPresets);
+            presetsSnapshot = newPresets;
+        };
+
         const rerender = () => {
             container.empty();
             this.renderStickyNoteSettings(container);
@@ -1502,8 +1548,13 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             }
 
             card.addEventListener('click', async () => {
+                // Capture old resolved colors before changing theme
+                const oldPresets = resolveStickyNoteColors(settings);
                 settings.stickyNoteTheme = tid;
                 settings.stickyNoteOverrides = {};
+                // Migrate notes whose color matches an old preset to the new equivalent
+                const newPresets = resolveStickyNoteColors(settings);
+                await this.migrateCorkboardNoteColors(oldPresets, newPresets);
                 await this.plugin.saveSettings();
                 rerender();
             });
@@ -1560,8 +1611,9 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 updateSwatches();
                 // Debounce the heavier save + view refresh
                 if (debounceTimer) clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                    this.plugin.saveSettings();
+                debounceTimer = setTimeout(async () => {
+                    await migrateAndUpdate();
+                    await this.plugin.saveSettings();
                     this.plugin.refreshOpenViews();
                 }, 300);
             });
@@ -1578,9 +1630,12 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         resetBtn.style.fontSize = '11px';
         resetBtn.style.padding = '2px 10px';
         resetBtn.addEventListener('click', async () => {
+            const oldPresets = presetsSnapshot;
             settings.stickyNoteHue = 0;
             settings.stickyNoteSaturation = 0;
             settings.stickyNoteLightness = 0;
+            const newPresets = resolveStickyNoteColors(settings);
+            await this.migrateCorkboardNoteColors(oldPresets, newPresets);
             await this.plugin.saveSettings();
             rerender();
         });
@@ -1638,11 +1693,15 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 picker.style.height = '0';
 
                 dot.addEventListener('click', () => picker.click());
-                picker.addEventListener('input', () => {
+                picker.addEventListener('input', async () => {
+                    const oldPresets = presetsSnapshot;
                     settings.stickyNoteOverrides[i] = picker.value.toUpperCase();
                     dot.style.background = picker.value;
                     dot.style.border = '2px solid var(--interactive-accent)';
-                    this.plugin.saveSettings();
+                    const newPresets = resolveStickyNoteColors(settings);
+                    await this.migrateCorkboardNoteColors(oldPresets, newPresets);
+                    presetsSnapshot = newPresets;
+                    await this.plugin.saveSettings();
                     this.plugin.refreshOpenViews();
                 });
 
@@ -1650,7 +1709,11 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 dot.addEventListener('contextmenu', async (e) => {
                     e.preventDefault();
                     if (isOverridden) {
+                        const oldPresets = presetsSnapshot;
                         delete settings.stickyNoteOverrides[i];
+                        const newPresets = resolveStickyNoteColors(settings);
+                        await this.migrateCorkboardNoteColors(oldPresets, newPresets);
+                        presetsSnapshot = newPresets;
                         await this.plugin.saveSettings();
                         this.plugin.refreshOpenViews();
                         updateSwatches();
@@ -1679,7 +1742,10 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             clearBtn.style.fontSize = '11px';
             clearBtn.style.padding = '2px 10px';
             clearBtn.addEventListener('click', async () => {
+                const oldPresets = presetsSnapshot;
                 settings.stickyNoteOverrides = {};
+                const newPresets = resolveStickyNoteColors(settings);
+                await this.migrateCorkboardNoteColors(oldPresets, newPresets);
                 await this.plugin.saveSettings();
                 rerender();
             });

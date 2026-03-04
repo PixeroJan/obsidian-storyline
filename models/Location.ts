@@ -22,6 +22,8 @@ interface LocationBase {
     filePath: string;
     /** Vault-relative path to an image */
     image?: string;
+    /** Image gallery (max 10 images with captions) */
+    gallery?: Array<{ path: string; caption: string }>;
     /** Created date */
     created?: string;
     /** Modified date */
@@ -249,12 +251,12 @@ export const LOCATION_TYPES: string[] = [
 
 /** Frontmatter keys for World */
 export const WORLD_FIELD_KEYS: (keyof StoryWorld)[] = [
-    'name', 'image', 'description', 'geography', 'culture', 'politics',
+    'name', 'image', 'gallery', 'description', 'geography', 'culture', 'politics',
     'magicTechnology', 'beliefs', 'economy', 'history',
 ];
 
 /** Frontmatter keys for Location */
 export const LOCATION_FIELD_KEYS: (keyof StoryLocation)[] = [
-    'name', 'image', 'locationType', 'world', 'parent', 'description',
+    'name', 'image', 'gallery', 'locationType', 'world', 'parent', 'description',
     'atmosphere', 'significance', 'inhabitants', 'connectedLocations', 'mapNotes',
 ];

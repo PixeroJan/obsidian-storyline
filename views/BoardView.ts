@@ -1264,6 +1264,15 @@ export class BoardView extends ItemView {
             text: `${displayTitle} (${scenes.length})`
         });
 
+        // Show description subtitle if available (for act / chapter columns)
+        const columnDesc = this.getColumnDescription(title);
+        if (columnDesc) {
+            header.createDiv({
+                cls: 'story-line-column-description',
+                text: columnDesc,
+            });
+        }
+
         // Right-click context menu on column header
         if (this.groupBy === 'act' || this.groupBy === 'chapter') {
             header.addEventListener('contextmenu', (e) => {
@@ -1744,7 +1753,7 @@ export class BoardView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(scene.filePath);
         if (file instanceof TFile) {
             const leaf = this.app.workspace.getLeaf('tab');
-            await leaf.openFile(file);
+            await leaf.openFile(file, { state: { mode: 'preview' } });
         } else {
             new Notice(`Could not find file: ${scene.filePath}`);
         }
@@ -1907,6 +1916,21 @@ export class BoardView extends ItemView {
     }
 
     /**
+     * Get a description for a column header (act or chapter), if one has been set.
+     */
+    private getColumnDescription(groupKey: string): string | undefined {
+        const actMatch = groupKey.match(/^Act\s+(\d+)$/);
+        if (actMatch) {
+            return this.sceneManager.getActDescription(parseInt(actMatch[1], 10));
+        }
+        const chMatch = groupKey.match(/^Chapter\s+(\d+)$/);
+        if (chMatch) {
+            return this.sceneManager.getChapterDescription(parseInt(chMatch[1], 10));
+        }
+        return undefined;
+    }
+
+    /**
      * Show context menu on a column header (right-click).
      * Allows deleting/renaming acts or chapters.
      */
@@ -1925,6 +1949,18 @@ export class BoardView extends ItemView {
                     .onClick(() => {
                         this.openRenameModal('Act', actNum, currentLabel, async (newLabel) => {
                             await this.sceneManager.setActLabel(actNum, newLabel);
+                            this.refreshBoard();
+                        });
+                    });
+            });
+
+            menu.addItem(item => {
+                item.setTitle('Edit Description')
+                    .setIcon('file-text')
+                    .onClick(() => {
+                        const currentDesc = this.sceneManager.getActDescription(actNum) || '';
+                        this.openDescriptionModal('Act', actNum, currentDesc, async (desc) => {
+                            await this.sceneManager.setActDescription(actNum, desc);
                             this.refreshBoard();
                         });
                     });
@@ -1985,6 +2021,18 @@ export class BoardView extends ItemView {
             });
 
             menu.addItem(item => {
+                item.setTitle('Edit Description')
+                    .setIcon('file-text')
+                    .onClick(() => {
+                        const currentDesc = this.sceneManager.getChapterDescription(chNum) || '';
+                        this.openDescriptionModal('Chapter', chNum, currentDesc, async (desc) => {
+                            await this.sceneManager.setChapterDescription(chNum, desc);
+                            this.refreshBoard();
+                        });
+                    });
+            });
+
+            menu.addItem(item => {
                 item.setTitle('Delete Chapter')
                     .setIcon('trash')
                     .onClick(() => {
@@ -2025,6 +2073,41 @@ export class BoardView extends ItemView {
         }
 
         menu.showAtMouseEvent(event);
+    }
+
+    /**
+     * Open a modal to edit the description for an act or chapter.
+     */
+    private openDescriptionModal(type: string, num: number, current: string, onSave: (desc: string) => Promise<void>): void {
+        const modal = new Modal(this.app);
+        modal.titleEl.setText(`${type} ${num} Description`);
+        const { contentEl } = modal;
+
+        let value = current;
+        const descSetting = new Setting(contentEl)
+            .setName('Description')
+            .setDesc(`A short summary for ${type} ${num}. Leave blank to remove.`);
+        const textArea = contentEl.createEl('textarea', {
+            cls: 'storyline-description-textarea',
+        });
+        textArea.value = current;
+        textArea.placeholder = 'e.g. "Our heroes arrive in the capital…"';
+        textArea.rows = 4;
+        textArea.style.width = '100%';
+        textArea.style.resize = 'vertical';
+        textArea.addEventListener('input', () => { value = textArea.value; });
+        setTimeout(() => textArea.focus(), 50);
+
+        const btnRow = contentEl.createDiv('structure-close-row');
+        const saveBtn = btnRow.createEl('button', { text: 'Save', cls: 'mod-cta' });
+        saveBtn.addEventListener('click', async () => {
+            await onSave(value);
+            modal.close();
+        });
+        const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
+        cancelBtn.addEventListener('click', () => modal.close());
+
+        modal.open();
     }
 
     /**
@@ -2361,7 +2444,7 @@ export class BoardView extends ItemView {
                 this.refreshBoard();
 
                 if (openAfter) {
-                    await this.app.workspace.getLeaf('tab').openFile(file);
+                    await this.app.workspace.getLeaf('tab').openFile(file, { state: { mode: 'preview' } });
                 }
             }
         );

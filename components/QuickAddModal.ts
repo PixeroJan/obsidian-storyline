@@ -3,6 +3,7 @@ import { Scene, SceneStatus, SceneTemplate, BUILTIN_SCENE_TEMPLATES } from '../m
 import { SceneManager } from '../services/SceneManager';
 import { LocationManager } from '../services/LocationManager';
 import type SceneCardsPlugin from '../main';
+import { renderAutocompleteInput, renderTagPillInput } from './InlineSuggest';
 
 /**
  * Modal for quickly creating new scenes
@@ -88,64 +89,60 @@ export class QuickAddModal extends Modal {
             this.result.chapter = val ? (Number(val) || val) : undefined;
         });
 
-        // POV
-        new Setting(contentEl)
-            .setName('POV Character')
-            .addDropdown(dropdown => {
-                dropdown.addOption('', 'None');
+        // POV (autocomplete input)
+        const povSetting = new Setting(contentEl).setName('POV Character');
+        const povContainer = povSetting.controlEl.createDiv('sl-quickadd-autocomplete');
+        renderAutocompleteInput({
+            container: povContainer,
+            value: '',
+            getSuggestions: () => {
                 const characters = this.sceneManager.getAllCharacters();
-                characters.forEach(c => dropdown.addOption(c, c));
-                dropdown.onChange(value => this.result.pov = value || undefined);
-            })
-            .addExtraButton(btn => {
-                btn.setIcon('plus')
-                    .setTooltip('Type a new character name')
-                    .onClick(() => {
-                        // Fallback: allow typing manually
-                        const input = contentEl.createEl('input', {
-                            attr: { type: 'text', placeholder: 'New character name...' }
-                        });
-                        input.addEventListener('change', () => {
-                            this.result.pov = input.value;
-                        });
-                    });
-            });
+                const cm = this.plugin.characterManager;
+                const names = new Map<string, string>();
+                for (const c of characters) names.set(c.toLowerCase(), c);
+                if (cm) {
+                    for (const ch of cm.getAllCharacters()) {
+                        if (!names.has(ch.name.toLowerCase())) names.set(ch.name.toLowerCase(), ch.name);
+                    }
+                }
+                return Array.from(names.values()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            },
+            onChange: (value) => { this.result.pov = value || undefined; },
+            placeholder: 'Search characters…',
+        });
 
-        // Location (dropdown with existing locations + manual entry)
-        new Setting(contentEl)
-            .setName('Location')
-            .addDropdown(dropdown => {
-                dropdown.addOption('', 'None');
-                const locationNames = this.getLocationNames();
-                locationNames.forEach(name => dropdown.addOption(name, name));
-                dropdown.onChange(value => this.result.location = value || undefined);
-            })
-            .addExtraButton(btn => {
-                btn.setIcon('plus')
-                    .setTooltip('Type a new location name')
-                    .onClick(() => {
-                        const input = contentEl.createEl('input', {
-                            attr: { type: 'text', placeholder: 'New location name...' }
-                        });
-                        input.addEventListener('change', () => {
-                            this.result.location = input.value || undefined;
-                        });
-                    });
-            });
+        // Location (autocomplete input)
+        const locSetting = new Setting(contentEl).setName('Location');
+        const locContainer = locSetting.controlEl.createDiv('sl-quickadd-autocomplete');
+        renderAutocompleteInput({
+            container: locContainer,
+            value: '',
+            getSuggestions: () => this.getLocationNames(),
+            onChange: (value) => { this.result.location = value || undefined; },
+            placeholder: 'Search locations…',
+        });
 
-        // Characters
-        new Setting(contentEl)
-            .setName('Characters')
-            .addTextArea(area => {
-                area.setPlaceholder('Anna, Marcus, ...')
-                    .onChange(value => {
-                        this.result.characters = value
-                            ? value.split(',').map(c => c.trim()).filter(Boolean)
-                            : undefined;
-                    });
-                area.inputEl.rows = 2;
-                area.inputEl.addClass('story-line-wide-input');
-            });
+        // Characters (tag-pill autocomplete)
+        const charSetting = new Setting(contentEl).setName('Characters');
+        const charContainer = charSetting.controlEl.createDiv('sl-quickadd-tagpill');
+        renderTagPillInput({
+            container: charContainer,
+            values: [],
+            getSuggestions: () => {
+                const characters = this.sceneManager.getAllCharacters();
+                const cm = this.plugin.characterManager;
+                const names = new Map<string, string>();
+                for (const c of characters) names.set(c.toLowerCase(), c);
+                if (cm) {
+                    for (const ch of cm.getAllCharacters()) {
+                        if (!names.has(ch.name.toLowerCase())) names.set(ch.name.toLowerCase(), ch.name);
+                    }
+                }
+                return Array.from(names.values()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            },
+            onChange: (values) => { this.result.characters = values.length > 0 ? values : undefined; },
+            placeholder: 'Add character…',
+        });
 
         // Scene Draft (becomes body text)
         new Setting(contentEl)

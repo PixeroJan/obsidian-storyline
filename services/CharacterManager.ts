@@ -210,6 +210,13 @@ export class CharacterManager {
             delete fm.custom;
         }
 
+        // Universal fields (values from field-templates)
+        if (character.universalFields && Object.keys(character.universalFields).length > 0) {
+            fm.universalFields = character.universalFields;
+        } else {
+            delete fm.universalFields;
+        }
+
         // Write notes to body
         const finalBody = character.notes ?? body;
         const newContent = `---\n${stringifyYaml(fm)}---\n${finalBody ? '\n' + finalBody : ''}`;
@@ -276,6 +283,7 @@ export class CharacterManager {
             name: fm.name || basename,
             tagline: fm.tagline,
             image: fm.image,
+            gallery: this.parseGallery(fm.gallery),
             nickname: fm.nickname,
             age: fm.age != null ? String(fm.age) : undefined,
             role: fm.role,
@@ -305,6 +313,7 @@ export class CharacterManager {
             habits: fm.habits,
             props: fm.props,
             custom: fm.custom && typeof fm.custom === 'object' ? fm.custom : undefined,
+            universalFields: fm.universalFields && typeof fm.universalFields === 'object' ? fm.universalFields : undefined,
             created: fm.created,
             modified: fm.modified,
             notes: body || undefined,
@@ -439,5 +448,18 @@ export class CharacterManager {
     private async ensureFolder(folderPath: string): Promise<void> {
         if (this.app.vault.getAbstractFileByPath(folderPath)) return;
         await this.app.vault.createFolder(folderPath);
+    }
+
+    private parseGallery(value: any): Array<{ path: string; caption: string }> | undefined {
+        if (!Array.isArray(value)) return undefined;
+        const parsed: Array<{ path: string; caption: string }> = [];
+        for (const item of value) {
+            if (!item || typeof item !== 'object') continue;
+            const path = typeof item.path === 'string' ? item.path : '';
+            const caption = typeof item.caption === 'string' ? item.caption : '';
+            if (!path) continue;
+            parsed.push({ path, caption });
+        }
+        return parsed.length ? parsed : undefined;
     }
 }

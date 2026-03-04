@@ -77,6 +77,8 @@ export class LocationView extends ItemView {
     async onClose(): Promise<void> {
         // Flush any pending auto-save so edits are not lost
         await this.flushPendingSave();
+        // Remove any orphaned gallery lightbox windows
+        document.querySelectorAll('.gallery-lightbox-window').forEach(el => el.remove());
     }
 
     // ── Main render ────────────────────────────────────
@@ -427,6 +429,9 @@ export class LocationView extends ItemView {
 
         // Custom fields
         this.renderCustomFields(formPanel, draft);
+
+        // Gallery (before side panel stats)
+        this.renderGallery(sidePanel, draft);
 
         // Side panel
         if (isWorld) {
@@ -1032,7 +1037,7 @@ export class LocationView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(item.filePath);
         if (file instanceof TFile) {
             const leaf = this.app.workspace.getLeaf('tab');
-            await leaf.openFile(file);
+            await leaf.openFile(file, { state: { mode: 'preview' } });
         }
     }
 
@@ -1040,7 +1045,7 @@ export class LocationView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(scene.filePath);
         if (file instanceof TFile) {
             const leaf = this.app.workspace.getLeaf('tab');
-            await leaf.openFile(file);
+            await leaf.openFile(file, { state: { mode: 'preview' } });
         } else {
             new Notice(`Could not find file: ${scene.filePath}`);
         }
@@ -1060,6 +1065,365 @@ export class LocationView extends ItemView {
         if (this.rootContainer) {
             this.renderView(this.rootContainer);
         }
+    }
+
+    // ── Image gallery carousel ─────────────────────────
+
+    private renderGallery(container: HTMLElement, draft: WorldOrLocation): void {
+        const MAX_GALLERY = 10;
+        const SECTION_KEY = '__Gallery';
+
+        const wrapper = container.createDiv('character-gallery');
+
+        const gallery = draft.gallery ?? [];
+
+        // Collapsible header with add button
+        const isCollapsed = this.collapsedSections.has(SECTION_KEY);
+        const header = wrapper.createDiv('character-gallery-header');
+        const chevron = header.createSpan('location-section-chevron');
+        obsidian.setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
+        header.createEl('h4', { text: 'Gallery' });
+
+        // Add button in header
+        if (gallery.length < MAX_GALLERY) {
+            const addBtn = header.createEl('button', {
+                cls: 'character-section-add-field-btn',
+                attr: { title: `Add image (${gallery.length}/${MAX_GALLERY})`, 'aria-label': 'Add gallery image' }
+            });
+            obsidian.setIcon(addBtn, 'plus');
+            addBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.pickImage().then(async (picked) => {
+                    if (picked && picked !== '') {
+                        gallery.push({ path: picked, caption: '' });
+                        draft.gallery = [...gallery];
+                        if (draft.type === 'world') {
+                            await this.locationManager.saveWorld(draft as StoryWorld);
+                        } else {
+                            await this.locationManager.saveLocation(draft as StoryLocation);
+                        }
+                        // Re-render entire gallery section
+                        wrapper.empty();
+                        container.removeChild(wrapper);
+                        this.renderGallery(container, draft);
+                        // Move gallery before side panel stats
+                        const statsPanel = container.querySelector('.location-side-stats');
+                        if (statsPanel) {
+                            const galleryEl = container.querySelector('.character-gallery');
+                            if (galleryEl) container.insertBefore(galleryEl, statsPanel);
+                        }
+                    }
+                });
+            });
+        }
+
+        const body = wrapper.createDiv('character-gallery-body');
+        if (isCollapsed) body.style.display = 'none';
+
+        header.addEventListener('click', (e) => {
+            if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
+            if (this.collapsedSections.has(SECTION_KEY)) {
+                this.collapsedSections.delete(SECTION_KEY);
+                body.style.display = '';
+                obsidian.setIcon(chevron, 'chevron-down');
+            } else {
+                this.collapsedSections.add(SECTION_KEY);
+                body.style.display = 'none';
+                obsidian.setIcon(chevron, 'chevron-right');
+            }
+        });
+
+        // Active (large) image display
+        const viewer = body.createDiv('character-gallery-viewer');
+        const captionEl = body.createDiv('character-gallery-caption');
+        let activeIndex = gallery.length > 0 ? 0 : -1;
+
+        const renderViewer = () => {
+            viewer.empty();
+            captionEl.empty();
+            if (activeIndex >= 0 && activeIndex < gallery.length) {
+                const entry = gallery[activeIndex];
+                const src = resolveImagePath(this.app, entry.path);
+                if (src) {
+                    const img = viewer.createEl('img', {
+                        cls: 'character-gallery-img',
+                        attr: { src, alt: entry.caption || 'Gallery image' }
+                    });
+                    img.style.cursor = 'pointer';
+                    img.addEventListener('click', () => {
+                        const galleryWidth = wrapper.offsetWidth;
+                        this.openGalleryLightbox(gallery, activeIndex, galleryWidth);
+                    });
+                    img.onerror = () => {
+                        img.remove();
+                        const ph = viewer.createDiv('character-gallery-placeholder');
+                        obsidian.setIcon(ph, 'image-off');
+                    };
+                } else {
+                    const ph = viewer.createDiv('character-gallery-placeholder');
+                    obsidian.setIcon(ph, 'image-off');
+                }
+
+                // Editable caption
+                const captionInput = captionEl.createEl('input', {
+                    cls: 'character-gallery-caption-input',
+                    attr: { type: 'text', placeholder: 'Add caption\u2026', value: entry.caption || '' }
+                });
+                const idx = activeIndex;
+                captionInput.addEventListener('input', () => {
+                    gallery[idx].caption = captionInput.value;
+                    draft.gallery = gallery.length ? [...gallery] : undefined;
+                    this.scheduleSave(draft);
+                });
+
+                // Remove button for active image
+                const removeBtn = captionEl.createEl('button', {
+                    cls: 'character-gallery-remove-btn',
+                    attr: { title: 'Remove this image' }
+                });
+                obsidian.setIcon(removeBtn, 'x');
+                removeBtn.addEventListener('click', () => {
+                    gallery.splice(idx, 1);
+                    draft.gallery = gallery.length ? [...gallery] : undefined;
+                    this.scheduleSave(draft);
+                    activeIndex = gallery.length > 0 ? Math.min(idx, gallery.length - 1) : -1;
+                    renderViewer();
+                    renderThumbs();
+                });
+            } else {
+                const ph = viewer.createDiv('character-gallery-empty');
+                ph.textContent = 'No images yet';
+            }
+        };
+
+        // Navigation row: prev | thumbs | next
+        const nav = body.createDiv('character-gallery-nav');
+        const prevBtn = nav.createEl('button', { cls: 'character-gallery-arrow', attr: { title: 'Previous' } });
+        obsidian.setIcon(prevBtn, 'chevron-left');
+        prevBtn.addEventListener('click', () => {
+            if (gallery.length === 0) return;
+            activeIndex = (activeIndex - 1 + gallery.length) % gallery.length;
+            renderViewer();
+            renderThumbs();
+        });
+
+        const thumbStrip = nav.createDiv('character-gallery-thumbs');
+
+        const nextBtn = nav.createEl('button', { cls: 'character-gallery-arrow', attr: { title: 'Next' } });
+        obsidian.setIcon(nextBtn, 'chevron-right');
+        nextBtn.addEventListener('click', () => {
+            if (gallery.length === 0) return;
+            activeIndex = (activeIndex + 1) % gallery.length;
+            renderViewer();
+            renderThumbs();
+        });
+
+        // Thumbnail strip
+        const renderThumbs = () => {
+            thumbStrip.empty();
+            for (let i = 0; i < gallery.length; i++) {
+                const thumb = thumbStrip.createDiv({
+                    cls: `character-gallery-thumb${i === activeIndex ? ' active' : ''}`
+                });
+                const src = resolveImagePath(this.app, gallery[i].path);
+                if (src) {
+                    const timg = thumb.createEl('img', { attr: { src } });
+                    timg.onerror = () => {
+                        timg.remove();
+                        obsidian.setIcon(thumb, 'image-off');
+                    };
+                } else {
+                    obsidian.setIcon(thumb, 'image-off');
+                }
+                const idx = i;
+                thumb.addEventListener('click', () => {
+                    activeIndex = idx;
+                    renderViewer();
+                    renderThumbs();
+                });
+            }
+        };
+
+        renderViewer();
+        renderThumbs();
+    }
+
+    // ── Gallery lightbox ───────────────────────────────
+
+    /**
+     * Open a floating, draggable, resizable lightbox for gallery images.
+     * Sized at 2× the gallery panel width. Has prev/next navigation.
+     */
+    private openGalleryLightbox(
+        gallery: Array<{ path: string; caption: string }>,
+        startIndex: number,
+        galleryWidth: number
+    ): void {
+        // Close any existing lightbox
+        document.querySelector('.gallery-lightbox-window')?.remove();
+
+        let currentIndex = startIndex;
+        const winWidth = Math.min(Math.round(galleryWidth * 2), window.innerWidth - 40);
+        const winHeight = Math.round(winWidth * 3 / 4) + 36 + 28; // 4:3 content + titlebar + caption
+
+        // Floating window directly on body (no overlay — non-blocking)
+        const win = document.body.createDiv('gallery-lightbox-window');
+        win.style.width = `${winWidth}px`;
+        win.style.height = `${winHeight}px`;
+
+        // Titlebar (draggable)
+        const titlebar = win.createDiv('gallery-lightbox-titlebar');
+        const titleText = titlebar.createSpan({ cls: 'gallery-lightbox-title' });
+        const closeBtn = titlebar.createEl('button', { cls: 'gallery-lightbox-close', attr: { title: 'Close' } });
+        obsidian.setIcon(closeBtn, 'x');
+        closeBtn.addEventListener('click', () => { cleanup(); win.remove(); });
+
+        // Content area with nav + image
+        const contentRow = win.createDiv('gallery-lightbox-content-row');
+
+        const prevBtn = contentRow.createEl('button', { cls: 'gallery-lightbox-nav-btn', attr: { title: 'Previous' } });
+        obsidian.setIcon(prevBtn, 'chevron-left');
+        prevBtn.addEventListener('click', () => {
+            currentIndex = (currentIndex - 1 + gallery.length) % gallery.length;
+            renderContent();
+        });
+
+        const imgContainer = contentRow.createDiv('gallery-lightbox-content');
+
+        const nextBtn = contentRow.createEl('button', { cls: 'gallery-lightbox-nav-btn', attr: { title: 'Next' } });
+        obsidian.setIcon(nextBtn, 'chevron-right');
+        nextBtn.addEventListener('click', () => {
+            currentIndex = (currentIndex + 1) % gallery.length;
+            renderContent();
+        });
+
+        // Caption
+        const captionEl = win.createDiv('gallery-lightbox-caption');
+
+        // Resize handle
+        const resizeHandle = win.createDiv('gallery-lightbox-resize-handle');
+
+        const zoomLevels = new Map<number, number>();
+        const getZoom = () => zoomLevels.get(currentIndex) ?? 1;
+        const setZoom = (z: number) => { zoomLevels.set(currentIndex, z); };
+        const renderContent = () => {
+            const entry = gallery[currentIndex];
+            const src = resolveImagePath(this.app, entry.path);
+            titleText.textContent = entry.caption || `Image ${currentIndex + 1} of ${gallery.length}`;
+            imgContainer.empty();
+            if (src) {
+                const img = imgContainer.createEl('img', { attr: { src, alt: entry.caption || 'Gallery image' } });
+                img.style.transformOrigin = 'center center';
+                const z = getZoom();
+                if (z !== 1) img.style.transform = `scale(${z})`;
+            }
+            captionEl.textContent = entry.caption || '';
+            captionEl.style.display = entry.caption ? '' : 'none';
+            // Hide nav buttons if only one image
+            prevBtn.style.display = gallery.length > 1 ? '' : 'none';
+            nextBtn.style.display = gallery.length > 1 ? '' : 'none';
+        };
+        renderContent();
+
+        // ── Scroll / pinch to zoom ──
+        imgContainer.addEventListener('wheel', (e: WheelEvent) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            const newZoom = Math.max(0.5, Math.min(5, getZoom() + delta));
+            setZoom(newZoom);
+            const img = imgContainer.querySelector('img');
+            if (img) img.style.transform = `scale(${newZoom})`;
+        }, { passive: false });
+
+        // Touch pinch-to-zoom
+        let pinchStartDist = 0;
+        let pinchStartZoom = 1;
+        imgContainer.addEventListener('touchstart', (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                pinchStartDist = Math.hypot(dx, dy);
+                pinchStartZoom = getZoom();
+            }
+        }, { passive: true });
+        imgContainer.addEventListener('touchmove', (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy);
+                const scale = dist / pinchStartDist;
+                const newZoom = Math.max(0.5, Math.min(5, pinchStartZoom * scale));
+                setZoom(newZoom);
+                const img = imgContainer.querySelector('img');
+                if (img) img.style.transform = `scale(${newZoom})`;
+            }
+        }, { passive: false });
+
+        // ── Drag logic ──
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        titlebar.addEventListener('pointerdown', (e: PointerEvent) => {
+            if ((e.target as HTMLElement).closest('.gallery-lightbox-close')) return;
+            isDragging = true;
+            const rect = win.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            win.style.left = `${rect.left}px`;
+            win.style.top = `${rect.top}px`;
+            win.style.transform = 'none';
+            titlebar.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+        titlebar.addEventListener('pointermove', (e: PointerEvent) => {
+            if (!isDragging) return;
+            win.style.left = `${e.clientX - dragOffsetX}px`;
+            win.style.top = `${e.clientY - dragOffsetY}px`;
+        });
+        titlebar.addEventListener('pointerup', () => { isDragging = false; });
+        titlebar.addEventListener('lostpointercapture', () => { isDragging = false; });
+
+        // ── Resize logic ──
+        let isResizing = false;
+        let resizeStartX = 0;
+        let resizeStartY = 0;
+        let startW = 0;
+        let startH = 0;
+
+        resizeHandle.addEventListener('pointerdown', (e: PointerEvent) => {
+            isResizing = true;
+            resizeStartX = e.clientX;
+            resizeStartY = e.clientY;
+            startW = win.offsetWidth;
+            startH = win.offsetHeight;
+            resizeHandle.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        resizeHandle.addEventListener('pointermove', (e: PointerEvent) => {
+            if (!isResizing) return;
+            const newW = Math.max(200, startW + (e.clientX - resizeStartX));
+            const newH = Math.max(150, startH + (e.clientY - resizeStartY));
+            win.style.width = `${newW}px`;
+            win.style.height = `${newH}px`;
+        });
+        resizeHandle.addEventListener('pointerup', () => { isResizing = false; });
+        resizeHandle.addEventListener('lostpointercapture', () => { isResizing = false; });
+
+        // Close on Escape
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                cleanup();
+                win.remove();
+            }
+        };
+        document.addEventListener('keydown', onKey);
+
+        const cleanup = () => {
+            document.removeEventListener('keydown', onKey);
+        };
     }
 
     /**

@@ -1,6 +1,6 @@
 # StoryLine — Obsidian Plugin for Writers
 
-**Version 1.3.2** · By Jan Sandström
+**Version 1.4.0** · By Jan Sandström
 
 StoryLine transforms your Obsidian vault into a complete book planning and writing tool. Organize scenes, build characters, manage locations, track plotlines, and monitor your progress — all inside Obsidian.
 
@@ -36,6 +36,8 @@ Kanban-style scene cards organized by act, chapter, or status. Drag & drop scene
 
 Spreadsheet-style grid for mapping scenes against plotlines, themes, or story threads. Each cell can hold free text, formatting, colors, and linked scene cards. Double-click any cell to edit. Sticky headers keep row and column labels visible while scrolling.
 
+Act and chapter divider bands show where story sections begin and end. Scene rows are color-coded by status. Click any row or column header to jump straight to the file. Uses the same shared filters as the Board and Timeline views. When a cell has a linked scene, the inspector shows a tabbed panel — edit cell notes or the full scene details without leaving the grid.
+
 ![Plotgrid View](screenshots/02.Plotgrid.jpg)
 
 ---
@@ -62,7 +64,7 @@ Track plotlines across your scenes with two view modes: a transit-style **subway
 
 ### Characters View
 
-Rich character profiles with collapsible sections: basic info, physical traits, personality, backstory, relationships, character arc, and custom fields. **Portrait images** — click to add a character image (import from computer or choose from vault). Portraits display on overview cards (64×64 px) and in the detail editor (96×96 px). Includes a force-directed relationship map and a story graph showing how characters connect to scenes, locations, and props.
+Rich character profiles with collapsible sections: basic info, physical traits, personality, backstory, relationships, character arc, and custom fields. **Portrait images** — click to add a character image (import from computer or choose from vault). Portraits display on overview cards (64×64 px) and in the detail editor (96×96 px). **Image gallery** with carousel, captions, and a floating lightbox viewer. Includes a force-directed relationship map and a story graph showing how characters connect to scenes, locations, and props.
 
 ![Characters — Profile](screenshots/06.Characters.jpg)
 
@@ -76,7 +78,7 @@ Rich character profiles with collapsible sections: basic info, physical traits, 
 
 ### Locations View
 
-Hierarchical worldbuilding with worlds as top-level containers and locations nested underneath. Each location has fields for atmosphere, significance, and narrative role. **Portrait images** — add images to worlds and locations; thumbnails appear in the tree view and larger portraits in the detail editor.
+Hierarchical worldbuilding with worlds as top-level containers and locations nested underneath. Each location has fields for atmosphere, significance, and narrative role. **Portrait images** — add images to worlds and locations; thumbnails appear in the tree view and larger portraits in the detail editor. **Image gallery** with carousel, captions, and lightbox.
 
 ![Locations — Overview](screenshots/10.Locations.jpg)
 
@@ -135,7 +137,10 @@ Six export formats: Markdown, JSON, CSV, HTML, PDF, and DOCX. Export either an o
 - **Per-Project Colors** — Optionally save color scheme, HSL adjustments, and sticky note theme per project so each book can have its own look.
 - **Sticky Note Themes** — Six built-in sticky note color themes (Classic, Pastel, Earth, Jewel, Neon, Mono) with per-note overrides and HSL sliders.
 - **Plotline Subway Map** — Transit-style SVG visualization with gradient connectors, act dividers, scene labels, and drag-to-pan.
-- **Portrait Images** — Add images to characters and locations. Import from computer or choose from vault.
+- **Image Galleries** — Add up to 10 images per character or location with captions, carousel browsing, and a floating lightbox viewer.
+- **Custom Field Templates** — Define your own reusable fields for character and location profiles.
+- **Autocomplete Inputs** — Character, location, and tag fields use smart autocomplete with tag-pill styling.
+- **Chapter Descriptions** — Add descriptions to acts and chapters via the Board view's right-click menu.
 - **Undo / Redo** — `Ctrl+Z` / `Ctrl+Shift+Z` with a 50-action stack.
 
 ---

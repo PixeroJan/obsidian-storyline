@@ -229,6 +229,8 @@ export class SceneManager implements ISceneStore {
                 definedChapters: [],
                 actLabels: {},
                 chapterLabels: {},
+                actDescriptions: {},
+                chapterDescriptions: {},
                 filterPresets: [],
                 corkboardPositions: {},
             };
@@ -256,6 +258,8 @@ export class SceneManager implements ISceneStore {
         // saveSettings (which also calls saveProjectSystemData — with the new
         // project's data already loaded this is a harmless round-trip).
         await this.plugin.loadProjectSystemData();
+        // Reload universal field templates for the new project
+        await this.plugin.fieldTemplates.load();
         await this.loadCorkboardPositions();
         await this.plugin.saveSettings();
         await this.initialize();
@@ -327,6 +331,8 @@ export class SceneManager implements ISceneStore {
                 definedChapters: Array.isArray(fm.chapters) ? fm.chapters.map(Number).filter((n: number) => !isNaN(n)) : [],
                 actLabels: (fm.actLabels && typeof fm.actLabels === 'object') ? Object.fromEntries(Object.entries(fm.actLabels).map(([k, v]) => [Number(k), String(v)])) : {},
                 chapterLabels: (fm.chapterLabels && typeof fm.chapterLabels === 'object') ? Object.fromEntries(Object.entries(fm.chapterLabels).map(([k, v]) => [Number(k), String(v)])) : {},
+                actDescriptions: (fm.actDescriptions && typeof fm.actDescriptions === 'object') ? Object.fromEntries(Object.entries(fm.actDescriptions).map(([k, v]) => [Number(k), String(v)])) : {},
+                chapterDescriptions: (fm.chapterDescriptions && typeof fm.chapterDescriptions === 'object') ? Object.fromEntries(Object.entries(fm.chapterDescriptions).map(([k, v]) => [Number(k), String(v)])) : {},
                 filterPresets: Array.isArray(fm.filterPresets) ? fm.filterPresets : [],
                 corkboardPositions: {},
             };
@@ -761,6 +767,52 @@ export class SceneManager implements ISceneStore {
         await this.saveProjectFrontmatter(this._activeProject);
     }
 
+    // ────────────────────────────────────
+    //  Act / chapter descriptions
+    // ────────────────────────────────────
+
+    /** Get the description for a specific act */
+    getActDescription(actNumber: number): string | undefined {
+        return this._activeProject?.actDescriptions?.[actNumber];
+    }
+
+    /** Get all act descriptions */
+    getActDescriptions(): Record<number, string> {
+        return this._activeProject?.actDescriptions ?? {};
+    }
+
+    /** Set / update the description for a given act */
+    async setActDescription(actNumber: number, description: string): Promise<void> {
+        if (!this._activeProject) return;
+        if (description.trim()) {
+            this._activeProject.actDescriptions[actNumber] = description.trim();
+        } else {
+            delete this._activeProject.actDescriptions[actNumber];
+        }
+        await this.saveProjectFrontmatter(this._activeProject);
+    }
+
+    /** Get the description for a specific chapter */
+    getChapterDescription(chapterNumber: number): string | undefined {
+        return this._activeProject?.chapterDescriptions?.[chapterNumber];
+    }
+
+    /** Get all chapter descriptions */
+    getChapterDescriptions(): Record<number, string> {
+        return this._activeProject?.chapterDescriptions ?? {};
+    }
+
+    /** Set / update the description for a given chapter */
+    async setChapterDescription(chapterNumber: number, description: string): Promise<void> {
+        if (!this._activeProject) return;
+        if (description.trim()) {
+            this._activeProject.chapterDescriptions[chapterNumber] = description.trim();
+        } else {
+            delete this._activeProject.chapterDescriptions[chapterNumber];
+        }
+        await this.saveProjectFrontmatter(this._activeProject);
+    }
+
     /** Apply a beat sheet template — sets acts, chapters, and act labels */
     async applyBeatSheet(template: BeatSheetTemplate): Promise<void> {
         if (!this._activeProject) return;
@@ -926,6 +978,20 @@ export class SceneManager implements ISceneStore {
             existingFm.chapterLabels = project.chapterLabels;
         } else {
             delete existingFm.chapterLabels;
+        }
+
+        // Act descriptions
+        if (Object.keys(project.actDescriptions).length > 0) {
+            existingFm.actDescriptions = project.actDescriptions;
+        } else {
+            delete existingFm.actDescriptions;
+        }
+
+        // Chapter descriptions
+        if (Object.keys(project.chapterDescriptions).length > 0) {
+            existingFm.chapterDescriptions = project.chapterDescriptions;
+        } else {
+            delete existingFm.chapterDescriptions;
         }
 
         // Filter presets

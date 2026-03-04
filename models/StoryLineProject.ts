@@ -35,6 +35,10 @@ export interface StoryLineProject {
     actLabels: Record<number, string>;
     /** Human-readable labels for chapters (chapter number → label, e.g. 1 → "Opening Image") */
     chapterLabels: Record<number, string>;
+    /** Optional descriptions for acts (act number → description text) */
+    actDescriptions: Record<number, string>;
+    /** Optional descriptions for chapters (chapter number → description text) */
+    chapterDescriptions: Record<number, string>;
     /** Saved filter presets (persisted in project frontmatter) */
     filterPresets: FilterPreset[];
     /** Corkboard free-position layout (scene file path -> coordinates + layer order) */

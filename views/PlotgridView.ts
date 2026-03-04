@@ -1,8 +1,10 @@
 import { ItemView, WorkspaceLeaf, Menu, Modal, TFile, Notice } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { CellData, ColumnMeta, RowMeta, PlotGridData } from '../models/PlotGridData';
+import { LocationManager } from '../services/LocationManager';
 import { openConfirmModal } from '../components/ConfirmModal';
 import { Scene, SceneStatus, STATUS_CONFIG } from '../models/Scene';
+import type { SceneFilter, SortConfig } from '../models/Scene';
 import { SceneManager } from '../services/SceneManager';
 import { CharacterManager } from '../services/CharacterManager';
 import { InspectorComponent } from '../components/Inspector';
@@ -10,6 +12,7 @@ import { QuickAddModal } from '../components/QuickAddModal';
 import { LinkScanner } from '../services/LinkScanner';
 import * as lucide from 'lucide';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
+import { FiltersComponent } from '../components/Filters';
 import { enableDragToPan } from '../components/DragToPan';
 import { isMobile } from '../components/MobileAdapter';
 import { PLOTGRID_VIEW_TYPE } from '../constants';
@@ -42,6 +45,8 @@ export class PlotgridView extends ItemView {
     private selectedCol: number | null = null;
     private inspectorComponent: InspectorComponent | null = null;
     private inspectorEl: HTMLElement | null = null;
+    private filtersComponent: FiltersComponent | null = null;
+    private currentFilter: SceneFilter = {};
 
     constructor(leaf: WorkspaceLeaf, plugin?: SceneCardsPlugin) {
         super(leaf);
@@ -148,6 +153,22 @@ export class PlotgridView extends ItemView {
         const toolbar = this.wrapperEl.createDiv('story-line-toolbar plot-grid-toolbar');
         toolbar.style.flex = '0 0 auto';
         toolbar.style.padding = '8px';
+
+        // Filter bar (shared component, same as Board/Timeline)
+        const filterContainer = this.wrapperEl.createDiv('story-line-filters-container');
+        const filterSceneMgr = this.plugin?.sceneManager as SceneManager | undefined;
+        if (filterSceneMgr && this.plugin) {
+            this.filtersComponent = new FiltersComponent(
+                filterContainer,
+                filterSceneMgr,
+                (filter, _sort) => {
+                    this.currentFilter = filter;
+                    this.renderGrid();
+                },
+                this.plugin
+            );
+            this.filtersComponent.render();
+        }
 
         this.scrollAreaEl = this.wrapperEl.createDiv('plot-grid-scroll-area');
         this.scrollAreaEl.style.flex = '1 1 auto';
@@ -492,7 +513,66 @@ export class PlotgridView extends ItemView {
         this.canvasEl.empty();
 
         let colTemplate = [ROW_HEADER_WIDTH + 'px', ...this.data.columns.map((c) => c.width + 'px')].join(' ');
-        let rowTemplate = [COL_HEADER_HEIGHT + 'px', ...this.data.rows.map((r) => r.height + 'px')].join(' ');
+
+        // ── Determine which rows are visible (filter support) ──
+        const sceneManager = this.plugin?.sceneManager as SceneManager | undefined;
+        const activeProject = sceneManager?.activeProject;
+        const hasFilter = this.currentFilter && Object.keys(this.currentFilter).some(
+            k => { const v = (this.currentFilter as any)[k]; return v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0); }
+        );
+        let filteredPaths: Set<string> | null = null;
+        if (hasFilter && sceneManager) {
+            filteredPaths = new Set(
+                sceneManager.getFilteredScenes(this.currentFilter, undefined).map(s => s.filePath)
+            );
+        }
+        const visibleRows = new Set<number>();
+        for (let ri = 0; ri < this.data.rows.length; ri++) {
+            const row = this.data.rows[ri];
+            if (!filteredPaths) { visibleRows.add(ri); continue; }
+            // Manual rows always visible
+            if (!row.sourceId || row.sourceType !== 'auto') { visibleRows.add(ri); continue; }
+            if (filteredPaths.has(row.sourceId)) visibleRows.add(ri);
+        }
+
+        // ── Build act/chapter divider positions (visible rows only) ──
+        const dividersBefore = new Map<number, Array<{type: 'act'|'chapter', label: string}>>();
+        {
+            let prevAct: string | number | undefined;
+            let prevChapter: string | number | undefined;
+            for (let ri = 0; ri < this.data.rows.length; ri++) {
+                if (!visibleRows.has(ri)) continue;
+                const row = this.data.rows[ri];
+                if (row.sourceType !== 'auto' || !row.sourceId || !sceneManager) continue;
+                const scene = sceneManager.getScene(row.sourceId);
+                if (!scene) continue;
+                const dividers: Array<{type: 'act'|'chapter', label: string}> = [];
+                if (scene.act !== undefined && String(scene.act) !== String(prevAct)) {
+                    const actNum = typeof scene.act === 'number' ? scene.act : parseInt(String(scene.act), 10);
+                    const actLabel = !isNaN(actNum) ? (activeProject as any)?.actLabels?.[actNum] || '' : '';
+                    dividers.push({ type: 'act', label: actLabel ? `Act ${scene.act}: ${actLabel}` : `Act ${scene.act}` });
+                    prevChapter = undefined;
+                }
+                if (scene.chapter !== undefined && String(scene.chapter) !== String(prevChapter)) {
+                    const chNum = typeof scene.chapter === 'number' ? scene.chapter : parseInt(String(scene.chapter), 10);
+                    const chLabel = !isNaN(chNum) ? (activeProject as any)?.chapterLabels?.[chNum] || '' : '';
+                    dividers.push({ type: 'chapter', label: chLabel ? `Ch ${scene.chapter}: ${chLabel}` : `Chapter ${scene.chapter}` });
+                }
+                if (dividers.length > 0) dividersBefore.set(ri, dividers);
+                prevAct = scene.act;
+                prevChapter = scene.chapter;
+            }
+        }
+
+        // Build row template including divider rows (visible only)
+        const rowHeightParts: string[] = [];
+        for (let ri = 0; ri < this.data.rows.length; ri++) {
+            if (!visibleRows.has(ri)) continue;
+            const divs = dividersBefore.get(ri);
+            if (divs) for (const d of divs) rowHeightParts.push(d.type === 'act' ? '32px' : '26px');
+            rowHeightParts.push(this.data.rows[ri].height + 'px');
+        }
+        let rowTemplate = [COL_HEADER_HEIGHT + 'px', ...rowHeightParts].join(' ');
 
         // If there are no columns/rows yet, use flexible templates so the empty-state message
         // can span the full available width instead of being constrained to the single header column.
@@ -573,11 +653,19 @@ export class PlotgridView extends ItemView {
                 inp.addEventListener('blur', () => commit());
             });
 
-            // click selects entire column
+            // click opens entity for synced columns; Ctrl/Cmd+click selects
             el.addEventListener('click', (ev) => {
                 ev.stopPropagation();
+                if (col.sourceType === 'auto' && col.sourceId && col.sourceKind !== 'tags' && !(ev.ctrlKey || ev.metaKey)) {
+                    this.navigateToColumnEntity(col);
+                    return;
+                }
                 this.selectColumnHeader(ci);
             });
+            if (col.sourceType === 'auto' && col.sourceKind && col.sourceKind !== 'tags') {
+                el.title = `${col.label} (click to open)`;
+                el.style.cursor = 'pointer';
+            }
 
             // enable drag-to-reorder for columns
             el.draggable = true;
@@ -647,6 +735,23 @@ export class PlotgridView extends ItemView {
         }
 
         for (let ri = 0; ri < this.data.rows.length; ri++) {
+            if (!visibleRows.has(ri)) continue; // skip filtered-out rows
+            // ── Act/chapter dividers ──
+            const divs = dividersBefore.get(ri);
+            if (divs) {
+                const colCount = this.data.columns.length + 1;
+                for (const d of divs) {
+                    const divEl = this.canvasEl.createDiv(`plot-grid-divider plot-grid-divider-${d.type}`);
+                    divEl.style.gridColumn = `1 / ${colCount + 1}`;
+                    divEl.style.position = (this.data.stickyHeaders === false) ? 'relative' : 'sticky';
+                    divEl.style.left = '0';
+                    divEl.style.zIndex = '8';
+                    const icon = divEl.createSpan('plot-grid-divider-icon');
+                    obsidian.setIcon(icon, d.type === 'act' ? 'bookmark' : 'hash');
+                    divEl.createSpan({ text: d.label, cls: 'plot-grid-divider-label' });
+                }
+            }
+
             const row = this.data.rows[ri];
             const rowEl = this.canvasEl.createDiv('plot-grid-row-header');
             rowEl.style.position = (this.data.stickyHeaders === false) ? 'relative' : 'sticky';
@@ -662,6 +767,15 @@ export class PlotgridView extends ItemView {
             if (row.textColor) rowEl.style.color = row.textColor;
             if (row.bold) rowEl.style.fontWeight = '600';
             if (row.italic) rowEl.style.fontStyle = 'italic';
+
+            // Status color indicator on left border
+            if (row.sourceType === 'auto' && row.sourceId && sceneManager) {
+                const rowScene = sceneManager.getScene(row.sourceId);
+                if (rowScene) {
+                    const statusCfg = STATUS_CONFIG[rowScene.status || 'idea'];
+                    rowEl.style.borderLeft = `4px solid ${statusCfg.color}`;
+                }
+            }
 
             // allow naming like cells: double-click to edit label
             rowEl.addEventListener('dblclick', (ev) => {
@@ -679,11 +793,20 @@ export class PlotgridView extends ItemView {
                 inp.addEventListener('blur', () => commit());
             });
 
-            // click selects entire row
+            // click opens scene file for synced rows; Ctrl/Cmd+click selects
             rowEl.addEventListener('click', (ev) => {
                 ev.stopPropagation();
+                if (row.sourceType === 'auto' && row.sourceId && !(ev.ctrlKey || ev.metaKey)) {
+                    const file = this.app.vault.getAbstractFileByPath(row.sourceId) as TFile | null;
+                    if (file) this.app.workspace.getLeaf('tab').openFile(file, { state: { mode: 'preview' } });
+                    return;
+                }
                 this.selectRowHeader(ri);
             });
+            if (row.sourceType === 'auto' && row.sourceId) {
+                rowEl.title = `${row.label} (click to open)`;
+                rowEl.style.cursor = 'pointer';
+            }
 
             // enable drag-to-reorder for rows
             rowEl.draggable = true;
@@ -844,7 +967,7 @@ export class PlotgridView extends ItemView {
                         badge.addEventListener('click', (ev) => {
                             ev.stopPropagation();
                             const f = this.app.vault.getAbstractFileByPath(cell.linkedSceneId as string) as TFile | null;
-                            if (f) this.app.workspace.getLeaf('tab').openFile(f);
+                            if (f) this.app.workspace.getLeaf('tab').openFile(f, { state: { mode: 'preview' } });
                             else new Notice('Linked file not found');
                         });
                         const sub = cellEl.createDiv('plot-grid-linked-subtitle');
@@ -1600,10 +1723,41 @@ export class PlotgridView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(scene.filePath);
         if (file instanceof TFile) {
             const leaf = this.app.workspace.getLeaf('tab');
-            await leaf.openFile(file);
+            await leaf.openFile(file, { state: { mode: 'preview' } });
         } else {
             new Notice(`Could not find file: ${scene.filePath}`);
         }
+    }
+
+    /** Navigate to the entity represented by a column (character / location file) */
+    private navigateToColumnEntity(col: ColumnMeta): void {
+        if (!col.sourceId) return;
+        const name = col.sourceId.toLowerCase();
+
+        if (col.sourceKind === 'characters' || !col.sourceKind) {
+            const charMgr = this.plugin?.characterManager as CharacterManager | undefined;
+            if (charMgr) {
+                const match = charMgr.getAllCharacters().find(c => c.name.toLowerCase() === name);
+                if (match) {
+                    const file = this.app.vault.getAbstractFileByPath(match.filePath) as TFile | null;
+                    if (file) { this.app.workspace.getLeaf('tab').openFile(file, { state: { mode: 'preview' } }); return; }
+                }
+            }
+        }
+
+        if (col.sourceKind === 'locations' || !col.sourceKind) {
+            const locMgr = this.plugin?.locationManager as LocationManager | undefined;
+            if (locMgr) {
+                const allLocs = [...locMgr.getAllWorlds(), ...locMgr.getAllLocations()];
+                const match = allLocs.find(l => l.name.toLowerCase() === name);
+                if (match) {
+                    const file = this.app.vault.getAbstractFileByPath(match.filePath) as TFile | null;
+                    if (file) { this.app.workspace.getLeaf('tab').openFile(file, { state: { mode: 'preview' } }); return; }
+                }
+            }
+        }
+
+        // Tags have no backing file to navigate to
     }
 
     /** Delete a scene and refresh the grid */
@@ -1630,7 +1784,7 @@ export class PlotgridView extends ItemView {
                 this.scheduleSave();
                 this.renderGrid();
                 if (openAfter) {
-                    await this.app.workspace.getLeaf('tab').openFile(file);
+                    await this.app.workspace.getLeaf('tab').openFile(file, { state: { mode: 'preview' } });
                 }
             }
         );
@@ -1932,10 +2086,11 @@ export class PlotgridView extends ItemView {
             const existing = existingColMap.get(val);
             if (existing) {
                 existing.label = val;
+                existing.sourceKind = colSource;
                 colIds.set(val, existing.id);
             } else {
                 const id = makeId('c-');
-                const col: ColumnMeta = { id, label: val, width: 160, bgColor: '', sourceType: 'auto', sourceId: val };
+                const col: ColumnMeta = { id, label: val, width: 160, bgColor: '', sourceType: 'auto', sourceId: val, sourceKind: colSource };
                 this.data.columns.push(col);
                 colIds.set(val, id);
             }
@@ -2165,11 +2320,12 @@ export class PlotgridView extends ItemView {
         const col = this.data.columns[colIndex];
 
         // Stable key so we can always resolve the canonical cell in this.data
-        // even after refresh() replaces this.data with freshly-loaded data.
         const cellKey = `${row?.id}-${col?.id}`;
-
-        // Helper: get the live cell object from the current this.data
         const getCell = (): CellData => this.data.cells[cellKey] ?? cell;
+
+        // Resolve linked scene
+        const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
+        const linkedScene = (cell.linkedSceneId && scMgr) ? scMgr.getScene(cell.linkedSceneId) : undefined;
 
         // ── Header ──
         const header = el.createDiv('inspector-header');
@@ -2177,16 +2333,73 @@ export class PlotgridView extends ItemView {
         const closeBtn = header.createEl('button', { cls: 'clickable-icon inspector-close', text: '×' });
         closeBtn.addEventListener('click', () => this.hideCellInspector());
 
+        // ── Tab bar (only when a scene is linked) ──
+        let cellBody: HTMLElement;
+        let sceneBody: HTMLElement | null = null;
+        let cellInspectorInstance: InspectorComponent | null = null;
+
+        if (linkedScene) {
+            const tabBar = el.createDiv('sl-cell-tab-bar');
+            const cellTab = tabBar.createDiv({ cls: 'sl-cell-tab sl-cell-tab-active', text: 'Cell' });
+            const sceneTab = tabBar.createDiv({ cls: 'sl-cell-tab', text: 'Scene' });
+
+            // Small dot on Scene tab to indicate linked scene
+            sceneTab.createSpan({ cls: 'sl-cell-tab-dot' });
+
+            cellBody = el.createDiv('sl-cell-tab-body');
+            sceneBody = el.createDiv('sl-cell-tab-body');
+            sceneBody.style.display = 'none';
+
+            const switchTab = (active: 'cell' | 'scene') => {
+                if (active === 'cell') {
+                    cellTab.addClass('sl-cell-tab-active');
+                    sceneTab.removeClass('sl-cell-tab-active');
+                    cellBody.style.display = '';
+                    sceneBody!.style.display = 'none';
+                } else {
+                    cellTab.removeClass('sl-cell-tab-active');
+                    sceneTab.addClass('sl-cell-tab-active');
+                    cellBody.style.display = 'none';
+                    sceneBody!.style.display = '';
+                    // Lazy-render scene inspector on first switch
+                    if (!cellInspectorInstance && scMgr && this.plugin) {
+                        cellInspectorInstance = new InspectorComponent(
+                            sceneBody!,
+                            this.plugin,
+                            scMgr,
+                            {
+                                onEdit: (scene) => this.openScene(scene),
+                                onDelete: (scene) => this.deleteScene(scene),
+                                onRefresh: () => this.renderGrid(),
+                                onStatusChange: async (scene, status) => {
+                                    await scMgr.updateScene(scene.filePath, { status });
+                                    this.renderGrid();
+                                },
+                            }
+                        );
+                        cellInspectorInstance.show(linkedScene);
+                    }
+                }
+            };
+
+            cellTab.addEventListener('click', () => switchTab('cell'));
+            sceneTab.addEventListener('click', () => switchTab('scene'));
+        } else {
+            cellBody = el.createDiv('sl-cell-tab-body');
+        }
+
+        // ── Cell tab content ──
+
         // Row / Column label
-        const posSection = el.createDiv('inspector-section');
+        const posSection = cellBody.createDiv('inspector-section');
         posSection.createSpan({ cls: 'inspector-label', text: 'Row: ' });
         posSection.createSpan({ text: row?.label || `Row ${rowIndex + 1}` });
-        const colSection = el.createDiv('inspector-section');
+        const colSection = cellBody.createDiv('inspector-section');
         colSection.createSpan({ cls: 'inspector-label', text: 'Column: ' });
         colSection.createSpan({ text: col?.label || `Column ${colIndex + 1}` });
 
         // ── Cell text (editable) ──
-        const textSection = el.createDiv('inspector-section');
+        const textSection = cellBody.createDiv('inspector-section');
         textSection.createSpan({ cls: 'inspector-label', text: 'Content:' });
         const textArea = textSection.createEl('textarea', { cls: 'inspector-cell-textarea' });
         textArea.value = cell.content || '';
@@ -2202,8 +2415,8 @@ export class PlotgridView extends ItemView {
         textArea.style.font = 'inherit';
         textArea.style.fontSize = '13px';
 
-        // ── Scan results container ── (created before event handlers so they can reference it)
-        const scanContainer = el.createDiv('inspector-scan-results');
+        // ── Scan results container ──
+        const scanContainer = cellBody.createDiv('inspector-scan-results');
         this.updateCellInspectorScan(scanContainer, cell);
 
         let textSaveTimer: number | null = null;
@@ -2211,10 +2424,8 @@ export class PlotgridView extends ItemView {
             const liveCell = getCell();
             liveCell.content = textArea.value;
             liveCell.manualContent = true;
-            // Also keep the closure reference in sync (in case it diverged after a refresh)
             cell.content = textArea.value;
             cell.manualContent = true;
-            // Update the cell's visible content in the grid without a full re-render
             if (this.selectedRow !== null && this.selectedCol !== null) {
                 const gridCellEl = this.getCellElement(this.selectedRow, this.selectedCol);
                 if (gridCellEl) {
@@ -2225,7 +2436,6 @@ export class PlotgridView extends ItemView {
             if (textSaveTimer) window.clearTimeout(textSaveTimer);
             textSaveTimer = window.setTimeout(() => {
                 this.scheduleSave();
-                // Re-scan and update the inspector sections below
                 this.updateCellInspectorScan(scanContainer, liveCell);
             }, 600);
         });
@@ -2240,59 +2450,22 @@ export class PlotgridView extends ItemView {
             this.updateCellInspectorScan(scanContainer, liveCell);
         });
 
-        // ── Linked scene ──
-        const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
-        if (cell.linkedSceneId && scMgr) {
-            const scene = scMgr.getScene(cell.linkedSceneId);
-            if (scene) {
-                const sceneSection = el.createDiv('inspector-section');
-                sceneSection.createSpan({ cls: 'inspector-label', text: 'Linked Scene:' });
-                const sceneLink = sceneSection.createEl('a', {
-                    cls: 'inspector-scene-link',
-                    text: scene.title || scene.filePath.split('/').pop()?.replace('.md', '') || 'Untitled',
-                });
-                sceneLink.style.display = 'block';
-                sceneLink.style.marginTop = '4px';
-                sceneLink.style.cursor = 'pointer';
-                sceneLink.style.color = 'var(--text-accent)';
-                sceneLink.addEventListener('click', () => {
-                    const f = this.app.vault.getAbstractFileByPath(scene.filePath) as TFile | null;
-                    if (f) this.app.workspace.getLeaf('tab').openFile(f);
-                });
-
-                // Scene status
-                const statusSect = el.createDiv('inspector-section');
-                statusSect.createSpan({ cls: 'inspector-label', text: 'Status: ' });
-                const cfg = STATUS_CONFIG[scene.status || 'idea'];
-                const statusSpan = statusSect.createSpan();
-                const sIcon = statusSpan.createSpan();
-                obsidian.setIcon(sIcon, cfg.icon);
-                statusSpan.createSpan({ text: ' ' + cfg.label });
-
-                // POV
-                if (scene.pov) {
-                    const povSect = el.createDiv('inspector-section');
-                    povSect.createSpan({ cls: 'inspector-label', text: 'POV: ' });
-                    povSect.createSpan({ text: scene.pov });
-                }
-
-                // Location
-                if (scene.location) {
-                    const locSect = el.createDiv('inspector-section');
-                    locSect.createSpan({ cls: 'inspector-label', text: 'Location: ' });
-                    locSect.createSpan({ text: scene.location });
-                }
-
-                // Word count
-                const wcSect = el.createDiv('inspector-section');
-                wcSect.createSpan({ cls: 'inspector-label', text: 'Words: ' });
-                wcSect.createSpan({ text: String(scene.wordcount || 0) });
-
-                // Open scene button
-                const openBtn = el.createEl('button', { cls: 'mod-cta', text: 'Open Scene' });
-                openBtn.style.marginTop = '8px';
-                openBtn.addEventListener('click', () => this.openScene(scene));
-            }
+        // ── Linked scene summary (shown on Cell tab as a small info block) ──
+        if (linkedScene) {
+            const linkSection = cellBody.createDiv('inspector-section');
+            linkSection.createSpan({ cls: 'inspector-label', text: 'Linked Scene:' });
+            const sceneLink = linkSection.createEl('a', {
+                cls: 'inspector-scene-link',
+                text: linkedScene.title || linkedScene.filePath.split('/').pop()?.replace('.md', '') || 'Untitled',
+            });
+            sceneLink.style.display = 'block';
+            sceneLink.style.marginTop = '4px';
+            sceneLink.style.cursor = 'pointer';
+            sceneLink.style.color = 'var(--text-accent)';
+            sceneLink.addEventListener('click', () => {
+                const f = this.app.vault.getAbstractFileByPath(linkedScene.filePath) as TFile | null;
+                if (f) this.app.workspace.getLeaf('tab').openFile(f, { state: { mode: 'preview' } });
+            });
         }
     }
 
@@ -2342,7 +2515,7 @@ export class PlotgridView extends ItemView {
                     const char = charMgr?.getAllCharacters().find(c => c.name.toLowerCase() === key);
                     if (char) {
                         const f = this.app.vault.getAbstractFileByPath(char.filePath) as TFile | null;
-                        if (f) this.app.workspace.getLeaf('tab').openFile(f);
+                        if (f) this.app.workspace.getLeaf('tab').openFile(f, { state: { mode: 'preview' } });
                     }
                 });
             }

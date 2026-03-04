@@ -65,6 +65,7 @@ export class LocationManager {
                 type: 'world',
                 name: fm.name || basename,
                 image: fm.image,
+                gallery: this.parseGallery(fm.gallery),
                 description: fm.description,
                 geography: fm.geography,
                 culture: fm.culture,
@@ -85,6 +86,7 @@ export class LocationManager {
                 type: 'location',
                 name: fm.name || basename,
                 image: fm.image,
+                gallery: this.parseGallery(fm.gallery),
                 locationType: fm.locationType,
                 world: fm.world,
                 parent: fm.parent,
@@ -280,6 +282,19 @@ export class LocationManager {
     private extractBody(content: string): string {
         const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/);
         return match ? match[1].trim() : '';
+    }
+
+    private parseGallery(value: any): Array<{ path: string; caption: string }> | undefined {
+        if (!Array.isArray(value)) return undefined;
+        const parsed: Array<{ path: string; caption: string }> = [];
+        for (const item of value) {
+            if (!item || typeof item !== 'object') continue;
+            const path = typeof item.path === 'string' ? item.path : '';
+            const caption = typeof item.caption === 'string' ? item.caption : '';
+            if (!path) continue;
+            parsed.push({ path, caption });
+        }
+        return parsed.length ? parsed : undefined;
     }
 
     private async ensureFolder(folderPath: string): Promise<void> {

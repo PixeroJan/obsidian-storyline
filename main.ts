@@ -30,6 +30,7 @@ import { WritingTracker } from './services/WritingTracker';
 import { SnapshotManager } from './services/SnapshotManager';
 import { LinkScanner } from './services/LinkScanner';
 import { CascadeRenameService } from './services/CascadeRenameService';
+import { FieldTemplateService } from './services/FieldTemplateService';
 
 /**
  * StoryLine Plugin for Obsidian
@@ -51,6 +52,7 @@ export default class SceneCardsPlugin extends Plugin {
     snapshotManager: SnapshotManager;
     linkScanner: LinkScanner;
     cascadeRename: CascadeRenameService;
+    fieldTemplates: FieldTemplateService;
     /** The leaf currently hosting a StoryLine view */
     storyLeaf: WorkspaceLeaf | null = null;
     /** Removes native browser tooltips (`title`) inside StoryLine UI */
@@ -66,6 +68,7 @@ export default class SceneCardsPlugin extends Plugin {
         this.snapshotManager = new SnapshotManager(this.app);
         this.linkScanner = new LinkScanner(this.characterManager, this.locationManager);
         this.cascadeRename = new CascadeRenameService(this.app, this.sceneManager, this.characterManager, this.locationManager);
+        this.fieldTemplates = new FieldTemplateService(this.app, () => this.getProjectSystemFolder());
 
         // Wire up undo/redo to refresh views + re-index
         this.sceneManager.undoManager.onAfterUndoRedo = async () => {
@@ -143,6 +146,8 @@ export default class SceneCardsPlugin extends Plugin {
             await this.migrateProjectDataFromSettings();
             // Load per-project data from System/ files (tagColors, aliases, etc.)
             await this.loadProjectSystemData();
+            // Load universal field templates from System/field-templates.json
+            await this.fieldTemplates.load();
             // Load corkboard layout from System/board.json
             await this.sceneManager.loadCorkboardPositions();
             // Load locations and characters for the active project
@@ -337,6 +342,9 @@ export default class SceneCardsPlugin extends Plugin {
             this.nativeTooltipObserver.disconnect();
             this.nativeTooltipObserver = null;
         }
+
+        // Clean up any floating lightbox windows left on document.body
+        document.querySelectorAll('.gallery-lightbox-window').forEach(el => el.remove());
     }
 
     private enableNativeTooltipSuppression(): void {
@@ -865,7 +873,7 @@ export default class SceneCardsPlugin extends Plugin {
                 this.refreshOpenViews();
 
                 if (openAfter) {
-                    await this.app.workspace.getLeaf('tab').openFile(file);
+                    await this.app.workspace.getLeaf('tab').openFile(file, { state: { mode: 'preview' } });
                 }
             }
         );

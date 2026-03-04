@@ -11,6 +11,8 @@ import { StoryGraph } from '../components/StoryGraph';
 import { pickImage as pickImageModal, resolveImagePath } from '../components/ImagePicker';
 import { isMobile, DESKTOP_ONLY_CHARACTER_MODES, applyMobileClass } from '../components/MobileAdapter';
 import { RenameConfirmModal } from '../components/RenameConfirmModal';
+import { AddFieldModal } from '../components/AddFieldModal';
+import type { UniversalFieldTemplate } from '../services/FieldTemplateService';
 
 import type SceneCardsPlugin from '../main';
 
@@ -82,6 +84,8 @@ export class CharacterView extends ItemView {
     async onClose(): Promise<void> {
         // Flush any pending auto-save so edits are not lost
         await this.flushPendingSave();
+        // Remove any floating lightbox windows from document.body
+        document.querySelectorAll('.gallery-lightbox-window').forEach(el => el.remove());
     }
 
     // ── Main render ────────────────────────────────────
@@ -616,9 +620,9 @@ export class CharacterView extends ItemView {
         }
 
         // Working copy for editing
-        const draft: Character = { ...character, custom: { ...(character.custom || {}) } };
+        const draft: Character = { ...character, custom: { ...(character.custom || {}) }, universalFields: { ...(character.universalFields || {}) } };
         // Snapshot for undo — taken once when the detail view opens
-        this.undoSnapshot = { ...character, custom: { ...(character.custom || {}) } };
+        this.undoSnapshot = { ...character, custom: { ...(character.custom || {}) }, universalFields: { ...(character.universalFields || {}) } };
         // Track original name for cascade rename detection
         this.originalCharacterName = character.name;
 
@@ -694,7 +698,8 @@ export class CharacterView extends ItemView {
         // ── Custom fields section ──
         this.renderCustomFields(formPanel, draft);
 
-        // ── Side panel: scene info ──
+        // ── Side panel: gallery + scene info ──
+        this.renderGallery(sidePanel, draft);
         this.renderScenePanel(sidePanel, character.name);
     }
 
@@ -714,10 +719,35 @@ export class CharacterView extends ItemView {
         obsidian.setIcon(icon, category.icon);
         sectionHeader.createSpan({ text: category.title });
 
+        // ── '+' button to add a universal field to this section ──
+        const addFieldBtn = sectionHeader.createEl('button', {
+            cls: 'character-section-add-field-btn',
+            attr: { title: 'Add universal field to this section', 'aria-label': 'Add universal field' },
+        });
+        obsidian.setIcon(addFieldBtn, 'plus');
+        addFieldBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Don't toggle collapse
+            const modal = new AddFieldModal(
+                this.app,
+                category.title,
+                null,
+                async (template) => {
+                    await this.plugin.fieldTemplates.add(template);
+                    // Re-render the detail view to show the new field
+                    if (this.selectedCharacter && this.rootContainer) {
+                        this.renderCharacterDetail(this.rootContainer);
+                    }
+                },
+            );
+            modal.open();
+        });
+
         const sectionBody = section.createDiv('character-section-body');
         if (isCollapsed) sectionBody.style.display = 'none';
 
-        sectionHeader.addEventListener('click', () => {
+        sectionHeader.addEventListener('click', (e) => {
+            // Ignore clicks on the add-field button
+            if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
             if (this.collapsedSections.has(category.title)) {
                 this.collapsedSections.delete(category.title);
                 sectionBody.style.display = '';
@@ -729,9 +759,15 @@ export class CharacterView extends ItemView {
             }
         });
 
-        // Fields
+        // Built-in fields
         for (const field of category.fields) {
             this.renderField(sectionBody, field, draft);
+        }
+
+        // ── Universal fields for this section ──
+        const universalFields = this.plugin.fieldTemplates.getBySection(category.title);
+        for (const tpl of universalFields) {
+            this.renderUniversalField(sectionBody, tpl, draft);
         }
     }
 
@@ -788,12 +824,22 @@ export class CharacterView extends ItemView {
         } else if (field.multiline) {
             const textarea = row.createEl('textarea', {
                 cls: 'character-field-textarea',
-                attr: { placeholder: field.placeholder, rows: '3' },
+                attr: { placeholder: field.placeholder, rows: '2' },
             });
             textarea.value = value;
+            // Auto-grow: fit content, shrink back when empty
+            const autoGrow = () => {
+                textarea.style.height = 'auto';
+                const scrollH = textarea.scrollHeight;
+                const minH = 48; // ~2 rows
+                textarea.style.height = Math.max(scrollH, minH) + 'px';
+            };
+            // Initial sizing after paint
+            setTimeout(autoGrow, 0);
             textarea.addEventListener('input', () => {
                 (draft as any)[field.key] = textarea.value;
                 this.scheduleSave(draft);
+                autoGrow();
             });
         } else {
             const input = row.createEl('input', {
@@ -813,6 +859,99 @@ export class CharacterView extends ItemView {
                     this.checkCharacterRename(draft, input);
                 });
             }
+        }
+    }
+
+    /**
+     * Render a single universal (template-defined) field inside a section.
+     * Values are stored in `draft.universalFields[template.id]`.
+     */
+    private renderUniversalField(
+        parent: HTMLElement,
+        tpl: UniversalFieldTemplate,
+        draft: Character,
+    ): void {
+        if (!draft.universalFields) draft.universalFields = {};
+        const value = draft.universalFields[tpl.id] ?? '';
+
+        const row = parent.createDiv('character-field-row character-universal-field-row');
+
+        // Label with an edit icon
+        const labelWrap = row.createDiv('character-universal-label-wrap');
+        labelWrap.createEl('label', { cls: 'character-field-label', text: tpl.label });
+
+        const editBtn = labelWrap.createEl('button', {
+            cls: 'character-universal-edit-btn',
+            attr: { title: 'Edit or remove this universal field', 'aria-label': 'Edit field' },
+        });
+        obsidian.setIcon(editBtn, 'pencil');
+        editBtn.addEventListener('click', () => {
+            const modal = new AddFieldModal(
+                this.app,
+                tpl.section,
+                tpl,
+                async (updated) => {
+                    await this.plugin.fieldTemplates.update(tpl.id, updated);
+                    if (this.selectedCharacter && this.rootContainer) {
+                        this.renderCharacterDetail(this.rootContainer);
+                    }
+                },
+                async () => {
+                    await this.plugin.fieldTemplates.remove(tpl.id);
+                    // Optionally clean up universalFields[tpl.id] from all characters
+                    if (this.selectedCharacter && this.rootContainer) {
+                        this.renderCharacterDetail(this.rootContainer);
+                    }
+                },
+            );
+            modal.open();
+        });
+
+        // Input control based on template type
+        if (tpl.type === 'dropdown') {
+            const select = row.createEl('select', { cls: 'character-field-input dropdown' });
+            select.createEl('option', { text: tpl.placeholder || 'Select…', value: '' });
+            for (const opt of tpl.options) {
+                const el = select.createEl('option', { text: opt, value: opt });
+                if (value === opt) el.selected = true;
+            }
+            // If current value isn't in the list, add it
+            if (value && !tpl.options.includes(value)) {
+                const el = select.createEl('option', { text: value, value });
+                el.selected = true;
+            }
+            select.addEventListener('change', () => {
+                draft.universalFields![tpl.id] = select.value;
+                this.scheduleSave(draft);
+            });
+        } else if (tpl.type === 'textarea') {
+            const textarea = row.createEl('textarea', {
+                cls: 'character-field-textarea',
+                attr: { placeholder: tpl.placeholder, rows: '2' },
+            });
+            textarea.value = value;
+            const autoGrow = () => {
+                textarea.style.height = 'auto';
+                textarea.style.height = Math.max(textarea.scrollHeight, 48) + 'px';
+            };
+            setTimeout(autoGrow, 0);
+            textarea.addEventListener('input', () => {
+                draft.universalFields![tpl.id] = textarea.value;
+                this.scheduleSave(draft);
+                autoGrow();
+            });
+        } else {
+            // Default: single-line text
+            const input = row.createEl('input', {
+                cls: 'character-field-input',
+                type: 'text',
+                attr: { placeholder: tpl.placeholder },
+            });
+            input.value = value;
+            input.addEventListener('input', () => {
+                draft.universalFields![tpl.id] = input.value;
+                this.scheduleSave(draft);
+            });
         }
     }
 
@@ -1306,6 +1445,183 @@ export class CharacterView extends ItemView {
         renderAllCustomFields();
     }
 
+    // ── Image gallery carousel ─────────────────────────
+
+    private renderGallery(container: HTMLElement, draft: Character): void {
+        const MAX_GALLERY = 10;
+        const SECTION_KEY = '__Gallery';
+
+        const wrapper = container.createDiv('character-gallery');
+
+        const gallery = draft.gallery ?? [];
+
+        // Collapsible header with add button
+        const isCollapsed = this.collapsedSections.has(SECTION_KEY);
+        const header = wrapper.createDiv('character-gallery-header');
+        const chevron = header.createSpan('character-section-chevron');
+        obsidian.setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
+        header.createEl('h4', { text: 'Gallery' });
+
+        // Add button in header (like section add-field buttons)
+        if (gallery.length < MAX_GALLERY) {
+            const addBtn = header.createEl('button', {
+                cls: 'character-section-add-field-btn',
+                attr: { title: `Add image (${gallery.length}/${MAX_GALLERY})`, 'aria-label': 'Add gallery image' }
+            });
+            obsidian.setIcon(addBtn, 'plus');
+            addBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.pickImage().then(async (picked) => {
+                    if (picked && picked !== '') {
+                        gallery.push({ path: picked, caption: '' });
+                        draft.gallery = [...gallery];
+                        await this.characterManager.saveCharacter(draft);
+                        // Re-render entire gallery section
+                        wrapper.empty();
+                        container.removeChild(wrapper);
+                        this.renderGallery(container, draft);
+                        // Move gallery before scene panel
+                        const scenePanel = container.querySelector('.character-side-stats');
+                        if (scenePanel) {
+                            const galleryEl = container.querySelector('.character-gallery');
+                            if (galleryEl) container.insertBefore(galleryEl, scenePanel);
+                        }
+                    }
+                });
+            });
+        }
+
+        const body = wrapper.createDiv('character-gallery-body');
+        if (isCollapsed) body.style.display = 'none';
+
+        header.addEventListener('click', (e) => {
+            if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
+            if (this.collapsedSections.has(SECTION_KEY)) {
+                this.collapsedSections.delete(SECTION_KEY);
+                body.style.display = '';
+                obsidian.setIcon(chevron, 'chevron-down');
+            } else {
+                this.collapsedSections.add(SECTION_KEY);
+                body.style.display = 'none';
+                obsidian.setIcon(chevron, 'chevron-right');
+            }
+        });
+
+        // Active (large) image display
+        const viewer = body.createDiv('character-gallery-viewer');
+        const captionEl = body.createDiv('character-gallery-caption');
+        let activeIndex = gallery.length > 0 ? 0 : -1;
+
+        const renderViewer = () => {
+            viewer.empty();
+            captionEl.empty();
+            if (activeIndex >= 0 && activeIndex < gallery.length) {
+                const entry = gallery[activeIndex];
+                const src = resolveImagePath(this.app, entry.path);
+                if (src) {
+                    const img = viewer.createEl('img', {
+                        cls: 'character-gallery-img',
+                        attr: { src, alt: entry.caption || 'Gallery image' }
+                    });
+                    img.style.cursor = 'pointer';
+                    img.addEventListener('click', () => {
+                        const galleryWidth = wrapper.offsetWidth;
+                        this.openGalleryLightbox(gallery, activeIndex, galleryWidth);
+                    });
+                    img.onerror = () => {
+                        img.remove();
+                        const ph = viewer.createDiv('character-gallery-placeholder');
+                        obsidian.setIcon(ph, 'image-off');
+                    };
+                } else {
+                    const ph = viewer.createDiv('character-gallery-placeholder');
+                    obsidian.setIcon(ph, 'image-off');
+                }
+
+                // Editable caption
+                const captionInput = captionEl.createEl('input', {
+                    cls: 'character-gallery-caption-input',
+                    attr: { type: 'text', placeholder: 'Add caption\u2026', value: entry.caption || '' }
+                });
+                const idx = activeIndex;
+                captionInput.addEventListener('input', () => {
+                    gallery[idx].caption = captionInput.value;
+                    draft.gallery = gallery.length ? [...gallery] : undefined;
+                    this.scheduleSave(draft);
+                });
+
+                // Remove button for active image
+                const removeBtn = captionEl.createEl('button', {
+                    cls: 'character-gallery-remove-btn',
+                    attr: { title: 'Remove this image' }
+                });
+                obsidian.setIcon(removeBtn, 'x');
+                removeBtn.addEventListener('click', () => {
+                    gallery.splice(idx, 1);
+                    draft.gallery = gallery.length ? [...gallery] : undefined;
+                    this.scheduleSave(draft);
+                    activeIndex = gallery.length > 0 ? Math.min(idx, gallery.length - 1) : -1;
+                    renderViewer();
+                    renderThumbs();
+                });
+            } else {
+                const ph = viewer.createDiv('character-gallery-empty');
+                ph.textContent = 'No images yet';
+            }
+        };
+
+        // Navigation row: prev | thumbs | next
+        const nav = body.createDiv('character-gallery-nav');
+        const prevBtn = nav.createEl('button', { cls: 'character-gallery-arrow', attr: { title: 'Previous' } });
+        obsidian.setIcon(prevBtn, 'chevron-left');
+        prevBtn.addEventListener('click', () => {
+            if (gallery.length === 0) return;
+            activeIndex = (activeIndex - 1 + gallery.length) % gallery.length;
+            renderViewer();
+            renderThumbs();
+        });
+
+        const thumbStrip = nav.createDiv('character-gallery-thumbs');
+
+        const nextBtn = nav.createEl('button', { cls: 'character-gallery-arrow', attr: { title: 'Next' } });
+        obsidian.setIcon(nextBtn, 'chevron-right');
+        nextBtn.addEventListener('click', () => {
+            if (gallery.length === 0) return;
+            activeIndex = (activeIndex + 1) % gallery.length;
+            renderViewer();
+            renderThumbs();
+        });
+
+        // Thumbnail strip
+        const renderThumbs = () => {
+            thumbStrip.empty();
+            for (let i = 0; i < gallery.length; i++) {
+                const thumb = thumbStrip.createDiv({
+                    cls: `character-gallery-thumb${i === activeIndex ? ' active' : ''}`
+                });
+                const src = resolveImagePath(this.app, gallery[i].path);
+                if (src) {
+                    const timg = thumb.createEl('img', { attr: { src } });
+                    timg.onerror = () => {
+                        timg.remove();
+                        obsidian.setIcon(thumb, 'image-off');
+                    };
+                } else {
+                    obsidian.setIcon(thumb, 'image-off');
+                }
+                const idx = i;
+                thumb.addEventListener('click', () => {
+                    activeIndex = idx;
+                    renderViewer();
+                    renderThumbs();
+                });
+            }
+        };
+
+        renderViewer();
+        renderThumbs();
+    }
+
     // ── Scene side panel ───────────────────────────────
 
     private renderScenePanel(container: HTMLElement, characterName: string): void {
@@ -1644,7 +1960,7 @@ export class CharacterView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(character.filePath);
         if (file instanceof TFile) {
             const leaf = this.app.workspace.getLeaf('tab');
-            await leaf.openFile(file);
+            await leaf.openFile(file, { state: { mode: 'preview' } });
         }
     }
 
@@ -1652,7 +1968,7 @@ export class CharacterView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(scene.filePath);
         if (file instanceof TFile) {
             const leaf = this.app.workspace.getLeaf('tab');
-            await leaf.openFile(file);
+            await leaf.openFile(file, { state: { mode: 'preview' } });
         } else {
             new Notice(`Could not find file: ${scene.filePath}`);
         }
@@ -1903,6 +2219,185 @@ export class CharacterView extends ItemView {
     private pickImage(currentImage?: string): Promise<string | undefined> {
         const sceneFolder = this.sceneManager.getSceneFolder();
         return pickImageModal(this.app, sceneFolder, currentImage);
+    }
+
+    /**
+     * Open a non-modal, draggable/resizable floating window showing a gallery image.
+     * Sized at 2× the gallery panel width. Has prev/next navigation.
+     */
+    private openGalleryLightbox(
+        gallery: Array<{ path: string; caption: string }>,
+        startIndex: number,
+        galleryWidth: number
+    ): void {
+        // Close any existing lightbox
+        document.querySelector('.gallery-lightbox-window')?.remove();
+
+        let currentIndex = startIndex;
+        const winWidth = Math.min(Math.round(galleryWidth * 2), window.innerWidth - 40);
+        const winHeight = Math.round(winWidth * 3 / 4) + 36 + 28; // 4:3 content + titlebar + caption
+
+        // Floating window directly on body (no overlay — non-blocking)
+        const win = document.body.createDiv('gallery-lightbox-window');
+        win.style.width = `${winWidth}px`;
+        win.style.height = `${winHeight}px`;
+
+        // Titlebar (draggable)
+        const titlebar = win.createDiv('gallery-lightbox-titlebar');
+        const titleText = titlebar.createSpan({ cls: 'gallery-lightbox-title' });
+        const closeBtn = titlebar.createEl('button', { cls: 'gallery-lightbox-close', attr: { title: 'Close' } });
+        obsidian.setIcon(closeBtn, 'x');
+        closeBtn.addEventListener('click', () => { cleanup(); win.remove(); });
+
+        // Content area with nav + image
+        const contentRow = win.createDiv('gallery-lightbox-content-row');
+
+        const prevBtn = contentRow.createEl('button', { cls: 'gallery-lightbox-nav-btn', attr: { title: 'Previous' } });
+        obsidian.setIcon(prevBtn, 'chevron-left');
+        prevBtn.addEventListener('click', () => {
+            currentIndex = (currentIndex - 1 + gallery.length) % gallery.length;
+            renderContent();
+        });
+
+        const imgContainer = contentRow.createDiv('gallery-lightbox-content');
+
+        const nextBtn = contentRow.createEl('button', { cls: 'gallery-lightbox-nav-btn', attr: { title: 'Next' } });
+        obsidian.setIcon(nextBtn, 'chevron-right');
+        nextBtn.addEventListener('click', () => {
+            currentIndex = (currentIndex + 1) % gallery.length;
+            renderContent();
+        });
+
+        // Caption
+        const captionEl = win.createDiv('gallery-lightbox-caption');
+
+        // Resize handle
+        const resizeHandle = win.createDiv('gallery-lightbox-resize-handle');
+
+        const zoomLevels = new Map<number, number>();
+        const getZoom = () => zoomLevels.get(currentIndex) ?? 1;
+        const setZoom = (z: number) => { zoomLevels.set(currentIndex, z); };
+        const renderContent = () => {
+            const entry = gallery[currentIndex];
+            const src = resolveImagePath(this.app, entry.path);
+            titleText.textContent = entry.caption || `Image ${currentIndex + 1} of ${gallery.length}`;
+            imgContainer.empty();
+            if (src) {
+                const img = imgContainer.createEl('img', { attr: { src, alt: entry.caption || 'Gallery image' } });
+                img.style.transformOrigin = 'center center';
+                const z = getZoom();
+                if (z !== 1) img.style.transform = `scale(${z})`;
+            }
+            captionEl.textContent = entry.caption || '';
+            captionEl.style.display = entry.caption ? '' : 'none';
+            // Hide nav buttons if only one image
+            prevBtn.style.display = gallery.length > 1 ? '' : 'none';
+            nextBtn.style.display = gallery.length > 1 ? '' : 'none';
+        };
+        renderContent();
+
+        // ── Scroll / pinch to zoom ──
+        imgContainer.addEventListener('wheel', (e: WheelEvent) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            const newZoom = Math.max(0.5, Math.min(5, getZoom() + delta));
+            setZoom(newZoom);
+            const img = imgContainer.querySelector('img');
+            if (img) img.style.transform = `scale(${newZoom})`;
+        }, { passive: false });
+
+        // Touch pinch-to-zoom
+        let pinchStartDist = 0;
+        let pinchStartZoom = 1;
+        imgContainer.addEventListener('touchstart', (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                pinchStartDist = Math.hypot(dx, dy);
+                pinchStartZoom = getZoom();
+            }
+        }, { passive: true });
+        imgContainer.addEventListener('touchmove', (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy);
+                const scale = dist / pinchStartDist;
+                const newZoom = Math.max(0.5, Math.min(5, pinchStartZoom * scale));
+                setZoom(newZoom);
+                const img = imgContainer.querySelector('img');
+                if (img) img.style.transform = `scale(${newZoom})`;
+            }
+        }, { passive: false });
+
+        // ── Drag logic ──
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        titlebar.addEventListener('pointerdown', (e: PointerEvent) => {
+            if ((e.target as HTMLElement).closest('.gallery-lightbox-close')) return;
+            isDragging = true;
+            // Use getBoundingClientRect to get the actual visual position
+            // (handles transform: translate(-50%, -50%) correctly)
+            const rect = win.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            // Resolve transform to explicit left/top on first drag
+            win.style.left = `${rect.left}px`;
+            win.style.top = `${rect.top}px`;
+            win.style.transform = 'none';
+            titlebar.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+        titlebar.addEventListener('pointermove', (e: PointerEvent) => {
+            if (!isDragging) return;
+            win.style.left = `${e.clientX - dragOffsetX}px`;
+            win.style.top = `${e.clientY - dragOffsetY}px`;
+        });
+        titlebar.addEventListener('pointerup', () => { isDragging = false; });
+        titlebar.addEventListener('lostpointercapture', () => { isDragging = false; });
+
+        // ── Resize logic ──
+        let isResizing = false;
+        let resizeStartX = 0;
+        let resizeStartY = 0;
+        let startW = 0;
+        let startH = 0;
+
+        resizeHandle.addEventListener('pointerdown', (e: PointerEvent) => {
+            isResizing = true;
+            resizeStartX = e.clientX;
+            resizeStartY = e.clientY;
+            startW = win.offsetWidth;
+            startH = win.offsetHeight;
+            resizeHandle.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        resizeHandle.addEventListener('pointermove', (e: PointerEvent) => {
+            if (!isResizing) return;
+            const newW = Math.max(200, startW + (e.clientX - resizeStartX));
+            const newH = Math.max(150, startH + (e.clientY - resizeStartY));
+            win.style.width = `${newW}px`;
+            win.style.height = `${newH}px`;
+        });
+        resizeHandle.addEventListener('pointerup', () => { isResizing = false; });
+        resizeHandle.addEventListener('lostpointercapture', () => { isResizing = false; });
+
+        // Close on Escape
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                cleanup();
+                win.remove();
+            }
+        };
+        document.addEventListener('keydown', onKey);
+
+        const cleanup = () => {
+            document.removeEventListener('keydown', onKey);
+        };
     }
 }
 /**

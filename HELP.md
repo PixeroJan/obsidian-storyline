@@ -1,6 +1,6 @@
 # StoryLine — Obsidian Plugin for Writers
 
-**Version 1.3.2** · By Jan Sandström
+**Version 1.4.0** · By Jan Sandström
 
 StoryLine transforms your Obsidian vault into a full-featured book planning and writing tool. Organize scenes, build rich character profiles, manage worlds and locations, track plotlines, and monitor your progress — all without leaving Obsidian. Fully theme-aware with dark and light mode support.
 
@@ -45,6 +45,8 @@ StoryLine transforms your Obsidian vault into a full-featured book planning and 
 - [Link Scanner & Detected Links](#link-scanner--detected-links)
 - [Tag Type Overrides](#tag-type-overrides)
 - [Export](#export)
+- [Custom Field Templates](#custom-field-templates)
+- [Image Galleries](#image-galleries)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Settings](#settings)
 - [Project Management](#project-management)
@@ -124,6 +126,13 @@ A spreadsheet-like grid for detailed scene planning.
 - **Zoom in/out** for overview or detail.
 - Drag scenes onto cells to link them.
 - Supports custom row/column headers for acts, chapters, plotlines, etc.
+- **Act & chapter dividers** — colored bands appear when the act or chapter changes, showing labels from your project structure.
+- **Status color-coding** — scene rows show a colored left border matching their current status.
+- **Click to open** — click a row header to open the linked scene file. Click a column header to open the character or location file.
+- **Shared filters** — the same filter bar used in Board and Timeline views is now available in the Plotgrid. Filter by status, act, chapter, POV, characters, locations, tags, or search text. Presets are shared across views.
+- **Tabbed cell inspector** — when a cell has a linked scene, the inspector shows two tabs:
+  - **Cell tab** — cell content, detected characters/locations/tags, and a linked scene link.
+  - **Scene tab** — the full scene editor (status, POV, characters, location, tags, conflict, synopsis, etc.) so you can edit scene details without leaving the grid.
 
 ### Timeline View
 
@@ -184,6 +193,7 @@ A dedicated character management system with rich profiles.
   - **Character Arc** — starting state, desired arc, ending state.
   - **Custom Fields** — add your own key/value pairs for anything else.
 - **Portrait area** — circular portrait (96×96 px) at the top of the editor. Click to add or change the image. Hover shows "Add image" / "Change image" label.
+- **Image gallery** — add up to 10 reference images with captions. Browse them in a carousel below the portrait, or open any image in a floating lightbox you can resize and drag around. See [Image Galleries](#image-galleries).
 - **Image picker** — choose to import an image from your computer (saved into `<Project>/Images/`), pick an existing vault image, or remove the current image.
 - All fields show grey **placeholder text** that disappears when you type.
 - **Auto-save** — changes are saved automatically after a short delay (no manual save needed).
@@ -213,6 +223,7 @@ A hierarchical worldbuilding and location management system.
 - **World profiles** have eight collapsible sections: Overview, Geography & Environment, Culture & Society, Politics & Power, Magic & Technology, Beliefs & Mythology, Economy & Trade, History & Lore.
 - **Location profiles** have five sections: Overview, Atmosphere & Description, Story Significance, Connected Locations, and a Hierarchy section with World and Parent dropdowns.
 - **Portrait area** — rectangular portrait (120×80 px) at the top of the detail editor. Click to add or change the image.
+- **Image gallery** — add up to 10 images with captions. Browse via carousel or open in a floating lightbox. See [Image Galleries](#image-galleries).
 - **Image picker** — import from computer (saved into `<Project>/Images/` with automatic dedup), choose from vault, or remove.
 - **Custom fields** for any additional notes.
 - **Auto-save** with focus-loss protection (editing won't be interrupted).
@@ -302,13 +313,14 @@ Write your scene content below the frontmatter as normal Markdown.
 Click any scene card to open the **Inspector Panel** on the right side. It provides:
 
 - **Metadata editing** — title, act, chapter, sequence, status, POV, location, conflict, emotion, intensity.
-- **Characters** — add/remove characters with autocomplete.
-- **Tags** — manage plotline tags, with color-coded tag badges when tag colors are configured.
+- **Characters** — add/remove characters with autocomplete and tag-pill inputs.
+- **Tags** — manage plotline tags with autocomplete, color-coded tag badges when tag colors are configured.
 - **Notes** — editorial notes field for author comments and reminders.
+- **Snapshots** — save and restore point-in-time versions of the scene.
 - **Word count** — current vs. target with progress indicator.
 - **Setup/Payoff links** — see and manage which scenes set up or pay off this scene.
 - **Time & Order** — story date, story time, chronological order, timeline mode, and timeline strand (see [Reading Order vs Chronological Order](#reading-order-vs-chronological-order) and [Timeline Modes](#timeline-modes)).
-- **Open scene** — click to open the full Markdown file in a new tab.
+- **Open scene** — click to open the full Markdown file in reading view (frontmatter stays hidden).
 
 ---
 
@@ -900,6 +912,50 @@ Export your project in six formats. Access via the **Export** button in the view
 
 ---
 
+## Custom Field Templates
+
+Define your own reusable fields for character and location profiles. If the built-in fields don't cover everything you need, custom field templates let you add any fields you want — and they'll appear automatically in every character or location editor.
+
+### How to Use
+
+1. Open **Settings → Field Templates**.
+2. Click **Add Field** and give it a name (e.g., "Blood Type", "Languages Spoken", "Theme Song").
+3. Choose whether the field applies to **Characters**, **Locations**, or both.
+4. The new field appears in every character or location detail editor under the **Custom Fields** section.
+5. Fill in values per character/location as needed — empty fields are hidden from exports.
+
+Custom field data is stored in the character or location's frontmatter under the `custom` key as key-value pairs.
+
+---
+
+## Image Galleries
+
+Characters and locations support image galleries for storing reference art, concept images, maps, mood boards, or any visual material.
+
+### Adding Images
+
+1. Open a character or location detail editor.
+2. Scroll to the **Gallery** section (below the portrait).
+3. Click **Add Image** to import from your computer or choose an existing vault image.
+4. Add an optional **caption** to describe each image.
+5. Up to **10 images** per character or location.
+
+### Browsing
+
+- Use the **carousel** arrows to browse through images in the detail panel.
+- Click any image to open it in a **floating lightbox**.
+
+### Lightbox
+
+- The lightbox is a floating window you can **drag** around and **resize**.
+- **Zoom** in and out with the scroll wheel — zoom level is remembered per image.
+- Navigate between gallery images using the arrow buttons.
+- Close with the × button or by clicking outside.
+
+Images are saved into the `<Project>/Images/` folder, with automatic deduplication.
+
+---
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
@@ -1025,4 +1081,4 @@ MIT
 
 ---
 
-*StoryLine v1.3.2 — Transform your vault into a powerful book planning tool.*
+*StoryLine v1.4.0 — Transform your vault into a powerful book planning tool.*

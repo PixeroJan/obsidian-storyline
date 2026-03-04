@@ -1067,7 +1067,7 @@ export class TimelineView extends ItemView {
                 const file = await this.sceneManager.createScene(sceneData);
                 this.refresh();
                 if (openAfter) {
-                    await this.app.workspace.getLeaf('tab').openFile(file);
+                    await this.app.workspace.getLeaf('tab').openFile(file, { state: { mode: 'preview' } });
                 }
             }
         );
@@ -1143,13 +1143,16 @@ export class TimelineView extends ItemView {
             actsList.empty();
             const acts = this.sceneManager.getDefinedActs();
             const actLabels = this.sceneManager.getActLabels();
+            const actDescriptions = this.sceneManager.getActDescriptions();
             if (acts.length === 0) {
                 actsList.createEl('p', { cls: 'structure-empty', text: 'No acts defined yet.' });
             }
             for (const act of acts) {
                 const count = scenesPerAct.get(act) || 0;
                 const label = actLabels[act];
-                const row = actsList.createDiv('structure-row');
+                const desc = actDescriptions[act] || '';
+                const wrapper = actsList.createDiv('structure-item-wrapper');
+                const row = wrapper.createDiv('structure-row');
                 const labelText = label ? `Act ${act} — ${label}` : `Act ${act}`;
                 row.createSpan({ cls: 'structure-label', text: labelText });
                 row.createSpan({ cls: 'structure-count', text: `${count} scene${count !== 1 ? 's' : ''}` });
@@ -1194,6 +1197,29 @@ export class TimelineView extends ItemView {
                     await this.sceneManager.removeAct(act);
                     renderActsList();
                 });
+
+                // Description textarea
+                const descArea = wrapper.createEl('textarea', {
+                    cls: 'structure-description',
+                    attr: { placeholder: 'Description / notes for this act…', rows: '2' }
+                });
+                descArea.value = desc;
+                let descCommitTimer: ReturnType<typeof setTimeout> | null = null;
+                descArea.addEventListener('input', () => {
+                    // Auto-grow
+                    descArea.style.height = 'auto';
+                    descArea.style.height = descArea.scrollHeight + 'px';
+                    // Debounced save
+                    if (descCommitTimer) clearTimeout(descCommitTimer);
+                    descCommitTimer = setTimeout(async () => {
+                        await this.sceneManager.setActDescription(act, descArea.value);
+                    }, 600);
+                });
+                // Initial auto-grow
+                setTimeout(() => {
+                    descArea.style.height = 'auto';
+                    descArea.style.height = descArea.scrollHeight + 'px';
+                }, 0);
             }
         };
         renderActsList();
@@ -1243,14 +1269,51 @@ export class TimelineView extends ItemView {
         const renderChaptersList = () => {
             chaptersList.empty();
             const chapters = this.sceneManager.getDefinedChapters();
+            const chapterLabels = this.sceneManager.getChapterLabels();
+            const chapterDescriptions = this.sceneManager.getChapterDescriptions();
             if (chapters.length === 0) {
                 chaptersList.createEl('p', { cls: 'structure-empty', text: 'No chapters defined yet.' });
             }
             for (const ch of chapters) {
                 const count = scenesPerChapter.get(ch) || 0;
-                const row = chaptersList.createDiv('structure-row');
-                row.createSpan({ cls: 'structure-label', text: `Chapter ${ch}` });
+                const label = chapterLabels[ch];
+                const desc = chapterDescriptions[ch] || '';
+                const wrapper = chaptersList.createDiv('structure-item-wrapper');
+                const row = wrapper.createDiv('structure-row');
+                const labelText = label ? `Chapter ${ch} — ${label}` : `Chapter ${ch}`;
+                row.createSpan({ cls: 'structure-label', text: labelText });
                 row.createSpan({ cls: 'structure-count', text: `${count} scene${count !== 1 ? 's' : ''}` });
+
+                // Edit label button
+                const editBtn = row.createEl('button', {
+                    cls: 'clickable-icon structure-edit',
+                    attr: { 'aria-label': `Edit label for Chapter ${ch}` }
+                });
+                editBtn.textContent = '✎';
+                editBtn.addEventListener('click', () => {
+                    const input = row.querySelector('.structure-label-input') as HTMLInputElement;
+                    if (input) { input.focus(); return; }
+                    const labelSpan = row.querySelector('.structure-label') as HTMLElement;
+                    if (!labelSpan) return;
+                    labelSpan.style.display = 'none';
+                    const editInput = document.createElement('input');
+                    editInput.type = 'text';
+                    editInput.value = label || '';
+                    editInput.placeholder = 'e.g. The Journey Begins…';
+                    editInput.className = 'structure-label-input';
+                    row.insertBefore(editInput, labelSpan.nextSibling);
+                    editInput.focus();
+                    const commitEdit = async () => {
+                        await this.sceneManager.setChapterLabel(ch, editInput.value);
+                        renderChaptersList();
+                    };
+                    editInput.addEventListener('blur', commitEdit);
+                    editInput.addEventListener('keydown', (e: KeyboardEvent) => {
+                        if (e.key === 'Enter') { e.preventDefault(); editInput.blur(); }
+                        if (e.key === 'Escape') { labelSpan.style.display = ''; editInput.remove(); }
+                    });
+                });
+
                 const removeBtn = row.createEl('button', {
                     cls: 'clickable-icon structure-remove',
                     attr: { 'aria-label': `Remove Chapter ${ch}` }
@@ -1260,6 +1323,26 @@ export class TimelineView extends ItemView {
                     await this.sceneManager.removeChapter(ch);
                     renderChaptersList();
                 });
+
+                // Description textarea
+                const descArea = wrapper.createEl('textarea', {
+                    cls: 'structure-description',
+                    attr: { placeholder: 'Description / notes for this chapter…', rows: '2' }
+                });
+                descArea.value = desc;
+                let descCommitTimer: ReturnType<typeof setTimeout> | null = null;
+                descArea.addEventListener('input', () => {
+                    descArea.style.height = 'auto';
+                    descArea.style.height = descArea.scrollHeight + 'px';
+                    if (descCommitTimer) clearTimeout(descCommitTimer);
+                    descCommitTimer = setTimeout(async () => {
+                        await this.sceneManager.setChapterDescription(ch, descArea.value);
+                    }, 600);
+                });
+                setTimeout(() => {
+                    descArea.style.height = 'auto';
+                    descArea.style.height = descArea.scrollHeight + 'px';
+                }, 0);
             }
         };
         renderChaptersList();
@@ -1421,7 +1504,7 @@ export class TimelineView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(scene.filePath);
         if (file instanceof TFile) {
             const leaf = this.app.workspace.getLeaf('tab');
-            await leaf.openFile(file);
+            await leaf.openFile(file, { state: { mode: 'preview' } });
         } else {
             new Notice(`Could not find file: ${scene.filePath}`);
         }

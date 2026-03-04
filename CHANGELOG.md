@@ -2,6 +2,44 @@
 
 ---
 
+## Version 1.4.0
+
+### New Features
+
+- **Custom Field Templates** — Define your own reusable fields for character and location profiles. Add any fields you need beyond the built-in ones and they'll appear in every character or location editor.
+
+- **Image Gallery** — Characters and locations now support a full image gallery (up to 10 images each) with a carousel, editable captions, and a floating lightbox viewer you can resize and drag around. Great for reference art, concept images, or mood boards.
+
+- **Resizable Text Blocks** — All text fields in character and location detail views can now be resized by dragging the corner. No more squinting at tiny boxes.
+
+- **Autocomplete & Tag Inputs** — Character, location, and tag fields now use autocomplete with a tag-pill style instead of plain text inputs. Start typing and pick from existing entries.
+
+- **Chapter Titles & Descriptions** — Acts and chapters can now have descriptions in addition to labels. Right-click any act or chapter column header in the Board view and choose "Edit Description" to add notes about that section of your story. Descriptions appear as subtitles under column headers.
+
+### Plotgrid Improvements
+
+- **Act & Chapter Dividers** — The grid now shows colored divider bands when the act or chapter changes, with labels from your project structure. Makes it easy to see where story sections begin and end.
+
+- **Status Color-Coding** — Scene rows show a colored left border matching their status (idea, outlined, draft, written, revised, final) so you can see progress at a glance.
+
+- **Click to Open Files** — Click any scene row header to open its file. Click a column header to open the character or location file. Quick way to jump to your notes while working in the grid.
+
+- **Shared Filters** — The Plotgrid now uses the same filter bar as the Board and Timeline views. Filter by status, act, chapter, POV, characters, locations, tags, or search text. Presets are shared across all views.
+
+- **Tabbed Cell Inspector** — When a cell has a linked scene, the inspector panel now shows two tabs: **Cell** (cell content, detected links, and scan results) and **Scene** (the full scene editor with all fields). Switch between them to edit cell notes or scene details without leaving the grid.
+
+### Improvements
+
+- **Files open in preview mode** — Clicking to open a scene, character, or location file from anywhere in StoryLine now opens it in reading view by default, keeping frontmatter out of sight.
+
+### Bug Fixes
+
+- **POV dropdown staying open** — Fixed an issue where the POV autocomplete dropdown would keep reopening after being dismissed on empty fields.
+
+- **Autocomplete cleanup** — Fixed a memory issue where autocomplete dropdowns weren't being properly cleaned up when fields were re-rendered.
+
+---
+
 ## Version 1.3.2
 
 ### New Features
