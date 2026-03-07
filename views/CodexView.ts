@@ -420,10 +420,11 @@ export class CodexView extends ItemView {
         // Open in editor
         const openBtn = headerRight.createEl('button', {
             cls: 'codex-detail-action-btn',
-            attr: { 'aria-label': 'Open file', title: 'Open file' },
+            attr: { 'aria-label': 'Open file' },
         });
         const openIcon = openBtn.createSpan();
         obsidian.setIcon(openIcon, 'file');
+        attachTooltip(openBtn, 'Open file');
         openBtn.addEventListener('click', () => {
             const file = this.app.vault.getAbstractFileByPath(entry.filePath);
             if (file) this.app.workspace.openLinkText(entry.filePath, '', true);
@@ -432,10 +433,11 @@ export class CodexView extends ItemView {
         // Delete
         const deleteBtn = headerRight.createEl('button', {
             cls: 'codex-detail-action-btn codex-detail-delete-btn',
-            attr: { 'aria-label': 'Delete', title: 'Delete' },
+            attr: { 'aria-label': 'Delete' },
         });
         const deleteIcon = deleteBtn.createSpan();
         obsidian.setIcon(deleteIcon, 'trash');
+        attachTooltip(deleteBtn, 'Delete');
         deleteBtn.addEventListener('click', () => this.confirmDeleteEntry(entry));
 
         // ── Type label ─────────────────────────────────

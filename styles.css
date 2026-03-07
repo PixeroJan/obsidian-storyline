@@ -7509,19 +7509,25 @@ body.theme-dark {
 .codex-back-link:hover { color: var(--interactive-accent); background: none !important; }
 .codex-detail-header-right {
     display: flex;
-    gap: 4px;
+    gap: 8px;
 }
 .codex-detail-action-btn {
-    background: none;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    padding: 4px 8px;
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 2px;
     cursor: pointer;
     color: var(--text-muted);
-    display: flex;
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
+    border-radius: 0 !important;
 }
-.codex-detail-action-btn:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.codex-detail-action-btn:hover { color: var(--text-normal); background: none !important; }
+.codex-detail-action-btn:focus,
+.codex-detail-action-btn:focus-visible { outline: none !important; box-shadow: none !important; }
+.codex-detail-action-btn svg { width: 16px; height: 16px; }
 .codex-detail-delete-btn:hover { color: var(--text-error); }
 
 .codex-detail-type-label {
