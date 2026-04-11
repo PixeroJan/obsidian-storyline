@@ -460,8 +460,14 @@ export class NavigatorView extends ItemView {
 
         const sortFn = (a: Scene, b: Scene): number => {
             switch (this.sortMode) {
-                case 'reading':
-                    return (a.chapter ?? a.sequence ?? 9999) - (b.chapter ?? b.sequence ?? 9999);
+                case 'reading': {
+                    // Reading order: act → chapter → sequence
+                    const actCmp = Number(a.act ?? 9999) - Number(b.act ?? 9999);
+                    if (actCmp !== 0) return actCmp;
+                    const chapterCmp = Number(a.chapter ?? 9999) - Number(b.chapter ?? 9999);
+                    if (chapterCmp !== 0) return chapterCmp;
+                    return (a.sequence ?? 9999) - (b.sequence ?? 9999);
+                }
                 case 'chronological': {
                     // Prefer chronologicalOrder, then storyDate+storyTime, then sequence
                     if (a.chronologicalOrder != null || b.chronologicalOrder != null) {
@@ -524,7 +530,8 @@ export class NavigatorView extends ItemView {
         } else {
             const fill = this.progressBar.querySelector('.sl-nav-progress-fill') as HTMLElement;
             if (fill) fill.style.width = '0%';
-            this.progressLabel.textContent = `${this.formatWords(totalWords)} words · ${stats.totalScenes} scenes`;
+            const totalScenes = this.sceneManager.getAllScenes().filter(s => !s.corkboardNote).length;
+            this.progressLabel.textContent = `${this.formatWords(totalWords)} words · ${totalScenes} scenes`;
         }
     }
 
