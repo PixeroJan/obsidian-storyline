@@ -10,7 +10,7 @@ import { applyMobileClass } from '../components/MobileAdapter';
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import { Scene, getStatusOrder, resolveStatusCfg } from '../models/Scene';
 import { PlotWarning, Validator } from '../services/Validator';
-import { DEFAULT_STORYLINE_LOCALE, getReadingWordsPerMinute, isCjkStoryLineLocale, tokenizeWords } from '../utils/locale';
+import { DEFAULT_STORYLINE_LOCALE, countDialogueCharacters, countReadingCharacters, getReadingCharactersPerMinute, getReadingWordsPerMinute, getStopWords, isCjkStoryLineLocale, isSignificantWord, normalizeAnalysisToken, tokenizeWords } from '../utils/locale';
 
 /**
  * Statistics Dashboard View
@@ -77,7 +77,7 @@ export class StatsView extends ItemView {
         const allScenes = this.sceneManager.getAllScenes();
 
         // 1. Overview (always open)
-        this.renderOverview(content, stats);
+        this.renderOverview(content, stats, allScenes);
 
         // 2. Writing Sprint (always open)
         this.renderWritingSprint(content, stats.totalWords);
@@ -143,6 +143,7 @@ export class StatsView extends ItemView {
     private renderOverview(
         parent: HTMLElement,
         stats: ReturnType<SceneManager['getStatistics']>,
+        allScenes: Scene[],
     ): void {
         const section = parent.createDiv('stats-section');
         section.createEl('h4', { text: 'Overview' });
@@ -153,7 +154,13 @@ export class StatsView extends ItemView {
 
         // Estimated reading time
         const locale = this.sceneManager.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
-        const readMinutes = Math.round(stats.totalWords / getReadingWordsPerMinute(locale));
+        const cpm = getReadingCharactersPerMinute(locale);
+        const cjkChars = cpm > 0
+            ? allScenes.reduce((sum, s) => sum + countReadingCharacters(s.body || ''), 0)
+            : 0;
+        const readUnits = cjkChars > 0 ? cjkChars : stats.totalWords;
+        const readRate = cjkChars > 0 ? cpm : getReadingWordsPerMinute(locale);
+        const readMinutes = Math.round(readUnits / readRate);
         const readH = Math.floor(readMinutes / 60);
         const readM = readMinutes % 60;
         this.createStatCard(row, 'book-open', 'Read Time',
@@ -1039,7 +1046,7 @@ export class StatsView extends ItemView {
         const withBody = allScenes.filter(s => s.body && s.body.trim().length > 0);
         if (withBody.length === 0) return;
 
-        const quoteRe = /[""\u201C](.*?)[""\u201D]/gs;
+        const locale = this.sceneManager.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
         let totalDlg = 0;
         let totalAll = 0;
         const actDlg: Record<string, { dialogue: number; total: number }> = {};
@@ -1047,10 +1054,7 @@ export class StatsView extends ItemView {
         for (const scene of withBody) {
             const body = scene.body!;
             const total = body.length;
-            let dlg = 0;
-            let m: RegExpExecArray | null;
-            quoteRe.lastIndex = 0;
-            while ((m = quoteRe.exec(body)) !== null) dlg += m[1].length;
+            const dlg = countDialogueCharacters(body, locale);
             totalDlg += dlg;
             totalAll += total;
             const k = scene.act !== undefined ? `Act ${scene.act}` : 'No Act';
@@ -1230,19 +1234,10 @@ export class StatsView extends ItemView {
 
         const locale = this.sceneManager.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
         const words = tokenizeWords(clean, locale)
-            .map(w => isCjkStoryLineLocale(locale) ? w.trim() : w.replace(/^[^a-z]+|[^a-z]+$/g, ''))
-            .filter(w => isCjkStoryLineLocale(locale) ? w.length > 0 : w.length > 2);
+            .map(w => normalizeAnalysisToken(w, locale))
+            .filter(w => isSignificantWord(w, locale));
 
-        const stop = new Set([
-            'the','and','was','for','that','with','his','her','had','not','but','you','are',
-            'from','they','she','been','have','him','has','this','were','said','each','its',
-            'who','which','their','will','would','could','than','them','then','into','more',
-            'some','when','what','there','about','just','like','all','out','did','one','over',
-            'how','back','down','only','very','after','before','even','also','other','our',
-            'own','still','being','your','too','here','those','both','does','where','most',
-            'much','through','while','now','way','may','any','well','between','another',
-            'because','such','never',
-        ]);
+        const stop = getStopWords(locale);
 
         const freq: Record<string, number> = {};
         for (const w of words) if (!stop.has(w)) freq[w] = (freq[w] || 0) + 1;
@@ -1278,17 +1273,8 @@ export class StatsView extends ItemView {
     }
 
     private computeEchoes(scenes: Scene[]): { echoes: EchoCluster[]; perScene: SceneEchoReport[] } {
-        const stop = new Set([
-            'the','and','was','for','that','with','his','her','had','not','but','you','are',
-            'from','they','she','been','have','him','has','this','were','said','each','its',
-            'who','which','their','will','would','could','than','them','then','into','more',
-            'some','when','what','there','about','just','like','all','out','did','one','over',
-            'how','back','down','only','very','after','before','even','also','other','our',
-            'own','still','being','your','too','here','those','both','does','where','most',
-            'much','through','while','now','way','may','any','well','between','another',
-            'because','such','never','went','came','made','around','long','time','know',
-            'looked','thought','could','would','should','going','come','take','make',
-        ]);
+        const locale = this.sceneManager.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
+        const stop = getStopWords(locale);
 
         const echoes: EchoCluster[] = [];
         const perScene: SceneEchoReport[] = [];
@@ -1299,7 +1285,7 @@ export class StatsView extends ItemView {
         for (const scene of scenes) {
             const words = this.extractWords(scene.body!);
             for (const w of words) {
-                if (!stop.has(w) && w.length > 2) {
+                if (isSignificantWord(w, locale, stop)) {
                     globalFreq[w] = (globalFreq[w] || 0) + 1;
                     globalTotal++;
                 }
@@ -1311,20 +1297,20 @@ export class StatsView extends ItemView {
         for (const scene of scenes) {
             const body = scene.body!;
             // Sentence split — avoid lookbehind for iOS <16.4 compatibility.
-            const sentences = body.replace(/([.!?])\s+/g, '$1\u0001').split('\u0001').filter(s => s.trim().length > 0);
+            const sentences = body.replace(/([.!?。！？])\s*/g, '$1\u0001').split('\u0001').filter(s => s.trim().length > 0);
             const sceneWordList = this.extractWords(body);
             const sceneFreq: Record<string, number> = {};
-            const sceneTotal = sceneWordList.filter(w => !stop.has(w) && w.length > 2).length;
+            const sceneTotal = sceneWordList.filter(w => isSignificantWord(w, locale, stop)).length;
 
             for (const w of sceneWordList) {
-                if (!stop.has(w) && w.length > 2) {
+                if (isSignificantWord(w, locale, stop)) {
                     sceneFreq[w] = (sceneFreq[w] || 0) + 1;
                 }
             }
 
             // Find proximity echoes: same word repeated within a window of 3 sentences
             const sentenceWords: string[][] = sentences.map(s =>
-                this.extractWords(s).filter(w => !stop.has(w) && w.length > 2)
+                this.extractWords(s).filter(w => isSignificantWord(w, locale, stop))
             );
 
             const proximityMap: Record<string, number> = {};
@@ -1380,13 +1366,14 @@ export class StatsView extends ItemView {
     }
 
     private extractWords(text: string): string[] {
-        return text
+        const locale = this.sceneManager.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
+        const clean = text
             .replace(/^---[\s\S]*?---/gm, '')
             .replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g, '$3$1')
             .replace(/[#*_~`>\[\]()!]/g, '')
-            .toLowerCase()
-            .split(/\s+/)
-            .map(w => w.replace(/^[^a-z]+|[^a-z]+$/g, ''))
+            .toLowerCase();
+        return tokenizeWords(clean, locale)
+            .map(w => normalizeAnalysisToken(w, locale))
             .filter(w => w.length > 0);
     }
 
