@@ -3,6 +3,7 @@ import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel } f
 import { App, TFile, parseYaml, stringifyYaml } from 'obsidian';
 import { Scene, SceneStatus, TIMELINE_MODES, TimelineMode } from '../models/Scene';
 import { coerceString } from '../utils/narrow';
+import { DEFAULT_STORYLINE_LOCALE, StoryLineLocale, tokenizeWords } from '../utils/locale';
 
 /**
  * Issue #73 — frontmatter scene fields that point at other entities (scenes,
@@ -39,9 +40,13 @@ export function setWriteSceneFieldsAsWikilinks(on: boolean): void {
  */
 let _excludeCommentsFromWordcount = true;
 let _excludeChecklistFromWordcount = false;
+let _wordcountLocale: StoryLineLocale = DEFAULT_STORYLINE_LOCALE;
 export function setWordcountExclusions(opts: { comments?: boolean; checklists?: boolean }): void {
     if (typeof opts.comments === 'boolean') _excludeCommentsFromWordcount = opts.comments;
     if (typeof opts.checklists === 'boolean') _excludeChecklistFromWordcount = opts.checklists;
+}
+export function setWordcountLocale(locale: StoryLineLocale): void {
+    _wordcountLocale = locale;
 }
 function wrapScalar(v: unknown): unknown {
     if (!_writeSceneFieldsAsWikilinks) return v;
@@ -430,7 +435,7 @@ export class MetadataParser {
             .replace(/[*_~`]/g, '')
             .trim();
         if (!cleaned) return 0;
-        return cleaned.split(/\s+/).filter(w => w.length > 0).length;
+        return tokenizeWords(cleaned, _wordcountLocale).length;
     }
 
     /**

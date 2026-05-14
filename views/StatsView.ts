@@ -10,6 +10,7 @@ import { applyMobileClass } from '../components/MobileAdapter';
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import { Scene, getStatusOrder, resolveStatusCfg } from '../models/Scene';
 import { PlotWarning, Validator } from '../services/Validator';
+import { DEFAULT_STORYLINE_LOCALE, getReadingWordsPerMinute, isCjkStoryLineLocale, tokenizeWords } from '../utils/locale';
 
 /**
  * Statistics Dashboard View
@@ -150,8 +151,9 @@ export class StatsView extends ItemView {
         this.createStatCard(row, 'file-text', 'Scenes', String(stats.totalScenes));
         this.createStatCard(row, 'pen-tool', 'Words', stats.totalWords.toLocaleString());
 
-        // Estimated reading time (~250 wpm)
-        const readMinutes = Math.round(stats.totalWords / 250);
+        // Estimated reading time
+        const locale = this.sceneManager.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
+        const readMinutes = Math.round(stats.totalWords / getReadingWordsPerMinute(locale));
         const readH = Math.floor(readMinutes / 60);
         const readM = readMinutes % 60;
         this.createStatCard(row, 'book-open', 'Read Time',
@@ -1185,8 +1187,9 @@ export class StatsView extends ItemView {
             .replace(/\n+/g, ' ')
             .trim();
 
-        const sentences = clean.split(/[.!?]+/).filter(s => s.trim().length > 0);
-        const words = clean.split(/\s+/).filter(w => w.length > 0);
+        const sentences = clean.split(/[.!?。！？]+/).filter(s => s.trim().length > 0);
+        const locale = this.sceneManager.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
+        const words = tokenizeWords(clean, locale);
         const totalS = Math.max(sentences.length, 1);
         const totalW = Math.max(words.length, 1);
 
@@ -1194,7 +1197,9 @@ export class StatsView extends ItemView {
         let charLen = 0;
         for (const w of words) {
             syllables += this.countSyllables(w);
-            charLen += w.replace(/[^a-zA-Z]/g, '').length;
+            charLen += isCjkStoryLineLocale(locale)
+                ? w.replace(/\s/g, '').length
+                : w.replace(/[^a-zA-Z]/g, '').length;
         }
 
         const avgSL = Math.round((totalW / totalS) * 10) / 10;
@@ -1223,9 +1228,10 @@ export class StatsView extends ItemView {
             .replace(/[#*_~`>\[\]()!]/g, '')
             .toLowerCase();
 
-        const words = clean.split(/\s+/)
-            .map(w => w.replace(/^[^a-z]+|[^a-z]+$/g, ''))
-            .filter(w => w.length > 2);
+        const locale = this.sceneManager.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
+        const words = tokenizeWords(clean, locale)
+            .map(w => isCjkStoryLineLocale(locale) ? w.trim() : w.replace(/^[^a-z]+|[^a-z]+$/g, ''))
+            .filter(w => isCjkStoryLineLocale(locale) ? w.length > 0 : w.length > 2);
 
         const stop = new Set([
             'the','and','was','for','that','with','his','her','had','not','but','you','are',

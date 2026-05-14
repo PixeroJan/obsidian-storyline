@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unused-vars, no-unused-vars, no-useless-escape, no-control-regex, no-empty -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { FilterPreset } from './Scene';
+import type { StoryLineLocale } from '../utils/locale';
 
 /**
  * Represents a StoryLine project file.
@@ -24,6 +25,8 @@ export interface StoryLineProject {
     created: string;
     /** Description / notes (body of the .md file) */
     description: string;
+    /** Locale used for word segmentation and reading estimates */
+    locale: StoryLineLocale;
     /** Derived scene folder path */
     sceneFolder: string;
     /** Derived character folder path */
