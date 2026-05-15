@@ -91,7 +91,7 @@ export default class SceneCardsPlugin extends Plugin {
         this.locationManager = new LocationManager(this.app);
         this.characterManager = new CharacterManager(this.app);
         this.codexManager = new CodexManager(this.app);
-        this.snapshotManager = new SnapshotManager(this.app);
+        this.snapshotManager = new SnapshotManager(this.app, () => this.sceneManager?.activeProject?.locale ?? 'en');
         this.viewSnapshotService = new ViewSnapshotService(this);
         this.linkScanner = new LinkScanner(this.characterManager, this.locationManager);
         this.linkScanner.setCodexManager(this.codexManager);

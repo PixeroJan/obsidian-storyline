@@ -2,6 +2,7 @@
 import { App, TFile, TFolder, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { ResearchPost, ResearchType } from '../models/Research';
 import type SceneCardsPlugin from '../main';
+import { DEFAULT_STORYLINE_LOCALE, tokenizeWords } from '../utils/locale';
 
 /**
  * ResearchManager — CRUD, indexing, and search for research posts.
@@ -145,7 +146,8 @@ export class ResearchManager {
         }
 
         if (query.trim()) {
-            const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+            const locale = this.plugin.sceneManager?.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
+            const terms = tokenizeWords(query.toLowerCase(), locale);
             results = results.filter(post => {
                 const haystack = `${post.title} ${post.body} ${post.tags.join(' ')}`.toLowerCase();
                 return terms.every(term => haystack.includes(term));

@@ -6,6 +6,7 @@ import { ResearchManager } from '../services/ResearchManager';
 import { ResearchPost, ResearchType, RESEARCH_TYPE_CONFIG } from '../models/Research';
 import { RESEARCH_VIEW_TYPE } from '../constants';
 import { attachTooltip } from '../components/Tooltip';
+import { DEFAULT_STORYLINE_LOCALE, isCjkStoryLineLocale, tokenizeWords } from '../utils/locale';
 
 /**
  * ResearchView — a right-sidebar panel for browsing, searching,
@@ -402,7 +403,10 @@ export class ResearchView extends ItemView {
         if (scene.tags) keywords.push(...scene.tags);
         // Title words (3+ chars)
         if (scene.title) {
-            scene.title.split(/\s+/).filter(w => w.length >= 3).forEach(w => keywords.push(w));
+            const locale = this.plugin.sceneManager?.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
+            tokenizeWords(scene.title, locale)
+                .filter(w => w.length >= (isCjkStoryLineLocale(locale) ? 2 : 3))
+                .forEach(w => keywords.push(w));
         }
 
         return [...new Set(keywords)];

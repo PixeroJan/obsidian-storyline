@@ -18,6 +18,7 @@ import type { SceneStatus } from '../models/Scene';
 import { makeCustomCodexCategory } from '../models/Codex';
 import type { SeriesMetadata } from '../models/StoryLineProject';
 import { App, Modal, Notice, Setting, normalizePath, stringifyYaml } from 'obsidian';
+import { DEFAULT_STORYLINE_LOCALE, tokenizeWords } from '../utils/locale';
 
 // Node modules — only available on desktop
 const fs = ((window as unknown as { require?: (m: string) => unknown }).require)?.('fs') as typeof import('fs') | undefined;
@@ -1465,7 +1466,8 @@ export class ScrivenerImporter {
             fm.compile = false;
         }
 
-        const wordcount = body ? body.split(/\s+/).filter(Boolean).length : 0;
+        const locale = this.plugin.sceneManager?.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
+        const wordcount = tokenizeWords(body, locale).length;
         fm.wordcount = wordcount;
 
         fm.order = index;

@@ -2,6 +2,7 @@
 import { Modal, Setting, Notice } from 'obsidian';
 import type SceneCardsPlugin from '../main';
 import { BUILTIN_STATUS_CONFIG, Scene, SceneStatus, getStatusOrder } from '../models/Scene';
+import { DEFAULT_STORYLINE_LOCALE, tokenizeWords } from '../utils/locale';
 
 // ────────────────────────────────────────────────────────
 //  Split Scene Modal
@@ -134,8 +135,9 @@ export class SplitSceneModal extends Modal {
 
         const partA = body.substring(0, this.splitOffset).trim();
         const partB = body.substring(this.splitOffset).trim();
-        const wordCountA = partA ? partA.split(/\s+/).length : 0;
-        const wordCountB = partB ? partB.split(/\s+/).length : 0;
+        const locale = this.plugin.sceneManager?.activeProject?.locale ?? DEFAULT_STORYLINE_LOCALE;
+        const wordCountA = tokenizeWords(partA, locale).length;
+        const wordCountB = tokenizeWords(partB, locale).length;
 
         this.previewEl.createEl('div', {
             text: `Scene A: ~${wordCountA} words  |  Scene B: ~${wordCountB} words`,

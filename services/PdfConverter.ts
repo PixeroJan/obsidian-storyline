@@ -444,13 +444,14 @@ export class SLMarkdownToPdfConverter {
     /** Wrap plain text into lines that fit within maxWidth */
     private wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {
         const safeInput = this.safeText(text);
-        const words = safeInput.split(/\s+/);
+        const words = this.splitWrapTokens(safeInput).filter(t => t.trim() !== '');
         const lines: string[] = [];
         let currentLine = '';
 
         for (const word of words) {
             if (!word) continue;
-            const testLine = currentLine ? `${currentLine} ${word}` : word;
+            const joiner = currentLine && !this.isCjkWrapToken(word) && !this.isCjkWrapToken(currentLine.slice(-1)) ? ' ' : '';
+            const testLine = currentLine ? `${currentLine}${joiner}${word}` : word;
             const width = font.widthOfTextAtSize(testLine, fontSize);
             if (width > maxWidth && currentLine) {
                 lines.push(currentLine);
@@ -472,7 +473,7 @@ export class SLMarkdownToPdfConverter {
 
         for (const run of runs) {
             const font = this.pickFont(fonts, run.bold, run.italic);
-            const words = this.safeText(run.text).split(/( +)/); // keep spaces as separate tokens
+            const words = this.splitWrapTokens(this.safeText(run.text));
 
             for (const word of words) {
                 if (!word) continue;
@@ -515,6 +516,14 @@ export class SLMarkdownToPdfConverter {
         }
 
         return lines;
+    }
+
+    private splitWrapTokens(text: string): string[] {
+        return text.match(/[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]|\s+|[^\s\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]+/g) || [];
+    }
+
+    private isCjkWrapToken(text: string): boolean {
+        return /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text);
     }
 
     // ── Font helpers ───────────────────────────────────────────
