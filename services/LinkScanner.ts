@@ -13,6 +13,7 @@ import { CharacterManager } from './CharacterManager';
 import { LocationManager } from './LocationManager';
 import { CodexManager } from './CodexManager';
 import type { Scene } from '../models/Scene';
+import { hasCjkCharacters } from '../utils/locale';
 
 /** A single detected link with its classification */
 export interface DetectedLink {
@@ -287,11 +288,7 @@ export class LinkScanner {
 
         for (const nameLower of this.plainTextNames) {
             if (foundKeys.has(nameLower)) continue;
-            // Build a word-boundary regex for this name
-            // Escape regex special characters in the name
-            const escaped = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const re = new RegExp(`\\b${escaped}\\b`, 'i');
-            if (re.test(stripped)) {
+            if (this.hasPlainTextMention(stripped, nameLower)) {
                 foundKeys.add(nameLower);
                 results.push(nameLower);
                 // If this is a canonical (full) name, also mark its parts as found
@@ -301,6 +298,19 @@ export class LinkScanner {
         }
 
         return results;
+    }
+
+    private hasPlainTextMention(text: string, nameLower: string): boolean {
+        if (!nameLower) return false;
+        if (hasCjkCharacters(nameLower)) {
+            // Direct substring match
+            return text.toLowerCase().includes(nameLower);
+        }
+
+        // Build a word-boundary regex for English-like names
+        const escaped = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`\\b${escaped}\\b`, 'i');
+        return re.test(text);
     }
 
     /**
@@ -358,7 +368,7 @@ export class LinkScanner {
         }
 
         // 3. #tags
-        const tagRe = /#([A-Za-z][\w/-]*)/g;
+        const tagRe = /#([^\s#.,;:!?()[\]{}'"“”‘’「」『』，。！？、]+)/g;
         const tags: string[] = [];
         const tagSeen = new Set<string>();
         let tm: RegExpExecArray | null;

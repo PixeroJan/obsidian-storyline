@@ -40,6 +40,10 @@ export function countReadingCharacters(text: string): number {
     return (text.match(/[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/g) || []).length;
 }
 
+export function hasCjkCharacters(text: string): boolean {
+    return /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text);
+}
+
 export function getDialogueQuotePairs(locale: StoryLineLocale): [string, string][] {
     switch (locale) {
         case 'zh':
