@@ -6,6 +6,14 @@ StoryLine transforms your Obsidian vault into a complete book planning and writi
 
 ---
 
+## Support StoryLine
+
+If StoryLine helps your writing, please consider buying me a coffee. Donations keep the plugin actively maintained.
+
+[![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
+
+---
+
 ## Quick Start
 
 1. Install the plugin and enable it in Obsidian settings.

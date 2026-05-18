@@ -46,6 +46,10 @@ export class SnapshotManager {
             throw new Error(`Scene file not found: ${sceneFilePath}`);
         }
 
+        // Migrate any legacy snapshots from the (vault-invisible) `.snapshots`
+        // folder into the current snapshot folder before saving.
+        await this.migrateLegacySnapshotsFolder(sceneFilePath);
+
         const content = await this.app.vault.read(file);
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const safeName = file.basename.replace(/[\\/:*?"<>|]/g, '-');
@@ -57,19 +61,12 @@ export class SnapshotManager {
         const snapshotFileName = `${safeName}__${timestamp}__${safeLabel}.md`;
         const snapshotPath = normalizePath(`${snapshotDir}/${snapshotFileName}`);
 
-        // Prepend a small header comment
+        // Write the snapshot as an exact copy of the scene file so it opens
+        // identically in Obsidian (frontmatter on line 1 is recognized as
+        // Properties and collapsed away). Metadata (label, timestamp,
+        // wordcount) is recovered from the filename + body on listing.
         const wordcount = this.countWords(content);
-        const header = [
-            `<!-- StoryLine Snapshot`,
-            `  scene: ${sceneFilePath}`,
-            `  label: ${label}`,
-            `  timestamp: ${new Date().toISOString()}`,
-            `  wordcount: ${wordcount}`,
-            `-->`,
-            '',
-        ].join('\n');
-
-        await this.app.vault.create(snapshotPath, header + content);
+        await this.app.vault.create(snapshotPath, content);
 
         new Notice(`Snapshot "${label}" saved`);
 
@@ -89,6 +86,10 @@ export class SnapshotManager {
         const file = this.app.vault.getAbstractFileByPath(sceneFilePath);
         if (!(file instanceof TFile)) return [];
 
+        // Migrate any legacy snapshots from `.snapshots` (hidden from Obsidian's
+        // vault index) into the visible snapshot folder.
+        await this.migrateLegacySnapshotsFolder(sceneFilePath);
+
         const snapshotDir = this.getSnapshotDir(sceneFilePath);
         const folder = this.app.vault.getAbstractFileByPath(snapshotDir);
         if (!(folder instanceof TFolder)) return [];
@@ -104,14 +105,18 @@ export class SnapshotManager {
             if (parts.length < 3) continue;
 
             const content = await this.app.vault.read(child);
+            // Legacy snapshots carried a `<!-- StoryLine Snapshot ... -->`
+            // header with label/timestamp/wordcount; new ones are exact copies
+            // of the source and derive metadata from the filename + body.
             const meta = this.parseSnapshotHeader(content);
+            const body = content.replace(/^<!--[\s\S]*?-->\n?/, '');
 
             snapshots.push({
                 filePath: child.path,
                 sceneFilePath,
                 label: meta.label || parts.slice(2).join('__'),
                 timestamp: meta.timestamp || parts[1].replace(/-/g, ':'),
-                wordcount: meta.wordcount,
+                wordcount: meta.wordcount ?? this.countWords(body),
             });
         }
 
@@ -121,15 +126,17 @@ export class SnapshotManager {
     }
 
     /**
-     * Read the content of a snapshot (without the header comment).
+     * Read the content of a snapshot. Legacy snapshots had a leading HTML
+     * comment header that is stripped here; modern snapshots are exact copies
+     * of the source file and are returned unchanged.
      */
     async readSnapshotContent(snapshotPath: string): Promise<string> {
         const file = this.app.vault.getAbstractFileByPath(snapshotPath);
         if (!(file instanceof TFile)) throw new Error(`Snapshot not found: ${snapshotPath}`);
 
         const content = await this.app.vault.read(file);
-        // Strip the header comment
-        return content.replace(/^<!--[\s\S]*?-->\n?/, '');
+        // Strip the legacy StoryLine header comment if present.
+        return content.replace(/^<!--\s*StoryLine Snapshot[\s\S]*?-->\n?/, '');
     }
 
     /**
@@ -179,15 +186,72 @@ export class SnapshotManager {
     // ── Helpers ────────────────────────────────────────
 
     private getSnapshotDir(sceneFilePath: string): string {
-        // Place snapshots folder next to the scene's parent folder
+        // Place snapshots folder next to the scene. Use an underscore prefix
+        // (not a dot) so the folder is visible to Obsidian's vault index —
+        // dot-prefixed folders are treated as hidden/system files and are
+        // skipped by `vault.getAbstractFileByPath`, which made snapshots
+        // appear to vanish even though the file was written to disk.
         const parts = sceneFilePath.split('/');
         parts.pop(); // remove filename
-        return normalizePath(parts.join('/') + '/.snapshots');
+        const dir = parts.join('/');
+        return normalizePath((dir ? dir + '/' : '') + '_snapshots');
+    }
+
+    private getLegacySnapshotDir(sceneFilePath: string): string {
+        const parts = sceneFilePath.split('/');
+        parts.pop();
+        const dir = parts.join('/');
+        return normalizePath((dir ? dir + '/' : '') + '.snapshots');
     }
 
     private async ensureFolder(path: string): Promise<void> {
         if (!this.app.vault.getAbstractFileByPath(path)) {
             await this.app.vault.createFolder(path);
+        }
+    }
+
+    /**
+     * One-shot migration: move any snapshots from the legacy `.snapshots`
+     * folder (invisible to Obsidian) into the new `_snapshots` folder so
+     * existing files written under the old scheme appear in the UI again.
+     */
+    private async migrateLegacySnapshotsFolder(sceneFilePath: string): Promise<void> {
+        const legacyDir = this.getLegacySnapshotDir(sceneFilePath);
+        const newDir = this.getSnapshotDir(sceneFilePath);
+        const adapter: any = this.app.vault.adapter;
+        try {
+            const exists = await adapter.exists(legacyDir);
+            if (!exists) return;
+            const listing = await adapter.list(legacyDir);
+            const files: string[] = (listing && listing.files) || [];
+            if (files.length === 0) return;
+            await this.ensureFolder(newDir);
+            for (const src of files) {
+                const name = src.split('/').pop();
+                if (!name) continue;
+                const dst = normalizePath(`${newDir}/${name}`);
+                const dstExists = await adapter.exists(dst);
+                if (dstExists) continue;
+                try {
+                    await adapter.rename(src, dst);
+                } catch {
+                    // Fall back to copy + remove if rename fails
+                    try {
+                        const data = await adapter.read(src);
+                        await adapter.write(dst, data);
+                        await adapter.remove(src);
+                    } catch { /* ignore */ }
+                }
+            }
+            // Try to remove the now-empty legacy folder (best-effort)
+            try {
+                const after = await adapter.list(legacyDir);
+                if (after && (after.files || []).length === 0 && (after.folders || []).length === 0) {
+                    await adapter.rmdir(legacyDir, false);
+                }
+            } catch { /* ignore */ }
+        } catch {
+            /* migration is best-effort */
         }
     }
 

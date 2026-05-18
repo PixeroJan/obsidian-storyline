@@ -374,10 +374,45 @@ export class TimelineView extends ItemView {
             const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
             scenes.splice(insertAt, 0, moved);
 
-            // Update the field matching the current ordering mode
-            const field = this.timelineOrder === 'chronological' ? 'chronologicalOrder' : 'chapter';
-            for (let i = 0; i < scenes.length; i++) {
-                await this.sceneManager.updateScene(scenes[i].filePath, { [field]: i + 1 } as Partial<Scene>);
+            if (this.timelineOrder === 'chronological') {
+                // Chronological order is a single global counter — flat 1..N is correct.
+                for (let i = 0; i < scenes.length; i++) {
+                    await this.sceneManager.updateScene(
+                        scenes[i].filePath,
+                        { chronologicalOrder: i + 1 } as Partial<Scene>,
+                    );
+                }
+            } else {
+                // Reading order respects act → chapter → sequence nesting (issue #96).
+                // Previously this overwrote `chapter` flatly 1..N across all scenes,
+                // which destroyed the chapter hierarchy. Instead:
+                //   1. Adopt the act/chapter of the neighbour at the drop location for
+                //      the moved scene (so dragging into a new chapter actually moves
+                //      it into that chapter).
+                //   2. Renumber `sequence` within each (act, chapter) group based on
+                //      the new array order; leave act/chapter of other scenes alone.
+                const neighbour = scenes[insertAt - 1] ?? scenes[insertAt + 1] ?? null;
+                const movedPatch: Partial<Scene> = {};
+                if (neighbour) {
+                    if (moved.act !== neighbour.act) movedPatch.act = neighbour.act;
+                    if (moved.chapter !== neighbour.chapter) movedPatch.chapter = neighbour.chapter;
+                }
+                if (Object.keys(movedPatch).length > 0) {
+                    await this.sceneManager.updateScene(moved.filePath, movedPatch);
+                    if (movedPatch.act !== undefined) moved.act = movedPatch.act;
+                    if (movedPatch.chapter !== undefined) moved.chapter = movedPatch.chapter;
+                }
+
+                // Renumber sequences within each (act, chapter) group in array order.
+                const seqCounter = new Map<string, number>();
+                for (const s of scenes) {
+                    const key = `${String(s.act ?? '')}\u0000${String(s.chapter ?? '')}`;
+                    const next = (seqCounter.get(key) ?? 0) + 1;
+                    seqCounter.set(key, next);
+                    if (s.sequence !== next) {
+                        await this.sceneManager.updateScene(s.filePath, { sequence: next } as Partial<Scene>);
+                    }
+                }
             }
             this.refresh();
 

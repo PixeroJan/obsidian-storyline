@@ -13,9 +13,13 @@ import { CHARACTER_CATEGORIES } from '../models/Character';
  */
 export class AddFieldModal extends Modal {
     private existing: UniversalFieldTemplate | null;
-    private onSubmit: (template: UniversalFieldTemplate) => void;
+    private onSubmit: (template: UniversalFieldTemplate, positionAfterId?: string | null) => void;
     private onDelete?: () => void;
     private customSectionNames?: string[];
+    /** Issue #92 — siblings (same section + category) used to populate the Position dropdown */
+    private siblings: Array<{ id: string; label: string }> = [];
+    /** Issue #92 — selected position: undefined = at end (default), null = at top, string = after that sibling id */
+    private positionAfterId: string | null | undefined = undefined;
 
     // Working state
     private label = '';
@@ -40,15 +44,17 @@ export class AddFieldModal extends Modal {
         app: App,
         defaultSection: string,
         existing: UniversalFieldTemplate | null,
-        onSubmit: (template: UniversalFieldTemplate) => void,
+        onSubmit: (template: UniversalFieldTemplate, positionAfterId?: string | null) => void,
         onDelete?: () => void,
         sectionNames?: string[],
+        siblings?: Array<{ id: string; label: string }>,
     ) {
         super(app);
         this.existing = existing;
         this.onSubmit = onSubmit;
         this.onDelete = onDelete;
         this.customSectionNames = sectionNames;
+        this.siblings = (siblings || []).filter(s => !existing || s.id !== existing.id);
 
         if (existing) {
             this.label = existing.label;
@@ -231,6 +237,26 @@ export class AddFieldModal extends Modal {
                     .onChange(v => { this.defaultValue = v; });
             });
 
+        // ── Position (issue #92) ──
+        if (this.siblings.length > 0) {
+            new Setting(contentEl)
+                .setName('Position')
+                .setDesc('Where the field appears in the section')
+                .addDropdown(dd => {
+                    dd.addOption('__end__', 'At end (default)');
+                    dd.addOption('__top__', 'At top');
+                    for (const s of this.siblings) {
+                        dd.addOption(s.id, `After: ${s.label}`);
+                    }
+                    dd.setValue('__end__');
+                    dd.onChange(v => {
+                        if (v === '__end__') this.positionAfterId = undefined;
+                        else if (v === '__top__') this.positionAfterId = null;
+                        else this.positionAfterId = v;
+                    });
+                });
+        }
+
         // ── Action buttons ──
         const footer = contentEl.createDiv('storyline-add-field-footer');
 
@@ -293,7 +319,7 @@ export class AddFieldModal extends Modal {
                 order: this.existing?.order ?? Date.now(),
             };
 
-            this.onSubmit(template);
+            this.onSubmit(template, this.positionAfterId);
             this.close();
         });
     }

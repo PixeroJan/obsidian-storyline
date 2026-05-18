@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "ignoreDeprecations": "6.0",
+    "skipLibCheck": true,
     "baseUrl": ".",
     "inlineSourceMap": true,
     "inlineSources": true,

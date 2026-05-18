@@ -891,18 +891,27 @@ export class CharacterView extends ItemView {
         obsidian.setIcon(addFieldBtn, 'plus');
         addFieldBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Don't toggle collapse
+            const existingSiblings = this.plugin.fieldTemplates
+                .getBySection(category.title, 'character')
+                .map(t => ({ id: t.id, label: t.label }));
             const modal = new AddFieldModal(
                 this.app,
                 category.title,
                 null,
-                async (template) => {
+                async (template, positionAfterId) => {
                     template.category = 'character';
                     await this.plugin.fieldTemplates.add(template);
+                    if (positionAfterId !== undefined) {
+                        await this.plugin.fieldTemplates.moveAfter(template.id, positionAfterId);
+                    }
                     // Re-render the detail view to show the new field
                     if (this.selectedCharacter && this.rootContainer) {
                         this.renderCharacterDetail(this.rootContainer);
                     }
                 },
+                undefined,
+                undefined,
+                existingSiblings,
             );
             modal.open();
         });
@@ -929,14 +938,20 @@ export class CharacterView extends ItemView {
         const visibleFields = category.fields.filter(f => !hiddenKeys.includes(f.key));
         const hiddenFieldsInCat = category.fields.filter(f => hiddenKeys.includes(f.key));
 
-        for (const field of visibleFields) {
-            this.renderField(sectionBody, field, draft);
-        }
-
-        // ── Universal fields for this section ──
+        // Render fields in user-defined merged order (built-in + universal).
         const universalFields = this.plugin.fieldTemplates.getBySection(category.title, 'character');
-        for (const tpl of universalFields) {
-            this.renderUniversalField(sectionBody, tpl, draft);
+        const fieldMap = new Map(visibleFields.map(f => [f.key, f]));
+        const tplMap = new Map(universalFields.map(t => [t.id, t]));
+        const builtInKeys = visibleFields.map(f => f.key);
+        const merged = this.plugin.fieldTemplates.getMergedOrder(category.title, 'character', builtInKeys);
+        for (const entry of merged) {
+            if (entry.kind === 'builtin') {
+                const f = fieldMap.get(entry.key);
+                if (f) this.renderField(sectionBody, f, draft, category.title, builtInKeys);
+            } else {
+                const t = tplMap.get(entry.key);
+                if (t) this.renderUniversalField(sectionBody, t, draft, builtInKeys);
+            }
         }
 
         // Show toggle for hidden fields
@@ -962,9 +977,14 @@ export class CharacterView extends ItemView {
         }
     }
 
-    private renderField(parent: HTMLElement, field: CharacterFieldDef, draft: Character): void {
+    private renderField(parent: HTMLElement, field: CharacterFieldDef, draft: Character, sectionTitle?: string, builtInKeys?: string[]): void {
         const row = parent.createDiv('character-field-row');
         const labelEl = row.createEl('label', { cls: 'character-field-label', text: field.label });
+
+        // Up/down chevrons — reorder this built-in field within the section.
+        if (sectionTitle && builtInKeys) {
+            this.addBuiltInMoveChevrons(labelEl, sectionTitle, 'character', builtInKeys, field.key);
+        }
 
         // Hide/unhide field button (skip for 'name' — always visible)
         if (field.key !== 'name') {
@@ -1101,6 +1121,38 @@ export class CharacterView extends ItemView {
         }
     }
 
+    /** Shared helper — attach up/down chevron buttons to a built-in field's
+     *  label so it participates in the merged section ordering. */
+    private addBuiltInMoveChevrons(
+        labelEl: HTMLElement,
+        section: string,
+        category: string,
+        builtInKeys: string[],
+        fieldKey: string,
+    ): void {
+        const upBtn = labelEl.createEl('span', {
+            cls: 'field-move-btn',
+            attr: { title: 'Move field up', 'aria-label': 'Move field up' },
+        });
+        obsidian.setIcon(upBtn, 'chevron-up');
+        upBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryUp(section, category, builtInKeys, 'builtin', fieldKey);
+            if (this.selectedCharacter && this.rootContainer) this.renderCharacterDetail(this.rootContainer);
+        });
+
+        const downBtn = labelEl.createEl('span', {
+            cls: 'field-move-btn',
+            attr: { title: 'Move field down', 'aria-label': 'Move field down' },
+        });
+        obsidian.setIcon(downBtn, 'chevron-down');
+        downBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryDown(section, category, builtInKeys, 'builtin', fieldKey);
+            if (this.selectedCharacter && this.rootContainer) this.renderCharacterDetail(this.rootContainer);
+        });
+    }
+
     /**
      * Render a single universal (template-defined) field inside a section.
      * Values are stored in `draft.universalFields[template.id]`.
@@ -1109,6 +1161,7 @@ export class CharacterView extends ItemView {
         parent: HTMLElement,
         tpl: UniversalFieldTemplate,
         draft: Character,
+        builtInKeys?: string[],
     ): void {
         if (!draft.universalFields) draft.universalFields = {};
         const value = (draft.universalFields[tpl.id] ?? '') as string;
@@ -1119,12 +1172,15 @@ export class CharacterView extends ItemView {
         const labelWrap = row.createDiv('character-universal-label-wrap');
         labelWrap.createEl('label', { cls: 'character-field-label', text: tpl.label });
 
-        const editBtn = labelWrap.createEl('button', {
+        const editBtn = labelWrap.createEl('span', {
             cls: 'character-universal-edit-btn',
             attr: { title: 'Edit or remove this universal field', 'aria-label': 'Edit field' },
         });
         obsidian.setIcon(editBtn, 'pencil');
         editBtn.addEventListener('click', () => {
+            const siblings = this.plugin.fieldTemplates
+                .getBySection(tpl.section, tpl.category)
+                .map(t => ({ id: t.id, label: t.label }));
             const modal = new AddFieldModal(
                 this.app,
                 tpl.section,
@@ -1142,8 +1198,37 @@ export class CharacterView extends ItemView {
                         this.renderCharacterDetail(this.rootContainer);
                     }
                 },
+                undefined,
+                siblings,
             );
             modal.open();
+        });
+
+        // Issue #92 — up/down move buttons (revealed on hover)
+        const moveUpBtn = labelWrap.createEl('span', {
+            cls: 'character-universal-move-btn',
+            attr: { title: 'Move field up', 'aria-label': 'Move field up' },
+        });
+        obsidian.setIcon(moveUpBtn, 'chevron-up');
+        moveUpBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryUp(
+                tpl.section, tpl.category, builtInKeys ?? [], 'universal', tpl.id,
+            );
+            if (this.selectedCharacter && this.rootContainer) this.renderCharacterDetail(this.rootContainer);
+        });
+
+        const moveDownBtn = labelWrap.createEl('span', {
+            cls: 'character-universal-move-btn',
+            attr: { title: 'Move field down', 'aria-label': 'Move field down' },
+        });
+        obsidian.setIcon(moveDownBtn, 'chevron-down');
+        moveDownBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryDown(
+                tpl.section, tpl.category, builtInKeys ?? [], 'universal', tpl.id,
+            );
+            if (this.selectedCharacter && this.rootContainer) this.renderCharacterDetail(this.rootContainer);
         });
 
         // Input control based on template type
@@ -1198,6 +1283,20 @@ export class CharacterView extends ItemView {
                 const available = allOptions.filter(o => !selected.includes(o) && o.toLowerCase().includes(lf));
                 if (available.length === 0) { msDropdown.setCssStyles({ display: 'none' }); return; }
                 msDropdown.setCssStyles({ display: '' });
+                // Issue #91 — reposition via fixed coords so the popup escapes section overflow
+                const r = msInput.getBoundingClientRect();
+                const spaceBelow = window.innerHeight - r.bottom;
+                const popupMax = 200;
+                const flipUp = spaceBelow < 120 && r.top > spaceBelow;
+                msDropdown.setCssStyles({
+                    position: 'fixed',
+                    left: r.left + 'px',
+                    width: r.width + 'px',
+                    top: flipUp ? '' : (r.bottom + 'px'),
+                    bottom: flipUp ? (window.innerHeight - r.top) + 'px' : '',
+                    maxHeight: Math.min(popupMax, flipUp ? r.top - 8 : spaceBelow - 8) + 'px',
+                    zIndex: '1000',
+                });
                 for (const opt of available) {
                     const item = msDropdown.createDiv({ cls: 'universal-multi-dropdown-item', text: opt });
                     item.addEventListener('mousedown', (e) => {

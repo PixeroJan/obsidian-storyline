@@ -562,17 +562,24 @@ export class CodexView extends ItemView {
         addFieldBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const sectionNames = catDef.categories.map(c => c.title);
+            const existingSiblings = this.plugin.fieldTemplates
+                .getBySection(cat.title, catDef.id)
+                .map(t => ({ id: t.id, label: t.label }));
             const modal = new AddFieldModal(
                 this.app,
                 cat.title,
                 null,
-                async (template) => {
+                async (template, positionAfterId) => {
                     template.category = catDef.id;
                     await this.plugin.fieldTemplates.add(template);
+                    if (positionAfterId !== undefined) {
+                        await this.plugin.fieldTemplates.moveAfter(template.id, positionAfterId);
+                    }
                     if (this.rootContainer) this.renderView(this.rootContainer);
                 },
                 undefined,
                 sectionNames,
+                existingSiblings,
             );
             modal.open();
         });
@@ -585,14 +592,23 @@ export class CodexView extends ItemView {
             const visibleFields = cat.fields.filter(f => !hiddenKeys.includes(f.key));
             const hiddenFieldsInCat = cat.fields.filter(f => hiddenKeys.includes(f.key));
 
-            for (const field of visibleFields) {
-                this.renderField(body, field, draft, catDef);
-            }
-
-            // Render universal fields for this section
+            // Render fields in user-defined merged order (built-in + universal).
+            // Issue #92 follow-up — universal fields can be moved past built-ins
+            // and built-ins themselves can be reordered via the up/down chevrons
+            // that appear on hover.
             const universalFields = this.plugin.fieldTemplates.getBySection(cat.title, catDef.id);
-            for (const tpl of universalFields) {
-                this.renderUniversalField(body, tpl, draft);
+            const fieldMap = new Map(visibleFields.map(f => [f.key, f]));
+            const tplMap = new Map(universalFields.map(t => [t.id, t]));
+            const builtInKeys = visibleFields.map(f => f.key);
+            const merged = this.plugin.fieldTemplates.getMergedOrder(cat.title, catDef.id, builtInKeys);
+            for (const entry of merged) {
+                if (entry.kind === 'builtin') {
+                    const f = fieldMap.get(entry.key);
+                    if (f) this.renderField(body, f, draft, catDef, cat.title, builtInKeys);
+                } else {
+                    const t = tplMap.get(entry.key);
+                    if (t) this.renderUniversalField(body, t, draft, builtInKeys);
+                }
             }
 
             // Hidden fields toggle
@@ -624,10 +640,19 @@ export class CodexView extends ItemView {
         field: CodexFieldDef,
         draft: CodexEntry,
         catDef: CodexCategoryDef,
+        sectionTitle?: string,
+        builtInKeys?: string[],
     ): void {
         const { key, label, placeholder, multiline, characterRef } = field;
         const row = container.createDiv('codex-field-row');
         const labelEl = row.createEl('label', { cls: 'codex-field-label', text: label });
+
+        // Up/down chevrons — reorder this built-in field within the section,
+        // interleaved with universal fields. Only shown when we have the
+        // section context to dispatch the move call.
+        if (sectionTitle && builtInKeys) {
+            this.addBuiltInMoveChevrons(labelEl, sectionTitle, catDef.id, builtInKeys, key);
+        }
 
         // Hide/unhide toggle (skip 'name')
         if (key !== 'name') {
@@ -731,10 +756,43 @@ export class CodexView extends ItemView {
 
     // ── Universal field rendering ──────────────────────
 
+    /** Shared helper — attach up/down chevron buttons to a built-in field's
+     *  label so it participates in the merged section ordering. */
+    private addBuiltInMoveChevrons(
+        labelEl: HTMLElement,
+        section: string,
+        category: string,
+        builtInKeys: string[],
+        fieldKey: string,
+    ): void {
+        const upBtn = labelEl.createEl('span', {
+            cls: 'field-move-btn',
+            attr: { title: 'Move field up', 'aria-label': 'Move field up' },
+        });
+        obsidian.setIcon(upBtn, 'chevron-up');
+        upBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryUp(section, category, builtInKeys, 'builtin', fieldKey);
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+
+        const downBtn = labelEl.createEl('span', {
+            cls: 'field-move-btn',
+            attr: { title: 'Move field down', 'aria-label': 'Move field down' },
+        });
+        obsidian.setIcon(downBtn, 'chevron-down');
+        downBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryDown(section, category, builtInKeys, 'builtin', fieldKey);
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+    }
+
     private renderUniversalField(
         parent: HTMLElement,
         tpl: UniversalFieldTemplate,
         draft: CodexEntry,
+        builtInKeys?: string[],
     ): void {
         if (!draft.universalFields) draft.universalFields = {};
         const value = (draft.universalFields[tpl.id] ?? '') as string;
@@ -745,12 +803,15 @@ export class CodexView extends ItemView {
         const labelWrap = row.createDiv('codex-universal-label-wrap');
         labelWrap.createEl('label', { cls: 'codex-field-label', text: tpl.label });
 
-        const editBtn = labelWrap.createEl('button', {
+        const editBtn = labelWrap.createEl('span', {
             cls: 'codex-universal-edit-btn',
             attr: { title: 'Edit or remove this universal field', 'aria-label': 'Edit field' },
         });
         obsidian.setIcon(editBtn, 'pencil');
         editBtn.addEventListener('click', () => {
+            const siblings = this.plugin.fieldTemplates
+                .getBySection(tpl.section, tpl.category)
+                .map(t => ({ id: t.id, label: t.label }));
             const modal = new AddFieldModal(
                 this.app,
                 tpl.section,
@@ -763,8 +824,37 @@ export class CodexView extends ItemView {
                     await this.plugin.fieldTemplates.remove(tpl.id);
                     if (this.rootContainer) this.renderView(this.rootContainer);
                 },
+                undefined,
+                siblings,
             );
             modal.open();
+        });
+
+        // Issue #92 — up/down move buttons (revealed on hover)
+        const moveUpBtn = labelWrap.createEl('span', {
+            cls: 'codex-universal-move-btn',
+            attr: { title: 'Move field up', 'aria-label': 'Move field up' },
+        });
+        obsidian.setIcon(moveUpBtn, 'chevron-up');
+        moveUpBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryUp(
+                tpl.section, tpl.category, builtInKeys ?? [], 'universal', tpl.id,
+            );
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+
+        const moveDownBtn = labelWrap.createEl('span', {
+            cls: 'codex-universal-move-btn',
+            attr: { title: 'Move field down', 'aria-label': 'Move field down' },
+        });
+        obsidian.setIcon(moveDownBtn, 'chevron-down');
+        moveDownBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryDown(
+                tpl.section, tpl.category, builtInKeys ?? [], 'universal', tpl.id,
+            );
+            if (this.rootContainer) this.renderView(this.rootContainer);
         });
 
         // Input control based on template type
@@ -819,6 +909,20 @@ export class CodexView extends ItemView {
                 const available = allOptions.filter(o => !selected.includes(o) && o.toLowerCase().includes(lf));
                 if (available.length === 0) { msDropdown.setCssStyles({ display: 'none' }); return; }
                 msDropdown.setCssStyles({ display: '' });
+                // Issue #91 — reposition via fixed coords so the popup escapes section overflow
+                const r = msInput.getBoundingClientRect();
+                const spaceBelow = window.innerHeight - r.bottom;
+                const popupMax = 200;
+                const flipUp = spaceBelow < 120 && r.top > spaceBelow;
+                msDropdown.setCssStyles({
+                    position: 'fixed',
+                    left: r.left + 'px',
+                    width: r.width + 'px',
+                    top: flipUp ? '' : (r.bottom + 'px'),
+                    bottom: flipUp ? (window.innerHeight - r.top) + 'px' : '',
+                    maxHeight: Math.min(popupMax, flipUp ? r.top - 8 : spaceBelow - 8) + 'px',
+                    zIndex: '1000',
+                });
                 for (const opt of available) {
                     const item = msDropdown.createDiv({ cls: 'universal-multi-dropdown-item', text: opt });
                     item.addEventListener('mousedown', (e) => {

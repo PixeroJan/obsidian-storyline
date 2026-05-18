@@ -746,14 +746,20 @@ export class LocationView extends ItemView {
         const visibleFields = category.fields.filter(f => !hiddenKeys.includes(f.key));
         const hiddenFieldsInCat = category.fields.filter(f => hiddenKeys.includes(f.key));
 
-        for (const field of visibleFields) {
-            this.renderField(sectionBody, field, draft);
-        }
-
-        // Universal fields for this section
+        // Render in user-defined merged order (built-in + universal).
         const universalFields = this.plugin.fieldTemplates.getBySection(category.title, 'location');
-        for (const tpl of universalFields) {
-            this.renderUniversalField(sectionBody, tpl, draft);
+        const fieldMap = new Map(visibleFields.map(f => [f.key, f]));
+        const tplMap = new Map(universalFields.map(t => [t.id, t]));
+        const builtInKeys = visibleFields.map(f => f.key);
+        const merged = this.plugin.fieldTemplates.getMergedOrder(category.title, 'location', builtInKeys);
+        for (const entry of merged) {
+            if (entry.kind === 'builtin') {
+                const f = fieldMap.get(entry.key);
+                if (f) this.renderField(sectionBody, f, draft, category.title, builtInKeys);
+            } else {
+                const t = tplMap.get(entry.key);
+                if (t) this.renderUniversalField(sectionBody, t, draft, builtInKeys);
+            }
         }
 
         // Hidden fields toggle
@@ -779,9 +785,14 @@ export class LocationView extends ItemView {
         }
     }
 
-    private renderField(parent: HTMLElement, field: LocationFieldDef, draft: WorldOrLocation): void {
+    private renderField(parent: HTMLElement, field: LocationFieldDef, draft: WorldOrLocation, sectionTitle?: string, builtInKeys?: string[]): void {
         const row = parent.createDiv('location-field-row');
         const labelEl = row.createEl('label', { cls: 'location-field-label', text: field.label });
+
+        // Up/down chevrons — reorder this built-in field within the section.
+        if (sectionTitle && builtInKeys) {
+            this.addBuiltInMoveChevrons(labelEl, sectionTitle, 'location', builtInKeys, field.key);
+        }
 
         // Hide/unhide toggle (skip 'name')
         if (field.key !== 'name') {
@@ -894,10 +905,43 @@ export class LocationView extends ItemView {
         }
     }
 
+    /** Shared helper — attach up/down chevron buttons to a built-in field's
+     *  label so it participates in the merged section ordering. */
+    private addBuiltInMoveChevrons(
+        labelEl: HTMLElement,
+        section: string,
+        category: string,
+        builtInKeys: string[],
+        fieldKey: string,
+    ): void {
+        const upBtn = labelEl.createEl('span', {
+            cls: 'field-move-btn',
+            attr: { title: 'Move field up', 'aria-label': 'Move field up' },
+        });
+        obsidian.setIcon(upBtn, 'chevron-up');
+        upBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryUp(section, category, builtInKeys, 'builtin', fieldKey);
+            if (this.rootContainer) this.renderDetail(this.rootContainer);
+        });
+
+        const downBtn = labelEl.createEl('span', {
+            cls: 'field-move-btn',
+            attr: { title: 'Move field down', 'aria-label': 'Move field down' },
+        });
+        obsidian.setIcon(downBtn, 'chevron-down');
+        downBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryDown(section, category, builtInKeys, 'builtin', fieldKey);
+            if (this.rootContainer) this.renderDetail(this.rootContainer);
+        });
+    }
+
     private renderUniversalField(
         parent: HTMLElement,
         tpl: UniversalFieldTemplate,
         draft: WorldOrLocation,
+        builtInKeys?: string[],
     ): void {
         if (!draft.universalFields) draft.universalFields = {};
         const value = (draft.universalFields[tpl.id] ?? '') as string;
@@ -907,7 +951,7 @@ export class LocationView extends ItemView {
         const labelWrap = row.createDiv('codex-universal-label-wrap');
         labelWrap.createEl('label', { cls: 'location-field-label', text: tpl.label });
 
-        const editBtn = labelWrap.createEl('button', {
+        const editBtn = labelWrap.createEl('span', {
             cls: 'codex-universal-edit-btn',
             attr: { title: 'Edit or remove this universal field', 'aria-label': 'Edit field' },
         });
@@ -932,6 +976,33 @@ export class LocationView extends ItemView {
                 sectionNames,
             );
             modal.open();
+        });
+
+        // Up/down move buttons — share field-move-btn styling for hover behavior.
+        const moveUpBtn = labelWrap.createEl('span', {
+            cls: 'codex-universal-move-btn',
+            attr: { title: 'Move field up', 'aria-label': 'Move field up' },
+        });
+        obsidian.setIcon(moveUpBtn, 'chevron-up');
+        moveUpBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryUp(
+                tpl.section, tpl.category, builtInKeys ?? [], 'universal', tpl.id,
+            );
+            if (this.rootContainer) this.renderDetail(this.rootContainer);
+        });
+
+        const moveDownBtn = labelWrap.createEl('span', {
+            cls: 'codex-universal-move-btn',
+            attr: { title: 'Move field down', 'aria-label': 'Move field down' },
+        });
+        obsidian.setIcon(moveDownBtn, 'chevron-down');
+        moveDownBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.plugin.fieldTemplates.moveEntryDown(
+                tpl.section, tpl.category, builtInKeys ?? [], 'universal', tpl.id,
+            );
+            if (this.rootContainer) this.renderDetail(this.rootContainer);
         });
 
         if (tpl.type === 'multi-select') {

@@ -11,7 +11,6 @@ import { InspectorComponent } from '../components/Inspector';
 import { openManageSnapshotsModal } from '../components/ViewSnapshotModal';
 import { QuickAddModal } from '../components/QuickAddModal';
 import { LinkScanner } from '../services/LinkScanner';
-import * as lucide from 'lucide';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { FiltersComponent } from '../components/Filters';
 import { enableDragToPan } from '../components/DragToPan';
@@ -453,14 +452,11 @@ export class PlotgridView extends ItemView {
         actions.appendChild(zoomIn);
         actions.appendChild(resetZoomBtn);
 
-        // Initialize Lucide icons replacement for any `data-lucide` placeholders we added above
-        try {
-            const lucideRec = lucide as unknown as { createIcons?: (opts?: { icons?: unknown }) => void; icons?: unknown };
-            if (typeof lucideRec.createIcons === 'function') {
-                const icons = lucideRec.icons || lucideRec;
-                try { lucideRec.createIcons({ icons }); } catch (e) { /* fallback no-op */ }
-            }
-        } catch (e) { /* ignore lucide init errors */ }
+        // Icons are rendered exclusively via `obsidian.setIcon()` above —
+        // the previous `lucide.createIcons()` bootstrap was dead code and
+        // also caused the bundler to pull the entire `lucide` icon set
+        // (including a `Bitcoin` icon) into `main.js`, which tripped the
+        // Obsidian plugin reviewer's crypto-wallet heuristic.
 
         // Ensure icon-only appearance: remove any visible button edges and set icon size
         try {

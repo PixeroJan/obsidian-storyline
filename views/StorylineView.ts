@@ -11,6 +11,7 @@ import { applyMobileClass } from '../components/MobileAdapter';
 import { enableDragToPan } from '../components/DragToPan';
 import { resolveTagColor, getPlotlineHSL, contrastTextColor } from '../settings';
 import { attachTooltip } from '../components/Tooltip';
+import { compareScenesByActChapter } from '../utils/actChapter';
 
 type SortMode = 'alpha' | 'scenes-desc' | 'scenes-asc' | 'reading-order';
 type PlotlineViewMode = 'list' | 'subway';
@@ -347,7 +348,9 @@ export class StorylineView extends ItemView {
                 orderedScenes.push(s);
             }
         }
-        orderedScenes.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+        // Sort by act → chapter → sequence so e.g. "01-01-02" comes before "01-02-01".
+        // Sorting by sequence alone caused chapter nesting to be ignored (issue #96).
+        orderedScenes.sort((a, b) => compareScenesByActChapter(a, b, (x, y) => (x.sequence ?? 0) - (y.sequence ?? 0)));
 
         if (orderedScenes.length === 0) {
             this.renderListView(content, scenes, plotlines, plotlineKeys);
@@ -1130,6 +1133,12 @@ export class StorylineView extends ItemView {
                 }
                 groups.get(tag)!.push(scene);
             }
+        }
+
+        // Ensure each plotline's scenes are ordered by act → chapter → sequence
+        // so the list view doesn't show scenes in arbitrary input order (issue #96).
+        for (const list of groups.values()) {
+            list.sort((a, b) => compareScenesByActChapter(a, b, (x, y) => (x.sequence ?? 0) - (y.sequence ?? 0)));
         }
 
         return groups;

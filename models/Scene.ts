@@ -162,6 +162,8 @@ export interface Scene {
     universalFields?: Record<string, string | string[]>;
     /** Name of the beat sheet template used to create this scene */
     beatsheet?: string;
+    /** Issue #89 — names of detected codex links the user explicitly ignored in this scene */
+    ignored_detections?: string[];
 }
 
 /**

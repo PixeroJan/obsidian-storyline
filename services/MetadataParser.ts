@@ -110,6 +110,7 @@ export class MetadataParser {
             tags: frontmatter.tags || [],
             setup_scenes: this.parseStringArray(frontmatter.setup_scenes),
             payoff_scenes: this.parseStringArray(frontmatter.payoff_scenes),
+            ignored_detections: this.parseStringArray(frontmatter.ignored_detections),
             created: frontmatter.created,
             modified: frontmatter.modified,
             body,
@@ -180,6 +181,11 @@ export class MetadataParser {
             if (key === 'subtitle' && !value) { delete frontmatter[key]; continue; }
             if (key === 'color' && !value) { delete frontmatter[key]; continue; }
             if (key === 'beatsheet' && !value) { delete frontmatter[key]; continue; }
+            if (key === 'ignored_detections') {
+                if (Array.isArray(value) && value.length > 0) frontmatter[key] = value;
+                else delete frontmatter[key];
+                continue;
+            }
             if (key === 'codexLinks') {
                 if (value && typeof value === 'object' && Object.keys(value).some(k => {
                     const arr = (value as Record<string, unknown>)[k];

@@ -1063,8 +1063,11 @@ export class InspectorComponent {
                 for (const n of names) fmCodex.add(n.toLowerCase());
             }
         }
+        // Issue #89 — user-marked "ignore in this scene"
+        const ignored = new Set((scene.ignored_detections || []).map(n => n.toLowerCase()));
         const novel = result.links.filter(l => {
             const key = l.name.toLowerCase();
+            if (ignored.has(key)) return false;
             if (l.type === 'character' && fmChars.has(key)) return false;
             if (l.type === 'location' && key === fmLoc) return false;
             if (fmCodex.has(key)) return false;
@@ -1145,6 +1148,24 @@ export class InspectorComponent {
         const menu = new obsidian.Menu();
         menu.addItem(item => item.setTitle(tagName).setDisabled(true));
         menu.addSeparator();
+        // Issue #89 — Ignore this name in the current scene only
+        const sceneForIgnore = this.currentScene;
+        if (sceneForIgnore) {
+            menu.addItem(item => {
+                item.setTitle('Ignore in this scene')
+                    .setIcon('eye-off')
+                    .onClick(async () => {
+                        const cur = sceneForIgnore.ignored_detections || [];
+                        if (!cur.some(n => n.toLowerCase() === low)) {
+                            const updated = [...cur, tagName];
+                            await this.sceneManager.updateScene(sceneForIgnore.filePath, { ignored_detections: updated });
+                            sceneForIgnore.ignored_detections = updated;
+                        }
+                        onUpdate();
+                    });
+            });
+            menu.addSeparator();
+        }
         for (const t of types) {
             menu.addItem(item => {
                 item.setTitle(t.label)
@@ -1245,6 +1266,25 @@ export class InspectorComponent {
                 info.createSpan({ cls: 'inspector-snapshot-meta', text: `${dateStr}${wcStr}` });
 
                 const btns = row.createDiv('inspector-snapshot-btns');
+
+                // View — open the snapshot file in a new tab so the user
+                // can compare it side-by-side with the current scene before
+                // deciding whether to restore.
+                const viewBtn = btns.createEl('button', {
+                    cls: 'clickable-icon',
+                    attr: { title: 'Open snapshot in a new tab (compare)' },
+                });
+                obsidian.setIcon(viewBtn, 'file-text');
+                viewBtn.addEventListener('click', async () => {
+                    const file = this.plugin.app.vault.getAbstractFileByPath(snap.filePath);
+                    if (file instanceof obsidian.TFile) {
+                        const leaf = this.plugin.app.workspace.getLeaf('tab');
+                        await leaf.openFile(file);
+                    } else {
+                        new obsidian.Notice('Snapshot file not found.');
+                    }
+                });
+
                 const restoreBtn = btns.createEl('button', {
                     cls: 'clickable-icon',
                     attr: { title: 'Restore this snapshot' },

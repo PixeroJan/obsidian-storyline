@@ -46,10 +46,26 @@ export interface UniversalFieldTemplate {
     defaultValue?: string;
 }
 
+/** A single entry in a section's merged display order (issue #92 follow-up). */
+export interface SectionOrderEntry {
+    /** 'builtin' = StoryLine-defined field (keyed by field.key), 'universal' = template (keyed by tpl.id). */
+    kind: 'builtin' | 'universal';
+    /** field.key for built-ins, tpl.id for universal fields. */
+    key: string;
+}
+
 /** On-disk shape of field-templates.json */
 export interface FieldTemplateFile {
     version: number;
     fields: UniversalFieldTemplate[];
+    /**
+     * Per-section ordering of all visible fields (built-in + universal).
+     * Map key is `${section}|${category||''}`. Missing keys fall back to
+     * the natural order (built-ins first, then universals by `order`).
+     * Added in v1.9.x to let users interleave universal fields between
+     * built-in fields within a section.
+     */
+    sectionOrders?: Record<string, SectionOrderEntry[]>;
 }
 
 
@@ -81,6 +97,8 @@ export interface FieldTemplateChange {
 export class FieldTemplateService {
     private app: App;
     private templates: UniversalFieldTemplate[] = [];
+    /** Per-section ordering (built-in + universal interleaved). See {@link SectionOrderEntry}. */
+    private sectionOrders: Record<string, SectionOrderEntry[]> = {};
     /** Resolver set by the plugin so we don't depend on main.ts directly */
     private getSystemFolder: () => string;
     private onChange?: (change: FieldTemplateChange) => void | Promise<void>;
@@ -183,6 +201,137 @@ export class FieldTemplateService {
         await this.save();
     }
 
+    /**
+     * Issue #92 — move a template up by one position within its (section, category) scope.
+     * Swaps order with the previous sibling.
+     */
+    async moveUp(id: string): Promise<void> {
+        const t = this.templates.find(f => f.id === id);
+        if (!t) return;
+        const siblings = this.getBySection(t.section, t.category);
+        const idx = siblings.findIndex(s => s.id === id);
+        if (idx <= 0) return;
+        // Normalize all sibling orders to 0..n then swap
+        siblings.forEach((s, i) => { s.order = i; });
+        const prev = siblings[idx - 1];
+        const tmp = prev.order;
+        prev.order = t.order;
+        t.order = tmp;
+        await this.save();
+    }
+
+    /**
+     * Issue #92 — move a template down by one position within its (section, category) scope.
+     */
+    async moveDown(id: string): Promise<void> {
+        const t = this.templates.find(f => f.id === id);
+        if (!t) return;
+        const siblings = this.getBySection(t.section, t.category);
+        const idx = siblings.findIndex(s => s.id === id);
+        if (idx < 0 || idx >= siblings.length - 1) return;
+        siblings.forEach((s, i) => { s.order = i; });
+        const next = siblings[idx + 1];
+        const tmp = next.order;
+        next.order = t.order;
+        t.order = tmp;
+        await this.save();
+    }
+
+    /**
+     * Issue #92 — place an existing template directly after another sibling
+     * (same section + category). Pass `null` to move to the top.
+     * Normalises orders to 0..n.
+     */
+    async moveAfter(id: string, afterId: string | null): Promise<void> {
+        const t = this.templates.find(f => f.id === id);
+        if (!t) return;
+        const siblings = this.getBySection(t.section, t.category).filter(s => s.id !== id);
+        let insertIdx = 0;
+        if (afterId) {
+            const i = siblings.findIndex(s => s.id === afterId);
+            insertIdx = i >= 0 ? i + 1 : siblings.length;
+        }
+        siblings.splice(insertIdx, 0, t);
+        siblings.forEach((s, i) => { s.order = i; });
+        await this.save();
+    }
+
+    // ── Merged ordering (built-in + universal) ─────────
+
+    private sectionKey(section: string, category?: string): string {
+        return `${section}|${category ?? ''}`;
+    }
+
+    /**
+     * Resolve the full display order for a section, interleaving built-in
+     * field keys with universal-field template ids. Any items missing from
+     * the stored order are appended at the end (built-ins first in their
+     * natural sequence, then universals sorted by their `order` value).
+     */
+    getMergedOrder(section: string, category: string | undefined, builtInKeys: string[]): SectionOrderEntry[] {
+        const stored = this.sectionOrders[this.sectionKey(section, category)] ?? [];
+        const builtInSet = new Set(builtInKeys);
+        const universals = this.getBySection(section, category);
+        const uniIds = new Set(universals.map(u => u.id));
+
+        // Keep only stored entries that still exist; drop renames/removals.
+        const result: SectionOrderEntry[] = [];
+        const seen = new Set<string>();
+        for (const e of stored) {
+            if (e.kind === 'builtin' ? builtInSet.has(e.key) : uniIds.has(e.key)) {
+                const tag = `${e.kind}:${e.key}`;
+                if (!seen.has(tag)) { result.push(e); seen.add(tag); }
+            }
+        }
+        // Append any built-ins not yet ordered, preserving their natural sequence.
+        for (const bk of builtInKeys) {
+            const tag = `builtin:${bk}`;
+            if (!seen.has(tag)) { result.push({ kind: 'builtin', key: bk }); seen.add(tag); }
+        }
+        // Append any universals not yet ordered.
+        for (const u of universals) {
+            const tag = `universal:${u.id}`;
+            if (!seen.has(tag)) { result.push({ kind: 'universal', key: u.id }); seen.add(tag); }
+        }
+        return result;
+    }
+
+    /** Persist a fully-resolved order for a section. */
+    private async setSectionOrder(section: string, category: string | undefined, order: SectionOrderEntry[]): Promise<void> {
+        this.sectionOrders[this.sectionKey(section, category)] = order.map(e => ({ kind: e.kind, key: e.key }));
+        await this.save();
+    }
+
+    /** Move an entry (built-in or universal) one slot up within its section. */
+    async moveEntryUp(
+        section: string,
+        category: string | undefined,
+        builtInKeys: string[],
+        kind: 'builtin' | 'universal',
+        key: string,
+    ): Promise<void> {
+        const order = this.getMergedOrder(section, category, builtInKeys);
+        const idx = order.findIndex(e => e.kind === kind && e.key === key);
+        if (idx <= 0) return;
+        [order[idx - 1], order[idx]] = [order[idx], order[idx - 1]];
+        await this.setSectionOrder(section, category, order);
+    }
+
+    /** Move an entry one slot down within its section. */
+    async moveEntryDown(
+        section: string,
+        category: string | undefined,
+        builtInKeys: string[],
+        kind: 'builtin' | 'universal',
+        key: string,
+    ): Promise<void> {
+        const order = this.getMergedOrder(section, category, builtInKeys);
+        const idx = order.findIndex(e => e.kind === kind && e.key === key);
+        if (idx < 0 || idx >= order.length - 1) return;
+        [order[idx + 1], order[idx]] = [order[idx], order[idx + 1]];
+        await this.setSectionOrder(section, category, order);
+    }
+
     // ── Persistence ────────────────────────────────────
 
     /** Load templates from System/field-templates.json */
@@ -192,10 +341,23 @@ export class FieldTemplateService {
             const filePath = normalizePath(`${this.getSystemFolder()}/field-templates.json`);
             if (!await adapter.exists(filePath)) {
                 this.templates = [];
+                this.sectionOrders = {};
                 return;
             }
             const txt = await adapter.read(filePath);
             const data: FieldTemplateFile = JSON.parse(txt);
+            this.sectionOrders = {};
+            if (data.sectionOrders && typeof data.sectionOrders === 'object') {
+                for (const [k, v] of Object.entries(data.sectionOrders)) {
+                    if (!Array.isArray(v)) continue;
+                    this.sectionOrders[k] = v
+                        .filter((e): e is SectionOrderEntry =>
+                            !!e && typeof e === 'object'
+                            && (e.kind === 'builtin' || e.kind === 'universal')
+                            && typeof e.key === 'string')
+                        .map(e => ({ kind: e.kind, key: e.key }));
+                }
+            }
             if (Array.isArray(data.fields)) {
                 this.templates = data.fields.map(f => ({
                     id: f.id ?? generateId(),
@@ -215,6 +377,7 @@ export class FieldTemplateService {
             }
         } catch {
             this.templates = [];
+            this.sectionOrders = {};
         }
     }
 
@@ -229,6 +392,7 @@ export class FieldTemplateService {
             const data: FieldTemplateFile = {
                 version: 1,
                 fields: this.templates,
+                sectionOrders: this.sectionOrders,
             };
             await adapter.write(
                 normalizePath(`${systemFolder}/field-templates.json`),
