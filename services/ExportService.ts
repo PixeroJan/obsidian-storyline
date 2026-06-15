@@ -228,14 +228,10 @@ export class ExportService {
             const startsNewChapter = nextScene && nextScene.chapter !== undefined && nextScene.chapter !== currentChapter;
             if (nextScene && !startsNewAct && !startsNewChapter) {
                 if (this.separatorType === 'asterisks') {
-                    lines.push('\\* \\* \\*');
+                    lines.push('<div class="scene-separator">* * *</div>');
                     lines.push('');
                 } else if (this.separatorType === 'custom' && this.separatorCustom) {
-                    let custom = this.separatorCustom;
-                    if (/^[ \-*_]+$/.test(custom) && (custom.match(/[*-_]/g) || []).length >= 3) {
-                        custom = custom.replace(/([*-_])/g, '\\$1');
-                    }
-                    lines.push(custom);
+                    lines.push(`<div class="scene-separator">${this.separatorCustom}</div>`);
                     lines.push('');
                 }
             }

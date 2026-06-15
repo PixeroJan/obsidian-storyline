@@ -70,7 +70,7 @@ export interface SLObsidianFontSettings {
 }
 
 interface SLDocumentElement {
-    type: 'paragraph' | 'heading' | 'list' | 'codeblock' | 'table' | 'break' | 'blockquote' | 'tasklist' | 'horizontal-rule' | 'image';
+    type: 'paragraph' | 'heading' | 'list' | 'codeblock' | 'table' | 'break' | 'blockquote' | 'tasklist' | 'horizontal-rule' | 'image' | 'scene-separator';
     content?: string;
     level?: number;
     style?: SLTextStyle;
@@ -681,12 +681,18 @@ ${imageRels}</Relationships>`;
                 case 'horizontal-rule': return this.horizontalRuleToXml();
                 case 'image': return this.imageToXml(element);
                 case 'break': return '<w:p><w:pPr></w:pPr></w:p>';
+                case 'scene-separator': return this.sceneSeparatorToXml(element);
                 default: return '';
             }
         } catch (error) {
             console.error('StoryLine DOCX: Error converting element to XML:', element.type, error);
             return `<w:p><w:pPr></w:pPr><w:r><w:t>[Error processing ${element.type}]</w:t></w:r></w:p>`;
         }
+    }
+
+    private sceneSeparatorToXml(element: SLDocumentElement): string {
+        const text = this.escapeXml(element.content || '* * *');
+        return `<w:p>\n  <w:pPr>\n    <w:jc w:val="center"/>\n    <w:spacing w:before="240" w:after="240"/>\n  </w:pPr>\n  <w:r>\n    <w:t>${text}</w:t>\n  </w:r>\n</w:p>`;
     }
 
     private headingToXml(element: SLDocumentElement): string {
@@ -1261,6 +1267,17 @@ ${imageRels}</Relationships>`;
             }
 
             const trimmedLine = line.trim();
+
+            // Scene separators
+            const separatorMatch = trimmedLine.match(/^<div\s+class="scene-separator">(.*?)<\/div>/i);
+            if (separatorMatch) {
+                elements.push({
+                    type: 'scene-separator',
+                    content: separatorMatch[1].trim()
+                });
+                i++;
+                continue;
+            }
 
             // Horizontal rules
             const cleanLine = trimmedLine.replace(/\s/g, '');
