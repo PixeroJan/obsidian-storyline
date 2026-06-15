@@ -793,6 +793,9 @@ export interface SceneCardsSettings {
      * on conflict.
      */
     defaultSceneFrontmatter?: string;
+
+    exportSceneSeparatorType?: 'blank' | 'asterisks' | 'custom';
+    exportSceneSeparatorCustom?: string;
 }
 
 /**
@@ -905,6 +908,8 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     excludeChecklistFromWordcount: false,
     defaultProjectLanguage: 'en',
     defaultSceneFrontmatter: '',
+    exportSceneSeparatorType: 'blank',
+    exportSceneSeparatorCustom: '',
 };
 
 /**
@@ -2166,6 +2171,35 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         //  Export & Import
         // ═══════════════════════════════════════════
         new Setting(containerEl).setName('Export & Import').setHeading();
+
+        new Setting(containerEl)
+            .setName('Scene separator')
+            .setDesc('Separator used between scenes in manuscript exports (Markdown, Word, PDF, and HTML).')
+            .addDropdown(dropdown => dropdown
+                .addOptions({
+                    'blank': 'Blank Line',
+                    'asterisks': '* * *',
+                    'custom': 'Custom Separator',
+                })
+                .setValue(this.plugin.settings.exportSceneSeparatorType ?? 'blank')
+                .onChange(async (value) => {
+                    this.plugin.settings.exportSceneSeparatorType = value as 'blank' | 'asterisks' | 'custom';
+                    await this.plugin.saveSettings();
+                    this.refreshSettingsView();
+                }));
+
+        if (this.plugin.settings.exportSceneSeparatorType === 'custom') {
+            new Setting(containerEl)
+                .setName('Custom separator')
+                .setDesc('Enter any UTF-8 character or text to use as a scene separator.')
+                .addText(text => text
+                    .setPlaceholder('e.g. ~ ~ ~')
+                    .setValue(this.plugin.settings.exportSceneSeparatorCustom ?? '')
+                    .onChange(async (value) => {
+                        this.plugin.settings.exportSceneSeparatorCustom = value;
+                        await this.plugin.saveSettings();
+                    }));
+        }
 
         // --- DOCX Export Settings (collapsible) ---
         this.renderDocxSettings(containerEl);

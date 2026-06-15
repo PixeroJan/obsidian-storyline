@@ -44,6 +44,8 @@ export class ExportService {
         includeCorkboardNotes: false,
         includeInactiveScenes: false,
     };
+    private separatorType: 'blank' | 'asterisks' | 'custom' = 'blank';
+    private separatorCustom = '';
 
     constructor(app: App, sceneManager: SceneManager, characterManager: CharacterManager, locationManager: LocationManager) {
         this.app = app;
@@ -65,6 +67,12 @@ export class ExportService {
     /** Set per-export options (scene titles, numbering, corkboard notes). */
     setExportOptions(options: ExportOptions): void {
         this.exportOptions = { ...this.exportOptions, ...options };
+    }
+
+    /** Set scene separator options. */
+    setSeparatorSettings(type: 'blank' | 'asterisks' | 'custom', custom: string): void {
+        this.separatorType = type;
+        this.separatorCustom = custom;
     }
 
     /**
@@ -214,7 +222,23 @@ export class ExportService {
                 lines.push('');
             }
 
-            // (no divider between scenes – the heading structure is sufficient)
+            // Scene separator
+            const nextScene = scenes[sceneNumber];
+            const startsNewAct = nextScene && nextScene.act !== undefined && nextScene.act !== currentAct;
+            const startsNewChapter = nextScene && nextScene.chapter !== undefined && nextScene.chapter !== currentChapter;
+            if (nextScene && !startsNewAct && !startsNewChapter) {
+                if (this.separatorType === 'asterisks') {
+                    lines.push('\\* \\* \\*');
+                    lines.push('');
+                } else if (this.separatorType === 'custom' && this.separatorCustom) {
+                    let custom = this.separatorCustom;
+                    if (/^[ \-*_]+$/.test(custom) && (custom.match(/[*-_]/g) || []).length >= 3) {
+                        custom = custom.replace(/([*-_])/g, '\\$1');
+                    }
+                    lines.push(custom);
+                    lines.push('');
+                }
+            }
         }
     }
 
@@ -526,6 +550,7 @@ export class ExportService {
     h5 { font-size: 11pt; margin-top: 0.9em; font-weight: 600; }
     h6 { font-size: 10pt; margin-top: 0.8em; font-weight: 600; color: #666; }
     hr { border: none; border-top: 1px solid #ccc; margin: 1.5em 0; }
+    .scene-separator { text-align: center; margin: 1.5em 0; }
     table { width: 100%; border-collapse: collapse; font-size: 10pt; margin: 1em 0; }
     th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
     th { background: #f5f5f5; font-weight: 600; }
@@ -591,6 +616,18 @@ ${body}
             }
 
             parts.push('</div>');
+
+            // Scene separator
+            const nextScene = scenes[sceneNumber];
+            const startsNewAct = nextScene && nextScene.act !== undefined && nextScene.act !== currentAct;
+            const startsNewChapter = nextScene && nextScene.chapter !== undefined && nextScene.chapter !== currentChapter;
+            if (nextScene && !startsNewAct && !startsNewChapter) {
+                if (this.separatorType === 'asterisks') {
+                    parts.push('<div class="scene-separator">* * *</div>');
+                } else if (this.separatorType === 'custom' && this.separatorCustom) {
+                    parts.push(`<div class="scene-separator">${this.escHtml(this.separatorCustom)}</div>`);
+                }
+            }
         }
 
         return parts.join('\n');
@@ -1288,6 +1325,7 @@ ${body}
     h6 { font-size: ${h6Size}pt; margin-top: 0.8em; font-weight: 600; color: #666; }
     p  { margin: 0 0 0.5em 0; }
     hr { border: none; border-top: 1px solid #ccc; margin: 1.5em 0; }
+    .scene-separator { text-align: center; margin: 1.5em 0; }
     table { width: 100%; border-collapse: collapse; font-size: ${Math.round(fontSize * 0.9)}pt; margin: 1em 0; }
     th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
     th { background: #f5f5f5; font-weight: 600; }

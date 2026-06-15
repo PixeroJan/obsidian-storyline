@@ -19,11 +19,16 @@ export class ExportModal extends Modal {
     private numberScenesOnExport = false;
     private includeCorkboardNotes = false;
     private includeInactiveScenes = false;
+    private sceneSeparatorType: 'blank' | 'asterisks' | 'custom' = 'blank';
+    private sceneSeparatorCustom = '';
 
     constructor(plugin: SceneCardsPlugin) {
         super(plugin.app);
         this.plugin = plugin;
         this.exportService = new ExportService(plugin.app, plugin.sceneManager, plugin.characterManager, plugin.locationManager);
+        
+        this.sceneSeparatorType = plugin.settings.exportSceneSeparatorType || 'blank';
+        this.sceneSeparatorCustom = plugin.settings.exportSceneSeparatorCustom || '';
         // Pass DOCX settings to the export service
         if (plugin.settings.docxSettings) {
             this.exportService.setDocxSettings(plugin.settings.docxSettings);
@@ -153,6 +158,37 @@ export class ExportModal extends Modal {
                     t.onChange(v => { this.includeCorkboardNotes = v; });
                 });
 
+            new Setting(manuscriptOptions)
+                .setName('Scene separator')
+                .setDesc('Separator used between scenes in manuscript exports.')
+                .addDropdown(dd => dd
+                    .addOptions({
+                        'blank': 'Blank Line',
+                        'asterisks': '* * *',
+                        'custom': 'Custom Separator',
+                    })
+                    .setValue(this.sceneSeparatorType)
+                    .onChange(async (v) => {
+                        this.sceneSeparatorType = v as 'blank' | 'asterisks' | 'custom';
+                        this.plugin.settings.exportSceneSeparatorType = this.sceneSeparatorType;
+                        await this.plugin.saveSettings();
+                        renderManuscriptOptions();
+                    }));
+
+            if (this.sceneSeparatorType === 'custom') {
+                new Setting(manuscriptOptions)
+                    .setName('Custom separator')
+                    .setDesc('Enter any UTF-8 character or text to use as a scene separator.')
+                    .addText(text => text
+                        .setPlaceholder('e.g. ~ ~ ~')
+                        .setValue(this.sceneSeparatorCustom)
+                        .onChange(async (v) => {
+                            this.sceneSeparatorCustom = v;
+                            this.plugin.settings.exportSceneSeparatorCustom = v;
+                            await this.plugin.saveSettings();
+                        }));
+            }
+
         };
         renderManuscriptOptions();
 
@@ -168,6 +204,10 @@ export class ExportModal extends Modal {
                     includeCorkboardNotes: this.includeCorkboardNotes,
                     includeInactiveScenes: this.includeInactiveScenes,
                 });
+                this.exportService.setSeparatorSettings(
+                    this.sceneSeparatorType,
+                    this.sceneSeparatorCustom
+                );
                 await this.exportService.export(this.format, this.exportScope);
                 this.close();
             } catch (err) {
