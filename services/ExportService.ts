@@ -223,17 +223,10 @@ export class ExportService {
             }
 
             // Scene separator
-            const nextScene = scenes[sceneNumber];
-            const startsNewAct = nextScene && nextScene.act !== undefined && nextScene.act !== currentAct;
-            const startsNewChapter = nextScene && nextScene.chapter !== undefined && nextScene.chapter !== currentChapter;
-            if (nextScene && !startsNewAct && !startsNewChapter) {
-                if (this.separatorType === 'asterisks') {
-                    lines.push('<div class="scene-separator">* * *</div>');
-                    lines.push('');
-                } else if (this.separatorType === 'custom' && this.separatorCustom) {
-                    lines.push(`<div class="scene-separator">${this.separatorCustom}</div>`);
-                    lines.push('');
-                }
+            const separatorHtml = this.getSceneSeparator(scenes[sceneNumber], currentAct, currentChapter);
+            if (separatorHtml) {
+                lines.push(separatorHtml);
+                lines.push('');
             }
         }
     }
@@ -614,15 +607,9 @@ ${body}
             parts.push('</div>');
 
             // Scene separator
-            const nextScene = scenes[sceneNumber];
-            const startsNewAct = nextScene && nextScene.act !== undefined && nextScene.act !== currentAct;
-            const startsNewChapter = nextScene && nextScene.chapter !== undefined && nextScene.chapter !== currentChapter;
-            if (nextScene && !startsNewAct && !startsNewChapter) {
-                if (this.separatorType === 'asterisks') {
-                    parts.push('<div class="scene-separator">* * *</div>');
-                } else if (this.separatorType === 'custom' && this.separatorCustom) {
-                    parts.push(`<div class="scene-separator">${this.escHtml(this.separatorCustom)}</div>`);
-                }
+            const separatorHtml = this.getSceneSeparator(scenes[sceneNumber], currentAct, currentChapter);
+            if (separatorHtml) {
+                parts.push(separatorHtml);
             }
         }
 
@@ -835,6 +822,28 @@ ${body}
         }
 
         return filePath;
+    }
+
+    /**
+     * Determines whether to insert a scene separator before nextScene,
+     * and returns the formatted HTML element for the separator (with properly escaped content)
+     * if applicable. Returns an empty string if no separator is needed.
+     */
+    private getSceneSeparator(
+        nextScene: Scene | undefined,
+        currentAct: string | number | undefined,
+        currentChapter: string | number | undefined
+    ): string {
+        const startsNewAct = nextScene && nextScene.act !== undefined && nextScene.act !== currentAct;
+        const startsNewChapter = nextScene && nextScene.chapter !== undefined && nextScene.chapter !== currentChapter;
+        if (nextScene && !startsNewAct && !startsNewChapter) {
+            if (this.separatorType === 'asterisks') {
+                return '<div class="scene-separator">* * *</div>';
+            } else if (this.separatorType === 'custom' && this.separatorCustom) {
+                return `<div class="scene-separator">${this.escHtml(this.separatorCustom)}</div>`;
+            }
+        }
+        return '';
     }
 
     private escHtml(s: string): string {

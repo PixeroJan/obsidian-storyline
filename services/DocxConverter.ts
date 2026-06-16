@@ -99,7 +99,7 @@ export class SLMarkdownToDocxConverter {
     private footnotes: { [key: string]: string } = {};
     private usedFootnotes: string[] = [];
     private imageCounter: number = 0;
-    private imageRelationships: Array<{id: string, data: ArrayBuffer, extension: string}> = [];
+    private imageRelationships: Array<{ id: string, data: ArrayBuffer, extension: string }> = [];
     private md: MarkdownIt;
 
     constructor(settings: SLDocxSettings) {
@@ -692,7 +692,7 @@ ${imageRels}</Relationships>`;
 
     private sceneSeparatorToXml(element: SLDocumentElement): string {
         const text = this.escapeXml(element.content || '* * *');
-        return `<w:p>\n  <w:pPr>\n    <w:jc w:val="center"/>\n    <w:spacing w:before="240" w:after="240"/>\n  </w:pPr>\n  <w:r>\n    <w:t>${text}</w:t>\n  </w:r>\n</w:p>`;
+        return `<w:p>\n  <w:pPr>\n    <w:jc w:val="center"/>\n    <w:spacing w:before="240" w:after="240"/>\n  </w:pPr>\n  <w:r>\n    <w:t xml:space="preserve">${text}</w:t>\n  </w:r>\n</w:p>`;
     }
 
     private headingToXml(element: SLDocumentElement): string {
@@ -1273,7 +1273,7 @@ ${imageRels}</Relationships>`;
             if (separatorMatch) {
                 elements.push({
                     type: 'scene-separator',
-                    content: separatorMatch[1].trim()
+                    content: this.decodeHtmlEntities(separatorMatch[1].trim())
                 });
                 i++;
                 continue;
@@ -1580,14 +1580,8 @@ ${imageRels}</Relationships>`;
     }
 
     private decodeHtmlEntities(text: string): string {
-        return text
-            .replace(/&#x27;/g, "'")
-            .replace(/&#x22;/g, '"')
-            .replace(/&quot;/g, '"')
-            .replace(/&apos;/g, "'")
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&amp;/g, '&');
+        const doc = new DOMParser().parseFromString(text, 'text/html');
+        return doc.documentElement.textContent || '';
     }
 
     private extractFootnotes(markdown: string): { content: string; definitions: Map<string, string> } {

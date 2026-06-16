@@ -794,7 +794,16 @@ export interface SceneCardsSettings {
      */
     defaultSceneFrontmatter?: string;
 
+    /**
+     * Type of separator to insert between scenes in manuscript exports.
+     * Can be a blank line, three asterisks (* * *), or a custom text string.
+     */
     exportSceneSeparatorType?: 'blank' | 'asterisks' | 'custom';
+
+    /**
+     * Custom text/separator string to insert between scenes in manuscript exports
+     * when `exportSceneSeparatorType` is set to 'custom'.
+     */
     exportSceneSeparatorCustom?: string;
 }
 
