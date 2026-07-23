@@ -1,6 +1,6 @@
 {
   "name": "obsidian-storyline",
-  "version": "1.10.47",
+  "version": "1.10.48",
   "description": "Transform your vault into a powerful book planning and writingtool with StoryLine",
   "main": "main.js",
   "scripts": {

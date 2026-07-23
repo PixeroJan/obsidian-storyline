@@ -714,6 +714,10 @@ export class LocationView extends ItemView {
         category: LocationFieldCategory,
         draft: WorldOrLocation
     ): void {
+        // Issue #233 discussion — support hiding an entire category at once.
+        const hiddenCats = this.plugin.settings.hiddenCategories['location'] ?? [];
+        const isCategoryHidden = hiddenCats.includes(category.title);
+
         const section = parent.createDiv('location-section');
         const isCollapsed = this.collapsedSections.has(category.title);
 
@@ -723,6 +727,30 @@ export class LocationView extends ItemView {
         const icon = sectionHeader.createSpan('location-section-icon');
         obsidian.setIcon(icon, category.icon);
         sectionHeader.createSpan({ text: category.title });
+
+        // ── Hide/unhide entire category button ──
+        const hideCatBtn = sectionHeader.createSpan({
+            cls: 'character-section-hide-cat-btn',
+            attr: {
+                title: isCategoryHidden ? 'Show this category' : 'Hide this category',
+                'aria-label': isCategoryHidden ? 'Show this category' : 'Hide this category',
+                role: 'button',
+            },
+        });
+        obsidian.setIcon(hideCatBtn, isCategoryHidden ? 'eye' : 'eye-off');
+        hideCatBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const settings = this.plugin.settings;
+            if (!settings.hiddenCategories['location']) settings.hiddenCategories['location'] = [];
+            const list = settings.hiddenCategories['location'];
+            const idx = list.indexOf(category.title);
+            if (idx >= 0) list.splice(idx, 1);
+            else list.push(category.title);
+            await this.plugin.saveSettings();
+            if (this.rootContainer) {
+                this.renderDetail(this.rootContainer);
+            }
+        });
 
         // '+' button to add a universal field to this section
         const addFieldBtn = sectionHeader.createEl('button', {
@@ -767,11 +795,20 @@ export class LocationView extends ItemView {
             modal.open();
         });
 
+        // Issue #233 discussion — skip the section body entirely when the
+        // category is hidden. The header (with its eye icon) still renders
+        // so the user can un-hide it.
+        if (isCategoryHidden) {
+            section.addClass('is-category-hidden');
+            return;
+        }
+
         const sectionBody = section.createDiv('location-section-body');
         if (isCollapsed) sectionBody.setCssStyles({ display: 'none' });
 
         sectionHeader.addEventListener('click', (e) => {
             if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
+            if ((e.target as HTMLElement).closest('.character-section-hide-cat-btn')) return;
             if (this.collapsedSections.has(category.title)) {
                 this.collapsedSections.delete(category.title);
                 sectionBody.setCssStyles({ display: '' });

@@ -489,7 +489,19 @@ export class CharacterView extends ItemView {
         // Short description snippet — per-character tagline field selector, with auto fallback
         const taglineKey = char.tagline; // a field key like 'personality', 'occupation', etc.
         const autoSnippet = char.personality || char.occupation || getRoleDisplay(char.role) || '';
-        const snippet = (taglineKey ? coerceString((char as unknown as Record<string, unknown>)[taglineKey]) : '') || autoSnippet;
+        // Issue #233 discussion — support custom (universal) fields as the
+        // tagline source. Universal-field tagline keys are stored with the
+        // `uf:` prefix so they never collide with built-in field keys.
+        let snippet = '';
+        if (taglineKey) {
+            if (taglineKey.startsWith('uf:')) {
+                const ufId = taglineKey.slice(3);
+                snippet = coerceString((char.universalFields as Record<string, unknown> | undefined)?.[ufId]);
+            } else {
+                snippet = coerceString((char as unknown as Record<string, unknown>)[taglineKey]);
+            }
+        }
+        snippet = snippet || autoSnippet;
         if (snippet) {
             card.createEl('p', { cls: 'character-card-snippet', text: snippet });
         }
@@ -912,6 +924,10 @@ export class CharacterView extends ItemView {
         category: { title: string; icon: string; fields: CharacterFieldDef[] },
         draft: Character
     ): void {
+        // Issue #233 discussion — support hiding an entire category at once.
+        const hiddenCats = this.plugin.settings.hiddenCategories['character'] ?? [];
+        const isCategoryHidden = hiddenCats.includes(category.title);
+
         const section = parent.createDiv('character-section');
         const isCollapsed = this.collapsedSections.has(category.title);
 
@@ -922,6 +938,30 @@ export class CharacterView extends ItemView {
         const icon = sectionHeader.createSpan('character-section-icon');
         obsidian.setIcon(icon, category.icon);
         sectionHeader.createSpan({ text: category.title });
+
+        // ── Hide/unhide entire category button ──
+        const hideCatBtn = sectionHeader.createSpan({
+            cls: 'character-section-hide-cat-btn',
+            attr: {
+                title: isCategoryHidden ? 'Show this category' : 'Hide this category',
+                'aria-label': isCategoryHidden ? 'Show this category' : 'Hide this category',
+                role: 'button',
+            },
+        });
+        obsidian.setIcon(hideCatBtn, isCategoryHidden ? 'eye' : 'eye-off');
+        hideCatBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const settings = this.plugin.settings;
+            if (!settings.hiddenCategories['character']) settings.hiddenCategories['character'] = [];
+            const list = settings.hiddenCategories['character'];
+            const idx = list.indexOf(category.title);
+            if (idx >= 0) list.splice(idx, 1);
+            else list.push(category.title);
+            await this.plugin.saveSettings();
+            if (this.selectedCharacter && this.rootContainer) {
+                this.renderCharacterDetail(this.rootContainer);
+            }
+        });
 
         // ── '+' button to add a universal field to this section ──
         const addFieldBtn = sectionHeader.createEl('button', {
@@ -963,6 +1003,14 @@ export class CharacterView extends ItemView {
             );
             modal.open();
         });
+
+        // Issue #233 discussion — skip the section body entirely when the
+        // category is hidden. The header (with its eye icon) still renders
+        // so the user can un-hide it.
+        if (isCategoryHidden) {
+            section.addClass('is-category-hidden');
+            return;
+        }
 
         const sectionBody = section.createDiv('character-section-body');
         if (isCollapsed) sectionBody.setCssStyles({ display: 'none' });
@@ -1096,6 +1144,13 @@ export class CharacterView extends ItemView {
                     taglineOptions.push({ key: f.key, label: f.label });
                 }
             }
+            // Issue #233 discussion — also list custom (universal) fields so
+            // users can pick one as the card tagline. Keys are prefixed `uf:`
+            // + template id so they never collide with built-in field keys.
+            const universalTaglineFields = this.plugin.fieldTemplates.getAll()
+                .filter(t => (t.category || 'character') === 'character')
+                .map(t => ({ key: `uf:${t.id}`, label: `${t.label} (custom)` }));
+            taglineOptions.push(...universalTaglineFields);
             for (const opt of taglineOptions) {
                 const el = select.createEl('option', { text: opt.label, value: opt.key });
                 if (value === opt.key) el.selected = true;
@@ -1664,6 +1719,21 @@ export class CharacterView extends ItemView {
                     attr: { placeholder: 'Custom relation type (e.g. Bodyguard)' },
                 });
                 customTypeInput.setCssStyles({ display: 'none' });
+                // Issue #233 discussion — when defining a custom relation type,
+                // let the user assign it to an existing category (e.g. "mate"
+                // under "romantic") so the Character Map view groups it
+                // correctly. Defaults to 'custom' to preserve old behaviour.
+                const customCategorySelect = inlineRow.createEl('select', {
+                    cls: 'character-field-input dropdown relation-builder-custom-category',
+                });
+                customCategorySelect.setCssStyles({ display: 'none' });
+                for (const category of RELATION_CATEGORIES) {
+                    const opt = customCategorySelect.createEl('option', {
+                        text: category.label,
+                        value: category.value,
+                    });
+                    if (relation.category === category.value) opt.selected = true;
+                }
                 const dragHandle = inlineRow.createDiv('relation-builder-drag-handle');
                 dragHandle.draggable = true;
                 dragHandle.ariaLabel = 'Drag to reorder relation';
@@ -1686,13 +1756,16 @@ export class CharacterView extends ItemView {
                 const setCustomMode = (enabled: boolean, focus = false) => {
                     typeSelect.setCssStyles({ display: enabled ? 'none' : '' });
                     customTypeInput.setCssStyles({ display: enabled ? '' : 'none' });
+                    customCategorySelect.setCssStyles({ display: enabled ? '' : 'none' });
                     if (enabled) {
                         customTypeInput.value = relation.type && relation.type !== NEW_CUSTOM_TYPE_VALUE ? relation.type : '';
+                        // Reflect the current category in the dropdown
+                        customCategorySelect.value = relation.category || 'custom';
                         if (focus) customTypeInput.focus();
                     }
                 };
 
-                const shouldStartCustomMode = relation.category === 'custom' || relation.type === NEW_CUSTOM_TYPE_VALUE;
+                const shouldStartCustomMode = relation.category === 'custom' || relation.type === NEW_CUSTOM_TYPE_VALUE || !RELATION_CATEGORIES.some(c => c.value === relation.category);
                 setCustomMode(shouldStartCustomMode);
 
                 typeSelect.addEventListener('change', () => {
@@ -1712,6 +1785,12 @@ export class CharacterView extends ItemView {
                     setCustomMode(false);
                 });
 
+                customCategorySelect.addEventListener('change', () => {
+                    relation.category = customCategorySelect.value as CharacterRelationCategory;
+                    draft.relations = normalizeCharacterRelations(relations);
+                    this.scheduleSave(draft);
+                });
+
                 customTypeInput.addEventListener('input', () => {
                     const cleaned = customTypeInput.value.trim().toLowerCase().replace(/\s+/g, '-');
                     if (!cleaned) {
@@ -1722,7 +1801,9 @@ export class CharacterView extends ItemView {
                         return;
                     }
                     relation.type = cleaned;
-                    relation.category = 'custom';
+                    // Issue #233 discussion — keep the user-chosen category
+                    // (from customCategorySelect) instead of forcing 'custom'.
+                    relation.category = (customCategorySelect.value as CharacterRelationCategory) || 'custom';
                     draft.relations = normalizeCharacterRelations(relations);
                     this.scheduleSave(draft);
                 });

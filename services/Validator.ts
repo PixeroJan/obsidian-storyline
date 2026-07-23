@@ -144,7 +144,17 @@ export class Validator {
             const curr = withDates[i];
             const prevDate = prev.storyDate!;
             const currDate = curr.storyDate!;
-            if (currDate < prevDate) {
+            // Issue #233 — compare parsed dates when possible so ordinal
+            // markers like "Day 1" / "Day 2" don't trigger false out-of-order
+            // warnings from naive string comparison ("Day 10" < "Day 2").
+            // Fall back to string comparison only when both dates are
+            // unparseable (e.g. free-text like "morning", "evening").
+            const prevParsed = this.parseStoryDate(prevDate);
+            const currParsed = this.parseStoryDate(currDate);
+            const outOfOrder = prevParsed && currParsed
+                ? currParsed.getTime() < prevParsed.getTime()
+                : currDate < prevDate;
+            if (outOfOrder) {
                 // Allow simultaneous scenes to have same or any date
                 if (curr.timeline_mode === 'simultaneous' || prev.timeline_mode === 'simultaneous') continue;
                 warnings.push({
@@ -551,7 +561,18 @@ export class Validator {
             const d = new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
             if (!isNaN(d.getTime())) return d;
         }
-        // Try Date.parse as fallback (handles many formats)
+        // Issue #233 — do NOT fall back to Date.parse for arbitrary strings.
+        // V8's Date.parse interprets "Day 1" as 2000-12-31 and "Day 2" as
+        // 2001-01-31 (a 31-day gap), and "Day 10" as 2001-09-09, producing
+        // wildly false "31-day gap" / "out of order" warnings for users who
+        // label scenes with ordinal day markers. Only accept strings that
+        // look like real calendar dates (ISO, numeric YYYY/MM/DD, or month
+        // name formats) before calling Date.parse.
+        if (!/^\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/.test(dateStr) &&
+            !/^[A-Za-z]{3,9}\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{2,4}/.test(dateStr) &&
+            !/^\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}/.test(dateStr)) {
+            return null;
+        }
         const parsed = Date.parse(dateStr);
         if (!isNaN(parsed)) return new Date(parsed);
         return null;

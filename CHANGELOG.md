@@ -6,6 +6,26 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.48
+
+### Bug Fixes
+
+- **Core Properties sidebar no longer blank when StoryLine is enabled** *([#232](https://github.com/PixeroJan/obsidian-storyline/issues/232), [#230](https://github.com/PixeroJan/obsidian-storyline/discussions/230))* — When the "Hide frontmatter" setting was on, Obsidian's built-in **Properties** sidebar pane went completely blank for any file inside the StoryLine root (and stayed blank after creating a Series). The per-leaf `sl-hide-frontmatter` class was being applied to *any* leaf whose `view.file` pointed at a StoryLine file — but Obsidian's core Properties pane also tracks the active file via `view.file`, so it got tagged and its `.metadata-container` was hidden by CSS. The class is now applied only to markdown editor leaves (`viewType === 'markdown'`); StoryLine's own custom views remain covered by the body-level class and the `[data-type^="story-line-"]` CSS rule.
+
+- **Timeline no longer reports false "31-day gap" / out-of-order warnings** *([#233](https://github.com/PixeroJan/obsidian-storyline/discussions/233))* — Scenes labelled with ordinal day markers like "Day 1" and "Day 2" triggered spurious "31-day gap without a timeskip marker" warnings and false out-of-order errors. V8's `Date.parse("Day 1")` returns `2000-12-31` and `Date.parse("Day 2")` returns `2001-01-31` — a 31-day gap — and the fallback `Date.parse()` in `Validator.parseStoryDate()` accepted these as real calendar dates. `parseStoryDate()` now only calls `Date.parse()` for strings that match real calendar-date patterns (ISO `YYYY-MM-DD`, numeric `YYYY/MM/DD`, or month-name formats); ordinal markers return `null` and are skipped. `checkDateOrderForGroup()` also stopped using naive string comparison (where `"Day 10" < "Day 2"` is `true`) and now compares parsed dates when possible.
+
+- **Plotline colour picker no longer closes on every input** *([#234](https://github.com/PixeroJan/obsidian-storyline/issues/234))* — Typing a single digit into the RGB boxes or dragging the visual colour picker immediately closed the plotline colour customiser, making it nearly impossible to enter a precise colour. The `input` event handler called `this.refresh()`, which re-rendered the entire view and destroyed the colour input mid-edit. The `input` event now only persists the value without re-rendering; the `change` event (fired when the picker is dismissed/committed) triggers the full refresh.
+
+- **Hidden fields and categories now reachable on mobile** *(Reddit request #4)* — The per-field hide/move buttons and the new hide-category button use `opacity: 0` + `:hover` to stay out of the way on desktop. Touch devices have no hover, so the buttons were invisible and unreachable — users couldn't hide fields, and hidden fields appeared because the toggle was inaccessible. These buttons are now always visible at reduced opacity on mobile (`.sl-mobile`).
+
+### New Features
+
+- **Custom fields can be used as the character card tagline** *(Reddit request #1)* — The tagline dropdown on the character sheet now lists universal (custom) fields alongside the built-in fields, so you can pick any custom field as the snippet shown on character cards. Custom-field tagline keys are stored with an `uf:` prefix to avoid colliding with built-in field keys, and card rendering resolves them via `char.universalFields`.
+
+- **Custom relations can be assigned to an existing category** *(Reddit request #2)* — When defining a custom relation type (e.g. "mate"), a category dropdown now appears next to the type input, letting you assign it to any existing category (e.g. "romantic") so the Character Map view groups and colours it correctly. Previously every custom relation was forced into the generic "custom" bucket. The Relationship Map automatically renders the edge using the chosen category's base type via `RELATION_BASE_TYPE_BY_CATEGORY`.
+
+- **Hide entire categories at once** *(Reddit request #3)* — A new eye/eye-off button on each section header in the Character, Codex, and Location views lets you hide a whole category in one click, instead of hiding each field individually. Hidden categories show only their header (with the eye button) so you can un-hide them later. The setting is stored in a new `hiddenCategories: Record<string, string[]>` field and round-trips through `data.json`.
+
 ## Version 1.10.47
 
 ### Bug Fixes

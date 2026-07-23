@@ -816,10 +816,18 @@ export class StorylineView extends ItemView {
             e.stopPropagation();
             colorInput.click();
         });
+        // Issue #234 — the native color picker fires `input` on every change
+        // (each keystroke when typing RGB values, each drag in the visual
+        // picker). Calling refresh() on `input` destroyed the input element
+        // mid-edit, making the picker close immediately. Now `input` only
+        // persists the value without re-rendering; `change` (fires when the
+        // picker is dismissed / committed) triggers the full refresh.
         colorInput.addEventListener('input', async (e) => {
             const newColor = (e.target as HTMLInputElement).value;
             this.plugin.settings.tagColors[plotline] = newColor;
             await this.plugin.saveSettings();
+        });
+        colorInput.addEventListener('change', async () => {
             this.refresh();
         });
 

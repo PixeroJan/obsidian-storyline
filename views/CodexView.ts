@@ -555,12 +555,16 @@ export class CodexView extends ItemView {
     ): void {
         const sectionKey = `${catDef.id}-${cat.title}`;
         const isCollapsed = this.collapsedSections.has(sectionKey);
+        // Issue #233 discussion — support hiding an entire category at once.
+        const hiddenCats = this.plugin.settings.hiddenCategories[catDef.id] ?? [];
+        const isCategoryHidden = hiddenCats.includes(cat.title);
 
         const section = container.createDiv('codex-section');
         const sectionHeader = section.createDiv('codex-section-header');
         sectionHeader.addEventListener('click', (e) => {
-            // Ignore clicks on the add-field button
+            // Ignore clicks on the add-field / hide-category buttons
             if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
+            if ((e.target as HTMLElement).closest('.character-section-hide-cat-btn')) return;
             if (this.collapsedSections.has(sectionKey)) {
                 this.collapsedSections.delete(sectionKey);
             } else {
@@ -576,6 +580,28 @@ export class CodexView extends ItemView {
         obsidian.setIcon(catIcon, cat.icon);
 
         sectionHeader.createSpan({ cls: 'codex-section-title', text: cat.title });
+
+        // ── Hide/unhide entire category button ──
+        const hideCatBtn = sectionHeader.createSpan({
+            cls: 'character-section-hide-cat-btn',
+            attr: {
+                title: isCategoryHidden ? 'Show this category' : 'Hide this category',
+                'aria-label': isCategoryHidden ? 'Show this category' : 'Hide this category',
+                role: 'button',
+            },
+        });
+        obsidian.setIcon(hideCatBtn, isCategoryHidden ? 'eye' : 'eye-off');
+        hideCatBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const settings = this.plugin.settings;
+            if (!settings.hiddenCategories[catDef.id]) settings.hiddenCategories[catDef.id] = [];
+            const list = settings.hiddenCategories[catDef.id];
+            const idx = list.indexOf(cat.title);
+            if (idx >= 0) list.splice(idx, 1);
+            else list.push(cat.title);
+            await this.plugin.saveSettings();
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
 
         // '+' button to add a universal field to this section
         const addFieldBtn = sectionHeader.createEl('button', {
@@ -615,6 +641,14 @@ export class CodexView extends ItemView {
             );
             modal.open();
         });
+
+        // Issue #233 discussion — skip the section body entirely when the
+        // category is hidden. The header (with its eye icon) still renders
+        // so the user can un-hide it.
+        if (isCategoryHidden) {
+            section.addClass('is-category-hidden');
+            return;
+        }
 
         if (!isCollapsed) {
             const body = section.createDiv('codex-section-body');

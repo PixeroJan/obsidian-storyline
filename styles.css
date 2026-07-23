@@ -8080,6 +8080,23 @@ body /* Clamp title on mobile too, in case it's very long */
     display: none;
 }
 
+/* ── Issue #233 discussion (Reddit #4): hidden fields on mobile ──────
+ * The per-field hide/move buttons and the hide-category button use
+ * opacity:0 + :hover to stay out of the way on desktop. Touch devices
+ * have no hover, so the buttons were invisible and users couldn't hide
+ * fields — and hidden fields appeared because the toggle was unreachable.
+ * Always show them at reduced opacity on mobile. */
+.sl-mobile .field-hide-btn,
+.sl-mobile .field-move-btn,
+.sl-mobile .character-section-hide-cat-btn {
+    opacity: 0.55;
+}
+.sl-mobile .field-hide-btn:hover,
+.sl-mobile .field-move-btn:hover,
+.sl-mobile .character-section-hide-cat-btn:hover {
+    opacity: 1;
+}
+
 /* ── Location view: touch-friendly tree ────────────── */
 
 .sl-mobile .location-tree-node {
@@ -10848,6 +10865,44 @@ body /* ── Plain-text mode: hide link/tag decorations ───────�
 .field-hide-btn.field-hide-btn:hover {
     opacity: 1;
     color: var(--text-accent);
+}
+
+/* ── Hide-category button (issue #233 discussion — hide full categories) ─ */
+.character-section-hide-cat-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    opacity: 0;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: opacity 0.15s;
+    vertical-align: middle;
+    background: transparent;
+    border: none;
+    padding: 2px;
+}
+.character-section-hide-cat-btn svg {
+    width: 14px;
+    height: 14px;
+}
+.character-section-header:hover .character-section-hide-cat-btn,
+.codex-section-header:hover .character-section-hide-cat-btn,
+.location-section-header:hover .character-section-hide-cat-btn {
+    opacity: 0.6;
+}
+.character-section-hide-cat-btn:hover {
+    opacity: 1;
+    color: var(--text-accent);
+}
+/* When a category is hidden, keep its eye button visible so the user can un-hide it */
+.is-category-hidden .character-section-hide-cat-btn {
+    opacity: 0.6;
+}
+.is-category-hidden .character-section-body,
+.is-category-hidden .codex-section-body,
+.is-category-hidden .location-section-body {
+    display: none;
 }
 
 /* ── Move-up / move-down chevrons (built-in field rows) ─ */

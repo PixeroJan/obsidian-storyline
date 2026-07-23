@@ -805,10 +805,20 @@ export default class SceneCardsPlugin extends Plugin {
             const view = leaf.view as unknown as { getViewType?: () => string; file?: TFile | null };
             const filePath = view?.file?.path;
             const inStoryLine = !!filePath && (filePath === root.slice(0, -1) || filePath.startsWith(root));
+            // Issue #232 / #230 — only hide frontmatter inside markdown editor
+            // leaves. Obsidian's core "Properties" sidebar pane (view type
+            // 'properties') also exposes `view.file` (the active file), so the
+            // previous check tagged it with `sl-hide-frontmatter` whenever a
+            // StoryLine scene was open, making the whole Properties pane blank.
+            // Restrict the per-leaf class to markdown views only; the body-level
+            // `sl-hide-frontmatter-global` class + the `[data-type^="story-line-"]`
+            // CSS rule still cover StoryLine's own custom views.
+            const viewType = view?.getViewType?.();
+            const isMarkdownView = viewType === 'markdown';
             const container = (leaf as unknown as { containerEl?: HTMLElement }).containerEl;
             const target = container?.querySelector('.view-content') as HTMLElement | null;
             if (!target) continue;
-            if (hide && inStoryLine) {
+            if (hide && inStoryLine && isMarkdownView) {
                 target.classList.add('sl-hide-frontmatter');
             } else {
                 target.classList.remove('sl-hide-frontmatter');
