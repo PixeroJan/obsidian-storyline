@@ -108,6 +108,10 @@ export class LocationManager {
                 economy: fmEff.economy,
                 history: fmEff.history,
                 books: this.parseStringList(fmEff.books),
+                // ── Linking & Matching (Issue #228 round-trip fix) ──
+                entryType: fmEff.entryType,
+                caseSensitive: fmEff.caseSensitive === true || fmEff.caseSensitive === 'true',
+                excludeTerms: typeof fmEff.excludeTerms === 'string' ? fmEff.excludeTerms : undefined,
                 custom: fmEff.custom && typeof fmEff.custom === 'object'
                     ? (fmEff.custom as Record<string, string>)
                     : undefined,
@@ -140,6 +144,10 @@ export class LocationManager {
                 connectedLocations: fmEff.connectedLocations,
                 mapNotes: fmEff.mapNotes,
                 books: this.parseStringList(fmEff.books),
+                // ── Linking & Matching (Issue #228 round-trip fix) ──
+                entryType: fmEff.entryType,
+                caseSensitive: fmEff.caseSensitive === true || fmEff.caseSensitive === 'true',
+                excludeTerms: typeof fmEff.excludeTerms === 'string' ? fmEff.excludeTerms : undefined,
                 custom: fmEff.custom && typeof fmEff.custom === 'object'
                     ? (fmEff.custom as Record<string, string>)
                     : undefined,

@@ -6,6 +6,12 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.50
+
+### Bug Fixes
+
+- **Linking & Matching fields now persist for Characters and Locations** *([#228](https://github.com/PixeroJan/obsidian-storyline/issues/228))* — The **Case-sensitive matching** toggle and **Exclude terms** field in the Linking & Matching section were written to the markdown files but reverted to their defaults (unchecked / empty) on reload. The Character and Location parsers built their in-memory objects field-by-field and omitted the three linking fields (`entryType`, `caseSensitive`, `excludeTerms`), so the values were dropped on read-back even though they were still in the frontmatter. The parsers now read these fields back (with `caseSensitive` coerced to a boolean), so the toggle and exclude terms survive a reload round-trip. Codex entries were unaffected — their parser uses a generic field-key loop that already included the linking keys.
+
 ## Version 1.10.49
 
 ### Bug Fixes

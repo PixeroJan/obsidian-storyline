@@ -365,6 +365,12 @@ export class CharacterManager {
             habits: safeFm.habits,
             props: safeFm.props,
             books: this.parseStringList(safeFm.books),
+            // ── Linking & Matching (Issue #228 round-trip fix) ──
+            // These were written by saveCharacter (via CHARACTER_FIELD_KEYS)
+            // but never read back, so the UI reverted to defaults on reload.
+            entryType: safeFm.entryType,
+            caseSensitive: safeFm.caseSensitive === true || safeFm.caseSensitive === 'true',
+            excludeTerms: typeof safeFm.excludeTerms === 'string' ? safeFm.excludeTerms : undefined,
             custom: safeFm.custom && typeof safeFm.custom === 'object'
                 ? (safeFm.custom as Record<string, string>)
                 : undefined,
