@@ -47,6 +47,37 @@ export interface EntityReference {
 }
 
 /**
+ * Issue #228 — common title words that should NOT be auto-aliased as a
+ * first name. When a character's name starts with one of these (e.g.
+ * "Lady of Dreams", "Lord Blackwood", "Sir Galahad"), the first word is a
+ * title, not a first name, and auto-aliasing it would tag the character
+ * in every scene that uses the title word.
+ */
+const TITLE_WORDS = new Set([
+    'lady', 'lord', 'sir', 'dame', 'madam', 'madame', 'mister', 'mr', 'mrs',
+    'ms', 'dr', 'doctor', 'professor', 'prof', 'captain', 'cap', 'lieutenant',
+    'lt', 'sergeant', 'sgt', 'general', 'gen', 'colonel', 'col', 'major',
+    'maj', 'admiral', 'adm', 'commander', 'cmdr', 'king', 'queen', 'prince',
+    'princess', 'duke', 'duchess', 'earl', 'count', 'countess', 'baron',
+    'baroness', 'marquis', 'marchioness', 'emperor', 'empress', 'pope',
+    'father', 'mother', 'sister', 'brother', 'reverend', 'rev', 'saint',
+    'st', 'elder', 'master', 'mistress', 'sheriff', 'deputy', 'officer',
+    'agent', 'director', 'president', 'senator', 'judge', 'justice',
+]);
+
+/**
+ * Issue #228 — connector words that indicate a descriptive phrase rather
+ * than a "[FirstName] [LastName]" pattern. When the second word of a name
+ * is one of these (e.g. "Lady **of** Dreams", "Keeper **of** the Keys"),
+ * the first word is not a first name and should not be auto-aliased.
+ */
+const CONNECTOR_WORDS = new Set([
+    'of', 'the', 'de', 'la', 'le', 'du', 'von', 'van', 'der', 'den', 'das',
+    'di', 'da', 'del', 'della', 'des', 'du', 'el', 'al', 'bin', 'ibn',
+    'from', 'in', 'on', 'at', 'for', 'to', 'and',
+]);
+
+/**
  * Scans scene body text for [[wikilinks]] and plain-text name mentions,
  * then classifies them.
  */
@@ -72,6 +103,15 @@ export class LinkScanner {
      * E.g. "anna" → "Anna Svensson" when nickname is "Anna".
      */
     private charCanonical: Map<string, string> = new Map();
+
+    /**
+     * Issue #228 — maps a lowercased name to its original-cased form(s).
+     * Used by `extractPlainTextMentions()` so that case-sensitive matching
+     * tests the real casing (e.g. "Dust") rather than the lowercased key
+     * ("dust"). A single lowercased key can map to multiple original
+     * casings (e.g. a character named "Dust" and a location named "dust").
+     */
+    private originalCasedNames: Map<string, string[]> = new Map();
 
     /**
      * All character/location plain-text names to search for, sorted longest
@@ -178,6 +218,18 @@ export class LinkScanner {
         // caseSensitive / excludeTerms for every entity type.
         this.codexEntryRules.clear();
         this.codexCaseSensitiveNames = [];
+        this.originalCasedNames.clear();
+
+        /** Issue #228 — record the original casing for a lowercased name
+         *  so case-sensitive matching can test the real casing. */
+        const registerOriginalCasing = (nameLower: string, originalName: string) => {
+            const list = this.originalCasedNames.get(nameLower);
+            if (list) {
+                if (!list.includes(originalName)) list.push(originalName);
+            } else {
+                this.originalCasedNames.set(nameLower, [originalName]);
+            }
+        };
 
         /** Build a {caseSensitive, excludeTerms} rule from any entity that
          *  exposes the Linking & Matching fields. Returns null when neither
@@ -195,6 +247,7 @@ export class LinkScanner {
 
         /** Register a rule (if any) for a name + its original casing. */
         const registerRule = (nameLower: string, originalName: string, rule: { caseSensitive: boolean; excludeTerms: string[] } | null) => {
+            registerOriginalCasing(nameLower, originalName);
             if (!rule) return;
             this.codexEntryRules.set(nameLower, rule);
             if (rule.caseSensitive) this.codexCaseSensitiveNames.push(originalName);
@@ -216,12 +269,29 @@ export class LinkScanner {
             const cRule = buildRule(c as unknown as Record<string, unknown>);
             registerRule(nameLower, c.name, cRule);
 
-            // Auto-add first name as alias (only if unique across characters)
+            // Auto-add first name as alias (only if unique across characters).
+            // Issue #228 — skip the auto-alias when the first word is a title
+            // (Lady, Lord, Sir, …) or when the name is a descriptive phrase
+            // ("Lady of Dreams", "Keeper of the Keys"). These aren't first
+            // names and auto-aliasing them causes false positives in every
+            // scene that uses the title word.
             const firstName = c.name.split(/\s+/)[0]?.toLowerCase();
-            if (firstName && firstName !== nameLower && (firstNameCount.get(firstName) || 0) <= 1) {
+            const nameWords = c.name.split(/\s+/);
+            const secondWord = nameWords[1]?.toLowerCase();
+            const isTitleOrPhrase =
+                TITLE_WORDS.has(firstName) ||
+                (secondWord && CONNECTOR_WORDS.has(secondWord));
+            if (
+                firstName &&
+                firstName !== nameLower &&
+                (firstNameCount.get(firstName) || 0) <= 1 &&
+                !isTitleOrPhrase
+            ) {
                 this.charNames.add(firstName);
                 this.charCanonical.set(firstName, c.name);
-                if (cRule) registerRule(firstName, c.name, cRule);
+                // Issue #228 — always register original casing so the
+                // case-sensitive regex can use it when a rule exists.
+                registerRule(firstName, c.name.split(/\s+/)[0], cRule);
             }
 
             if ((c as unknown as Record<string, unknown>).nickname) {
@@ -234,7 +304,7 @@ export class LinkScanner {
                     const nickLower = nick.toLowerCase();
                     this.charNames.add(nickLower);
                     this.charCanonical.set(nickLower, c.name);
-                    if (cRule) registerRule(nickLower, nick, cRule);
+                    registerRule(nickLower, nick, cRule);
                 }
             }
         }
@@ -259,7 +329,7 @@ export class LinkScanner {
                 for (const nick of nicks) {
                     const nickLower = nick.toLowerCase();
                     this.locNames.add(nickLower);
-                    if (lRule) registerRule(nickLower, nick, lRule);
+                    registerRule(nickLower, nick, lRule);
                 }
             }
         }
@@ -275,7 +345,7 @@ export class LinkScanner {
                 for (const nick of nicks) {
                     const nickLower = nick.toLowerCase();
                     this.locNames.add(nickLower);
-                    if (wRule) registerRule(nickLower, nick, wRule);
+                    registerRule(nickLower, nick, wRule);
                 }
             }
         }
@@ -300,6 +370,7 @@ export class LinkScanner {
                 // Don't add if already a character or location name
                 if (!this.charNames.has(lower) && !this.locNames.has(lower)) {
                     this.codexNames.add(lower);
+                    registerOriginalCasing(lower, entry.name);
                     this.codexEntryRules.set(lower, rules);
                     if (caseSensitive) this.codexCaseSensitiveNames.push(entry.name);
                 }
@@ -313,6 +384,7 @@ export class LinkScanner {
                     const aLower = alias.toLowerCase();
                     if (!this.charNames.has(aLower) && !this.locNames.has(aLower)) {
                         this.codexNames.add(aLower);
+                        registerOriginalCasing(aLower, alias);
                         this.codexEntryRules.set(aLower, rules);
                         if (caseSensitive) this.codexCaseSensitiveNames.push(alias);
                     }
@@ -325,6 +397,7 @@ export class LinkScanner {
                         const nLower = n.toLowerCase();
                         if (!this.charNames.has(nLower) && !this.locNames.has(nLower)) {
                             this.codexNames.add(nLower);
+                            registerOriginalCasing(nLower, n);
                             this.codexEntryRules.set(nLower, rules);
                             if (caseSensitive) this.codexCaseSensitiveNames.push(n);
                         }
@@ -411,6 +484,12 @@ export class LinkScanner {
     /**
      * Scan plain text (excluding wikilinks) for known character names,
      * nicknames, and location names. Returns matched names (lowercased).
+     *
+     * Issue #228 — exclude terms are now **contextual**: a match is
+     * suppressed only when an exclude term overlaps or directly surrounds
+     * the matched name in the text. Previously the whole scene was checked,
+     * which meant a single exclude-term occurrence anywhere would suppress
+     * all matches — even legitimate ones elsewhere in the scene.
      */
     private extractPlainTextMentions(text: string): string[] {
         if (this.plainTextNames.length === 0) return [];
@@ -429,42 +508,97 @@ export class LinkScanner {
             const isCaseSensitive = rules?.caseSensitive === true;
             const excludeTerms = rules?.excludeTerms ?? [];
 
-            let matched = false;
-            // Multi-language support — \b word boundaries don't exist in CJK
-            // (no whitespace between tokens). Fall back to a case-insensitive
-            // substring search whenever the name itself contains CJK glyphs.
-            if (/[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/.test(nameLower)) {
-                matched = isCaseSensitive
-                    ? stripped.includes(nameLower)
-                    : stripped.toLowerCase().includes(nameLower);
+            // Collect all match positions for this name. We need positions
+            // so exclude terms can be checked contextually (at the match
+            // site) rather than across the whole scene.
+            const matchPositions: number[] = [];
+            const isCJK = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/.test(nameLower);
+
+            if (isCJK) {
+                if (isCaseSensitive) {
+                    const variants = this.originalCasedNames.get(nameLower) ?? [nameLower];
+                    for (const v of variants) {
+                        let from = 0;
+                        let idx: number;
+                        while ((idx = stripped.indexOf(v, from)) !== -1) {
+                            matchPositions.push(idx);
+                            from = idx + v.length;
+                        }
+                    }
+                } else {
+                    const lowered = stripped.toLowerCase();
+                    let from = 0;
+                    let idx: number;
+                    while ((idx = lowered.indexOf(nameLower, from)) !== -1) {
+                        matchPositions.push(idx);
+                        from = idx + nameLower.length;
+                    }
+                }
             } else {
-                const escaped = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                // Case-sensitive codex entries match exact case only.
-                const flags = isCaseSensitive ? '' : 'i';
-                const re = new RegExp(`\\b${escaped}\\b`, flags);
-                matched = re.test(stripped);
+                if (isCaseSensitive) {
+                    const variants = this.originalCasedNames.get(nameLower) ?? [nameLower];
+                    for (const v of variants) {
+                        const esc = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const re = new RegExp(`\\b${esc}\\b`, 'g');
+                        let m: RegExpExecArray | null;
+                        while ((m = re.exec(stripped)) !== null) {
+                            matchPositions.push(m.index);
+                            if (m.index === re.lastIndex) re.lastIndex++;
+                        }
+                    }
+                } else {
+                    const escaped = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const re = new RegExp(`\\b${escaped}\\b`, 'gi');
+                    let m: RegExpExecArray | null;
+                    while ((m = re.exec(stripped)) !== null) {
+                        matchPositions.push(m.index);
+                        if (m.index === re.lastIndex) re.lastIndex++;
+                    }
+                }
             }
 
-            // Issue #223 — suppress the match if any exclude term appears in
-            // the surrounding text. We check the whole stripped text for any
-            // of the entry's exclude terms (lowercased), so "Saint" won't link
-            // when "Dawnguard Saint" is present.
-            if (matched && excludeTerms.length > 0) {
+            if (matchPositions.length === 0) continue;
+
+            // Issue #228 — contextual exclude-term check. A match is
+            // suppressed only if an exclude term overlaps it or appears
+            // directly adjacent (within a few characters). If at least one
+            // match is clean (not covered by any exclude term), the entity
+            // is considered mentioned.
+            let hasCleanMatch = matchPositions.length > 0;
+            if (excludeTerms.length > 0) {
                 const lowered = stripped.toLowerCase();
-                for (const term of excludeTerms) {
-                    if (lowered.includes(term)) {
-                        matched = false;
+                const nameLen = nameLower.length;
+                // Context window: check a window around each match. The
+                // exclude term must start within [matchStart - termLen,
+                // matchEnd] to count as overlapping/adjacent.
+                hasCleanMatch = false;
+                for (const pos of matchPositions) {
+                    const matchEnd = pos + nameLen;
+                    let suppressed = false;
+                    for (const term of excludeTerms) {
+                        const termLen = term.length;
+                        // Look for the exclude term starting anywhere in a
+                        // window that covers the match and a small margin
+                        // on either side (to catch "Lady Margaret" when the
+                        // matched name is "Lady" at the same position).
+                        const windowStart = Math.max(0, pos - termLen);
+                        const windowEnd = matchEnd + termLen;
+                        const window = lowered.substring(windowStart, windowEnd);
+                        if (window.includes(term)) {
+                            suppressed = true;
+                            break;
+                        }
+                    }
+                    if (!suppressed) {
+                        hasCleanMatch = true;
                         break;
                     }
                 }
             }
 
-            if (matched) {
+            if (hasCleanMatch) {
                 foundKeys.add(nameLower);
                 results.push(nameLower);
-                // If this is a canonical (full) name, also mark its parts as found
-                // so the shorter nickname won't create a duplicate entry
-                // (the canonical name is already in the result)
             }
         }
 

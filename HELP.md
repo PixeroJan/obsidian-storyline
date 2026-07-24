@@ -204,6 +204,8 @@ Visualize your scenes on a chronological timeline.
 - **Beat Sheet Templates** — apply a story structure template from the Structure modal.
 - **Act labels** — custom beat/act labels are displayed on timeline dividers and are inline-editable.
 - **Swimlane mode** — see [Timeline Swimlanes](#timeline-swimlanes).
+- **Multi-select** — ctrl/cmd-click to select multiple scenes. Right-click a selected scene for bulk actions.
+- **Shift dates** — when two or more scenes are selected, right-click → **"Shift dates (N scenes)…"** opens a modal to adjust their dates/times in bulk. Two modes: **"Start on a new date"** (set a new date/time for the earliest scene; the delta is applied to all others, preserving gaps) or **"Move by a set amount"** (shift all by a signed number of days/weeks/hours/minutes). A live preview shows each scene's current → new date/time. Only `storyDate` and `storyTime` are written; sequence and order are untouched.
 
 ### Plotlines View
 
@@ -333,16 +335,18 @@ The Codex is a unified hub that brings Characters, Locations, and custom categor
 
 #### Linking & Matching
 
-Every Codex category (Items, Creatures, Lore, Organizations, Culture, Systems, and custom categories) includes a shared **Linking & Matching** section at the bottom of each entry's detail page:
+Every Codex category (Items, Creatures, Lore, Organizations, Culture, Systems, and custom categories) includes a shared **Linking & Matching** section at the bottom of each entry's detail page. Characters and Locations also have this section (without the Aliases field, since they already have a Nickname field in Basic Information / Overview).
 
 | Field | Description |
 |-------|-------------|
 | **Type** | A free-form sub-type label (e.g. "Sword", "Potion", "Legend") shown as a badge next to the entry name in the list. |
-| **Aliases** | Comma- or newline-separated alternative names that should also link to this entry when found in scene text. |
-| **Case-sensitive matching** | An on/off toggle. When on, the entry's name and aliases only match text with the exact same capitalisation (e.g. "Saint" won't match "saint"). Off by default. |
-| **Exclude terms** | Comma- or newline-separated phrases that suppress a match when they appear in the surrounding text (e.g. listing "Dawnguard Saint" on a "Saint" entry prevents "Dawnguard Saint" from linking to that character). |
+| **Aliases** | Comma- or newline-separated alternative names that should also link to this entry when found in scene text. *(Codex entries only — Characters and Locations use the Nickname field.)* |
+| **Case-sensitive matching** | An on/off toggle. When on, the entry's name and aliases only match text with the exact same capitalisation (e.g. "Dust" matches "Dust" but not "dust"). Off by default. |
+| **Exclude terms** | Comma- or newline-separated phrases that suppress a match when they appear **at the same location** in the text (e.g. listing "Lady Margaret" on a "Lady" entry prevents that specific mention from linking). Exclude terms are checked *per match*, not across the whole scene — so a legitimate mention elsewhere in the same scene still tags the entity. |
 
 These rules are applied by the Link Scanner when it scans scene bodies for plain-text mentions, so you have fine-grained control over which words get linked — useful for complex name-play in speculative fiction.
+
+> **Tip:** The scanner automatically treats the first word of a character's name as an alias (e.g. "Anna" for "Anna Svensson"), but skips this for titles (Lady, Lord, Sir, …) and descriptive phrases ("Lady of Dreams", "Keeper of the Keys") to avoid false positives.
 
 ### Stats View
 
@@ -1385,7 +1389,15 @@ Every character, location, and codex detail editor comes with a set of built-in 
 - The **Name** field can never be hidden.
 - Hidden fields are stored per entity type: `character`, `location`, or the codex category ID (e.g., `items`, `creatures`). Hiding "Fears" in Characters does not affect any other view.
 - **Data is never deleted.** Hiding a field only removes it from the UI. The value stays in your frontmatter unchanged and reappears when you unhide the field.
-- Hidden field preferences are saved in plugin settings and persist across sessions.
+- Hidden field preferences are saved per project in `System/custom-sections.json` and persist across sessions.
+
+#### Hiding entire categories
+
+An eye-off button on each section header lets you hide a whole category in one click, instead of hiding each field individually. Hidden categories are collected into a collapsible **"Show N hidden categories"** toggle at the bottom of the form — when collapsed, no trace of the hidden categories is visible in the normal flow. Click the toggle to expand, then click the eye button on a hidden category's header to un-hide it.
+
+- Hidden categories are stored per entity type alongside hidden fields.
+- Hiding a category does not delete its data — values stay in frontmatter and reappear when un-hidden.
+- Applies to Character, Codex, and Location views.
 
 ---
 
@@ -1560,6 +1572,8 @@ The multi-select type is ideal for traits, themes, categories, or any field wher
 Custom field data is stored in the entity's frontmatter under the `universalFields` key. For scenes, custom fields appear in the Inspector between the intensity slider and setup/payoff sections.
 
 Custom sections on Characters, Locations, and Codex entries use the same basic field types. Fields inside those user-created sections can be edited in place, reordered with the chevrons, moved to another custom section with the move icon, and configured with a folder source for dropdown or multi-select choices.
+
+> **Per-project:** Custom sections, codex category definitions, enabled codex categories, and custom location types are stored per project in `System/custom-sections.json` — they do not carry over between unrelated writing projects. Universal field templates (the ones added via the **+** button on a section header) are also per-project, stored in `System/field-templates.json`.
 
 ---
 

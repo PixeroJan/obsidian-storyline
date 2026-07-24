@@ -6609,6 +6609,78 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     margin: 4px 0 0;
 }
 
+/* ============================================
+   Issue #237 — Shift Dates modal
+   ============================================ */
+
+.story-line-shift-dates {
+    max-width: 640px;
+}
+
+.story-line-shift-dates h3 {
+    margin-top: 18px;
+    margin-bottom: 8px;
+}
+
+.story-line-shift-preview {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 8px;
+    background: var(--background-secondary);
+}
+
+.story-line-shift-preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+
+.story-line-shift-preview-table th,
+.story-line-shift-preview-table td {
+    text-align: left;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    vertical-align: top;
+}
+
+.story-line-shift-preview-table th {
+    font-weight: 600;
+    color: var(--text-muted);
+    position: sticky;
+    top: 0;
+    background: var(--background-secondary);
+}
+
+.story-line-shift-preview-table tr.row-skipped {
+    opacity: 0.6;
+}
+
+.story-line-shift-note {
+    color: var(--text-warning);
+    font-size: 0.85em;
+    margin-left: 4px;
+}
+
+.story-line-shift-warning {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--background-modifier-warning);
+    color: var(--text-warning);
+    font-size: 0.9em;
+}
+
+.story-line-shift-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
 .timeline-act-add-btn {
     position: absolute;
     right: 0;
@@ -10903,6 +10975,17 @@ body /* ── Plain-text mode: hide link/tag decorations ───────�
 .is-category-hidden .codex-section-body,
 .is-category-hidden .location-section-body {
     display: none;
+}
+
+/* Issue #236 — hidden categories container (mirrors hidden-fields-container).
+   Hidden categories are collected here instead of leaving their header
+   visible in the normal flow, so hiding a category truly removes it from
+   view (like hiding a field) rather than just collapsing it. */
+.hidden-categories-container {
+    border-left: 2px solid var(--background-modifier-border);
+    padding-left: 8px;
+    margin-top: 4px;
+    opacity: 0.8;
 }
 
 /* ── Move-up / move-down chevrons (built-in field rows) ─ */

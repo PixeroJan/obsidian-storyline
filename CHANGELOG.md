@@ -6,6 +6,24 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.49
+
+### Bug Fixes
+
+- **Case-sensitive matching now works correctly for Characters and Locations** *([#228](https://github.com/PixeroJan/obsidian-storyline/issues/228))* — The Linking & Matching section's **Case-sensitive matching** toggle was exactly backwards: it matched the *lowercased* name instead of the *original-cased* name. A character named "Dust" with case-sensitive matching enabled would match the common word "dust" (lowercase) but *not* "Dust" (the actual character name) — tagging the character in every chapter with the word "dust" and missing chapters where "Dust" was actually written. The scanner now keeps a map of original-cased names and tests those when case-sensitive matching is on, so "Dust" matches "Dust" and "dust" does not.
+
+- **Auto first-name aliasing no longer fires for titles and descriptive phrases** *([#228](https://github.com/PixeroJan/obsidian-storyline/issues/228))* — The scanner automatically treats the first word of a character's name as an alias (e.g. "Anna" for "Anna Svensson"). This caused false positives for titles and descriptive phrases: a character named "Lady of Dreams" would auto-alias "Lady", tagging the character in every scene containing "Lady Margaret", "Lady Smith", or any "Lady [anything]". The auto-alias is now skipped when the first word is a common title (Lady, Lord, Sir, Dame, Captain, King, Queen, Doctor, Saint, etc.) or when the second word is a connector (of, the, de, von, van, etc.). "Lady of Dreams" now only matches the full phrase.
+
+- **Exclude terms are now contextual, not whole-scene** *([#228](https://github.com/PixeroJan/obsidian-storyline/issues/228))* — The **Exclude terms** field previously checked whether the exclude term appeared *anywhere in the entire scene*. A single "Lady Margaret" anywhere would suppress all matches for "Lady of Dreams" — even legitimate mentions elsewhere in the same scene. The scanner now collects all match positions and checks exclude terms *per match*: a match is suppressed only if an exclude term overlaps or is adjacent to that specific match. If at least one match in the scene is clean, the entity is still tagged.
+
+- **Hidden categories now work like hidden fields** — Hiding a category previously left its header (title + eye button) visible in the normal flow, making it look identical to a collapsed section. Hidden categories are now skipped entirely in the render loop and collected into a collapsible **"Show N hidden categories"** toggle at the bottom of the form — exactly mirroring how hidden fields work. When collapsed, no trace of the hidden categories is visible. Applies to Character, Codex, and Location views.
+
+### New Features
+
+- **Per-project isolation of custom sections, codex categories & location types** *([#236](https://github.com/PixeroJan/obsidian-storyline/issues/236))* — Custom sections (character, location, codex), codex category definitions, enabled codex categories, and custom location types were previously stored vault-wide in `data.json`, so they leaked across unrelated writing projects. A user writing an urban fantasy story who added a "Magic" custom section to character sheets would see that section in every other project too. These settings now live in a per-project `System/custom-sections.json` file, following the same pattern as the existing per-project storage (`plotlines.json`, `characters.json`, etc.). Existing users' settings are migrated transparently on first load.
+
+- **Shift dates for multiple scenes in Timeline view** *([#237](https://github.com/PixeroJan/obsidian-storyline/issues/237))* — Timeline view now supports multi-selection (ctrl/cmd-click) and a **"Shift dates"** action in the right-click menu. A modal offers two modes: **"Start on a new date"** (set a new date/time for the earliest selected scene; the delta is applied to all others, preserving gaps) or **"Move by a set amount"** (shift all selected scenes by a signed number of days/weeks/hours/minutes). A live preview shows each scene's current → new date/time before applying. Only `storyDate` and `storyTime` are written; sequence, act, chapter, and chronological order are untouched. All writes go through the normal scene update path (individually undoable).
+
 ## Version 1.10.48
 
 ### Bug Fixes

@@ -4,6 +4,7 @@ import { SceneManager } from '../services/SceneManager';
 import { SceneCardComponent } from '../components/SceneCard';
 import { InspectorComponent } from '../components/Inspector';
 import { QuickAddModal } from '../components/QuickAddModal';
+import { ShiftDatesModal } from '../components/ShiftDatesModal';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { enableDragToPan } from '../components/DragToPan';
 import type SceneCardsPlugin from '../main';
@@ -34,6 +35,12 @@ export class TimelineView extends ItemView {
     private sceneManager: SceneManager;
     private inspectorComponent: InspectorComponent | null = null;
     private selectedScene: Scene | null = null;
+    /**
+     * Issue #237 — multi-selection in Timeline view. Stores file paths of
+     * scenes the user has ctrl/cmd-clicked. Drives the "Shift dates"
+     * context-menu action and the bulk action bar.
+     */
+    private selectedScenes: Set<string> = new Set();
     private zoomLevel = 1;
     private rootContainer: HTMLElement | null = null;
     private _pendingRefresh: number | null = null;
@@ -788,7 +795,7 @@ export class TimelineView extends ItemView {
         // Click / double-click / context menu
         card.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.selectScene(scene);
+            this.selectScene(scene, e);
         });
         card.addEventListener('dblclick', (e) => {
             e.stopPropagation();
@@ -998,7 +1005,7 @@ export class TimelineView extends ItemView {
         // Click to select (show inspector), double-click to open
         card.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.selectScene(scene);
+            this.selectScene(scene, e);
         });
         card.addEventListener('dblclick', (e) => {
             e.stopPropagation();
@@ -1075,19 +1082,37 @@ export class TimelineView extends ItemView {
     /**
      * Select a scene and show it in the inspector
      */
-    private selectScene(scene: Scene): void {
-        // Deselect previous
-        this.rootContainer?.querySelectorAll('.timeline-entry.selected').forEach(el => {
-            el.removeClass('selected');
-        });
+    private selectScene(scene: Scene, event?: MouseEvent): void {
+        const isMultiSelect = event && (event.ctrlKey || event.metaKey);
 
-        this.selectedScene = scene;
+        if (isMultiSelect) {
+            // Toggle this scene in multi-selection
+            if (this.selectedScenes.has(scene.filePath)) {
+                this.selectedScenes.delete(scene.filePath);
+                const entry = this.rootContainer?.querySelector(`[data-path="${CSS.escape(scene.filePath)}"]`);
+                if (entry) entry.removeClass('selected');
+            } else {
+                this.selectedScenes.add(scene.filePath);
+                const entry = this.rootContainer?.querySelector(`[data-path="${CSS.escape(scene.filePath)}"]`);
+                if (entry) entry.addClass('selected');
+            }
+            this.selectedScene = scene;
+        } else {
+            // Single select — clear multi-selection
+            this.selectedScenes.clear();
+            this.rootContainer?.querySelectorAll('.timeline-entry.selected').forEach(el => {
+                el.removeClass('selected');
+            });
 
-        // Highlight selected entry
-        const entry = this.rootContainer?.querySelector(`[data-path="${CSS.escape(scene.filePath)}"]`);
-        if (entry) entry.addClass('selected');
+            this.selectedScene = scene;
+            this.selectedScenes.add(scene.filePath);
 
-        // Show inspector
+            // Highlight selected entry
+            const entry = this.rootContainer?.querySelector(`[data-path="${CSS.escape(scene.filePath)}"]`);
+            if (entry) entry.addClass('selected');
+        }
+
+        // Show inspector for last clicked scene
         if (this.plugin.isSceneInspectorOpen()) {
             this.inspectorComponent?.hide();
             this.app.workspace.trigger('storyline:scene-focus', scene.filePath);
@@ -1100,6 +1125,14 @@ export class TimelineView extends ItemView {
      * Show context menu for a scene
      */
     private showContextMenu(scene: Scene, event: MouseEvent): void {
+        // Issue #237 — ensure the right-clicked scene is part of the
+        // multi-selection so the "Shift dates" action always includes it.
+        // If the user right-clicks a scene that isn't selected, we treat
+        // the right-click as a fresh single selection (mirroring Kanban).
+        if (!this.selectedScenes.has(scene.filePath)) {
+            this.selectScene(scene);
+        }
+
         const menu = new Menu();
 
         menu.addItem(item => {
@@ -1113,6 +1146,18 @@ export class TimelineView extends ItemView {
                 .setIcon('clock')
                 .onClick(() => this.openTimeEditModal(scene));
         });
+
+        // Issue #237 — bulk date/time shift across multiple selected scenes.
+        // Only shown when more than one scene is selected (ctrl/cmd-click).
+        // The right-clicked scene is implicitly included in the selection
+        // if it isn't already, so the action always has a sensible anchor.
+        if (this.selectedScenes.size > 1) {
+            menu.addItem(item => {
+                item.setTitle(`Shift dates (${this.selectedScenes.size} scenes)…`)
+                    .setIcon('calendar-range')
+                    .onClick(() => this.openShiftDatesModal());
+            });
+        }
 
         // Scene color picker
         menu.addItem(item => {
@@ -1679,6 +1724,29 @@ export class TimelineView extends ItemView {
         modal.open();
     }
 
+    /**
+     * Issue #237 — Open the bulk date/time shift modal for the currently
+     * selected scenes. Resolves each selected file path to its latest
+     * Scene snapshot (so we don't shift stale values) and filters out
+     * any that no longer exist.
+     */
+    private openShiftDatesModal(): void {
+        const scenes: Scene[] = [];
+        for (const fp of this.selectedScenes) {
+            const scene = this.sceneManager.getScene(fp);
+            if (scene) scenes.push(scene);
+        }
+        if (scenes.length < 2) {
+            new Notice('Select at least two scenes (ctrl/cmd-click) to shift dates.');
+            return;
+        }
+        const modal = new ShiftDatesModal(this.app, this.sceneManager, scenes);
+        modal.onClose = () => {
+            this.refresh();
+        };
+        modal.open();
+    }
+
     private async openScene(scene: Scene): Promise<void> {
         const file = this.app.vault.getAbstractFileByPath(scene.filePath);
         if (file instanceof TFile) {
@@ -1741,6 +1809,20 @@ export class TimelineView extends ItemView {
                         this.inspectorComponent?.show(updated);
                     }
                 }
+            }
+            // Re-apply multi-selection highlight after re-render. Stale
+            // paths (deleted scenes) are silently dropped from the set.
+            if (this.selectedScenes.size > 0) {
+                const stale: string[] = [];
+                for (const fp of this.selectedScenes) {
+                    if (!this.sceneManager.getScene(fp)) {
+                        stale.push(fp);
+                        continue;
+                    }
+                    const entry = this.rootContainer?.querySelector(`[data-path="${CSS.escape(fp)}"]`);
+                    if (entry) entry.addClass('selected');
+                }
+                for (const fp of stale) this.selectedScenes.delete(fp);
             }
         });
     }

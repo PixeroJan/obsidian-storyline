@@ -1101,6 +1101,15 @@ export default class SceneCardsPlugin extends Plugin {
         'rows', 'columns', 'cells', 'zoom', 'stickyHeaders',
         // Legacy / per-project keys that don't belong in global settings
         'filterPresets',
+        // Issue #236 — custom sections, codex categories, and location types
+        // are now per-project (stored in System/custom-sections.json) so they
+        // don't leak across unrelated writing projects.
+        'characterCustomSections',
+        'locationCustomSections',
+        'codexCategoryCustomSections',
+        'customLocationTypes',
+        'codexCustomCategories',
+        'codexEnabledCategories',
     ];
 
     async saveSettings(): Promise<void> {
@@ -1534,6 +1543,57 @@ export default class SceneCardsPlugin extends Plugin {
             this.writingTracker.importData(stats.writingTrackerData as unknown as Parameters<typeof this.writingTracker.importData>[0]);
         }
 
+        // Issue #236 — load per-project custom sections, codex categories,
+        // and location types from System/custom-sections.json. If the file
+        // doesn't exist yet, reset to empty defaults so the previous
+        // project's custom sections don't leak into this one.
+        //
+        // Migration: on the very first load after upgrading to this version,
+        // data.json still contains the legacy global values. We detect this
+        // by checking whether _systemMigrationDone is already true (it's set
+        // at the end of this method). On the first call it's false, so we
+        // keep the data.json values and they get written to the System file
+        // on the next save. On subsequent calls (project switches), the
+        // in-memory values are from the previous project and must NOT be
+        // kept — we reset to empty defaults for the new project.
+        const customSections = await this.readSystemJson('custom-sections.json');
+        const hasCustomSectionsFile = await this.app.vault.adapter.exists(
+            `${this.getProjectSystemFolder()}/custom-sections.json`
+        );
+        if (hasCustomSectionsFile) {
+            this.settings.characterCustomSections = Array.isArray(customSections.characterCustomSections)
+                ? (customSections.characterCustomSections as typeof this.settings.characterCustomSections)
+                : [];
+            this.settings.locationCustomSections = Array.isArray(customSections.locationCustomSections)
+                ? (customSections.locationCustomSections as typeof this.settings.locationCustomSections)
+                : [];
+            this.settings.codexCategoryCustomSections = isRecord(customSections.codexCategoryCustomSections)
+                ? (customSections.codexCategoryCustomSections as typeof this.settings.codexCategoryCustomSections)
+                : {};
+            this.settings.customLocationTypes = Array.isArray(customSections.customLocationTypes)
+                ? (customSections.customLocationTypes as string[])
+                : [];
+            this.settings.codexCustomCategories = Array.isArray(customSections.codexCustomCategories)
+                ? (customSections.codexCustomCategories as typeof this.settings.codexCustomCategories)
+                : [];
+            this.settings.codexEnabledCategories = Array.isArray(customSections.codexEnabledCategories)
+                ? (customSections.codexEnabledCategories as string[])
+                : [];
+        } else if (this._systemMigrationDone) {
+            // Subsequent project switch with no System file — this is a new
+            // project (or one that has never had custom sections). Reset to
+            // empty defaults so the previous project's values don't leak.
+            this.settings.characterCustomSections = [];
+            this.settings.locationCustomSections = [];
+            this.settings.codexCategoryCustomSections = {};
+            this.settings.customLocationTypes = [];
+            this.settings.codexCustomCategories = [];
+            this.settings.codexEnabledCategories = [];
+        }
+        // else: first-ever load — keep the data.json values (migration).
+        // They will be written to System/custom-sections.json on the next
+        // saveSettings() call and stripped from data.json thereafter.
+
         // System files are now the source of truth
         this._systemMigrationDone = true;
     }
@@ -1576,6 +1636,17 @@ export default class SceneCardsPlugin extends Plugin {
         // Save writing tracker data
         await this.writeSystemJson('stats.json', {
             writingTrackerData: this.writingTracker.exportData(),
+        });
+
+        // Issue #236 — save per-project custom sections, codex categories,
+        // and location types so they don't leak across unrelated projects.
+        await this.writeSystemJson('custom-sections.json', {
+            characterCustomSections: this.settings.characterCustomSections || [],
+            locationCustomSections: this.settings.locationCustomSections || [],
+            codexCategoryCustomSections: this.settings.codexCategoryCustomSections || {},
+            customLocationTypes: this.settings.customLocationTypes || [],
+            codexCustomCategories: this.settings.codexCustomCategories || [],
+            codexEnabledCategories: this.settings.codexEnabledCategories || [],
         });
     }
 

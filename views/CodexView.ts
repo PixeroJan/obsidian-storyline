@@ -522,7 +522,18 @@ export class CodexView extends ItemView {
         // Render field categories interleaved with user-defined custom sections (#114)
         const customHost = this.buildCustomSectionsHost(draft, catDef.categories.length);
         renderCustomSectionsAtSlot(formPanel, customHost, 0);
+        // Issue #236 — collect hidden categories so we can render them in a
+        // collapsible "hidden categories" container at the bottom, mirroring
+        // how hidden fields work. Previously the header was left visible,
+        // which looked identical to a collapsed section.
+        const hiddenCats = this.plugin.settings.hiddenCategories[catDef.id] ?? [];
+        const hiddenCategoryList: typeof catDef.categories = [];
         for (let i = 0; i < catDef.categories.length; i++) {
+            if (hiddenCats.includes(catDef.categories[i].title)) {
+                hiddenCategoryList.push(catDef.categories[i]);
+                renderCustomSectionsAtSlot(formPanel, customHost, i + 1);
+                continue;
+            }
             this.renderFieldCategory(formPanel, catDef.categories[i], draft, catDef);
             renderCustomSectionsAtSlot(formPanel, customHost, i + 1);
         }
@@ -532,6 +543,11 @@ export class CodexView extends ItemView {
 
         // "+ Add custom section" button at the bottom
         renderAddCustomSectionButton(formPanel, customHost);
+
+        // ── Hidden categories toggle (mirrors hidden fields) ──
+        if (hiddenCategoryList.length > 0) {
+            this.renderHiddenCategoriesToggle(formPanel, hiddenCategoryList, draft, catDef);
+        }
 
         // Books (series-ready)
         this.renderBooksField(formPanel, draft);
@@ -555,9 +571,6 @@ export class CodexView extends ItemView {
     ): void {
         const sectionKey = `${catDef.id}-${cat.title}`;
         const isCollapsed = this.collapsedSections.has(sectionKey);
-        // Issue #233 discussion — support hiding an entire category at once.
-        const hiddenCats = this.plugin.settings.hiddenCategories[catDef.id] ?? [];
-        const isCategoryHidden = hiddenCats.includes(cat.title);
 
         const section = container.createDiv('codex-section');
         const sectionHeader = section.createDiv('codex-section-header');
@@ -585,20 +598,18 @@ export class CodexView extends ItemView {
         const hideCatBtn = sectionHeader.createSpan({
             cls: 'character-section-hide-cat-btn',
             attr: {
-                title: isCategoryHidden ? 'Show this category' : 'Hide this category',
-                'aria-label': isCategoryHidden ? 'Show this category' : 'Hide this category',
+                title: 'Hide this category',
+                'aria-label': 'Hide this category',
                 role: 'button',
             },
         });
-        obsidian.setIcon(hideCatBtn, isCategoryHidden ? 'eye' : 'eye-off');
+        obsidian.setIcon(hideCatBtn, 'eye-off');
         hideCatBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const settings = this.plugin.settings;
             if (!settings.hiddenCategories[catDef.id]) settings.hiddenCategories[catDef.id] = [];
             const list = settings.hiddenCategories[catDef.id];
-            const idx = list.indexOf(cat.title);
-            if (idx >= 0) list.splice(idx, 1);
-            else list.push(cat.title);
+            if (!list.includes(cat.title)) list.push(cat.title);
             await this.plugin.saveSettings();
             if (this.rootContainer) this.renderView(this.rootContainer);
         });
@@ -642,13 +653,10 @@ export class CodexView extends ItemView {
             modal.open();
         });
 
-        // Issue #233 discussion — skip the section body entirely when the
-        // category is hidden. The header (with its eye icon) still renders
-        // so the user can un-hide it.
-        if (isCategoryHidden) {
-            section.addClass('is-category-hidden');
-            return;
-        }
+        // Issue #236 — hidden categories are now skipped entirely in the
+        // render loop and collected into a "hidden categories" toggle at
+        // the bottom (see renderHiddenCategoriesToggle). No early return
+        // here — if renderFieldCategory is called, the category is visible.
 
         if (!isCollapsed) {
             const body = section.createDiv('codex-section-body');
@@ -697,6 +705,108 @@ export class CodexView extends ItemView {
                         ? `Hide ${hiddenFieldsInCat.length} hidden field${hiddenFieldsInCat.length > 1 ? 's' : ''}`
                         : `Show ${hiddenFieldsInCat.length} hidden field${hiddenFieldsInCat.length > 1 ? 's' : ''}`;
                 });
+            }
+        }
+    }
+
+    /**
+     * Issue #236 — render a collapsible "Show N hidden categories" toggle
+     * at the bottom of the form, mirroring the hidden-fields pattern.
+     */
+    private renderHiddenCategoriesToggle(
+        parent: HTMLElement,
+        hiddenCategoryList: CodexFieldCategory[],
+        draft: CodexEntry,
+        catDef: CodexCategoryDef,
+    ): void {
+        const toggleEl = parent.createDiv('hidden-fields-toggle');
+        const count = hiddenCategoryList.length;
+        toggleEl.createEl('a', {
+            text: `Show ${count} hidden categor${count > 1 ? 'ies' : 'y'}`,
+            cls: 'hidden-fields-toggle-link',
+        });
+        const hiddenContainer = parent.createDiv('hidden-categories-container');
+        hiddenContainer.setCssStyles({ display: 'none' });
+        for (const cat of hiddenCategoryList) {
+            this.renderHiddenFieldCategory(hiddenContainer, cat, draft, catDef);
+        }
+        let showing = false;
+        toggleEl.addEventListener('click', () => {
+            showing = !showing;
+            hiddenContainer.setCssStyles({ display: showing ? '' : 'none' });
+            toggleEl.querySelector('a')!.textContent = showing
+                ? `Hide ${count} hidden categor${count > 1 ? 'ies' : 'y'}`
+                : `Show ${count} hidden categor${count > 1 ? 'ies' : 'y'}`;
+        });
+    }
+
+    /**
+     * Render a hidden category inside the hidden-categories toggle container.
+     * The header shows an eye (show) button so the user can un-hide it.
+     */
+    private renderHiddenFieldCategory(
+        parent: HTMLElement,
+        cat: CodexFieldCategory,
+        draft: CodexEntry,
+        catDef: CodexCategoryDef,
+    ): void {
+        const sectionKey = `${catDef.id}-${cat.title}`;
+        const isCollapsed = this.collapsedSections.has(sectionKey);
+
+        const section = parent.createDiv('codex-section is-category-hidden');
+        const sectionHeader = section.createDiv('codex-section-header');
+        sectionHeader.addEventListener('click', (e) => {
+            if ((e.target as HTMLElement).closest('.character-section-hide-cat-btn')) return;
+            if (this.collapsedSections.has(sectionKey)) {
+                this.collapsedSections.delete(sectionKey);
+            } else {
+                this.collapsedSections.add(sectionKey);
+            }
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+
+        const chevron = sectionHeader.createSpan({ cls: 'codex-section-chevron' });
+        obsidian.setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
+        const catIcon = sectionHeader.createSpan({ cls: 'codex-section-icon' });
+        obsidian.setIcon(catIcon, cat.icon);
+        sectionHeader.createSpan({ cls: 'codex-section-title', text: cat.title });
+
+        const showCatBtn = sectionHeader.createSpan({
+            cls: 'character-section-hide-cat-btn',
+            attr: {
+                title: 'Show this category',
+                'aria-label': 'Show this category',
+                role: 'button',
+            },
+        });
+        obsidian.setIcon(showCatBtn, 'eye');
+        showCatBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const settings = this.plugin.settings;
+            const list = settings.hiddenCategories[catDef.id] ?? [];
+            const idx = list.indexOf(cat.title);
+            if (idx >= 0) list.splice(idx, 1);
+            await this.plugin.saveSettings();
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+
+        if (!isCollapsed) {
+            const body = section.createDiv('codex-section-body');
+            const hiddenKeys = this.plugin.settings.hiddenFields[catDef.id] ?? [];
+            const visibleFields = cat.fields.filter(f => !hiddenKeys.includes(f.key));
+            const universalFields = this.plugin.fieldTemplates.getBySection(cat.title, catDef.id);
+            const fieldMap = new Map(visibleFields.map(f => [f.key, f]));
+            const tplMap = new Map(universalFields.map(t => [t.id, t]));
+            const builtInKeys = visibleFields.map(f => f.key);
+            const merged = this.plugin.fieldTemplates.getMergedOrder(cat.title, catDef.id, builtInKeys);
+            for (const entry of merged) {
+                if (entry.kind === 'builtin') {
+                    const f = fieldMap.get(entry.key);
+                    if (f) this.renderField(body, f, draft, catDef, cat.title, builtInKeys);
+                } else {
+                    const t = tplMap.get(entry.key);
+                    if (t) this.renderUniversalField(body, t, draft, builtInKeys);
+                }
             }
         }
     }
