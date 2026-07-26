@@ -1631,7 +1631,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Sort suggestions by frequency')
-            .setDesc('Issue #238 feedback — when on, character and location suggestions in the scene Inspector are sorted by how often they appear across scenes (most used first), then alphabetically. Off = alphabetical only.')
+            .setDesc('When on, character and location suggestions in the scene inspector are sorted by how often they appear across scenes (most used first), then alphabetically. Off = alphabetical only. (Issue #238 feedback.)')
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.sortByFrequency === true)
                 .onChange(async (value) => {
@@ -1757,12 +1757,12 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         // ── Issue #238 feedback — Default PoV character ──
         const povSetting = new Setting(containerEl)
             .setName('Default PoV character')
-            .setDesc('Auto-assign this character as the PoV of every newly-created scene. Useful for single-PoV stories so you don\'t have to pick it each time. Leave blank to choose manually.');
+            .setDesc('Auto-assign this character as the PoV of every newly-created scene. Useful for single-pov stories so you don\'t have to pick it each time. Leave blank to choose manually. (Issue #238 feedback.)')
         const povSelect = povSetting.controlEl.createEl('select');
         povSelect.setCssStyles({ width: '200px' });
         const noneOpt = povSelect.createEl('option', { value: '' });
         noneOpt.text = '— None (pick manually) —';
-        const characters = this.plugin.characterManager?.getAll?.() ?? [];
+        const characters = this.plugin.characterManager?.getAllCharacters() ?? [];
         const sortedChars = [...characters].sort((a, b) => (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()));
         for (const c of sortedChars) {
             const opt = povSelect.createEl('option', { value: c.name });

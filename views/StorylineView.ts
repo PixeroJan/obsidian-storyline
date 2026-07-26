@@ -1122,9 +1122,9 @@ export class StorylineView extends ItemView {
         const setting = new Setting(modal.contentEl)
             .setName('Description / notes')
             .setDesc('A short note reminding you what this plotline is supposed to do. Shown under the plotline header in list view.');
-        const ta = setting.controlEl.createEl('textarea');
+        const ta = setting.controlEl.createEl('textarea') as HTMLTextAreaElement;
         ta.setCssStyles({ width: '100%', minHeight: '120px', resize: 'vertical' });
-        ta.setValue(desc);
+        ta.value = desc;
         ta.addEventListener('input', () => (desc = ta.value));
 
         new Setting(modal.contentEl)

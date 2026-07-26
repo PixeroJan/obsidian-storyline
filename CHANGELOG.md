@@ -6,6 +6,15 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.52
+
+### Bug Fixes
+
+- **Lint cleanup — unsafe `any` assignments in settings UI** — The default PoV character picker used `this.plugin.characterManager?.getAll?.()`, where the double optional chaining (`?.getAll?.()`) made TypeScript treat the result as `any`, triggering `no-unsafe-assignment`, `no-unsafe-call`, `no-unsafe-return`, and `no-unsafe-member-access` warnings. Changed to `this.plugin.characterManager?.getAllCharacters()` — `characterManager` is typed `CharacterManager` (definite assignment), and `getAllCharacters()` returns `Character[]`, so the whole chain is now properly typed.
+- **Lint cleanup — unsafe call in plotline description modal** — `setting.controlEl.createEl('textarea')` returns `HTMLElement` (Obsidian's `createEl` overload doesn't narrow to `HTMLTextAreaElement` for the string-tag form), so `ta.setValue(desc)` was an unsafe call on a loosely-typed object. Added an explicit `as HTMLTextAreaElement` cast, matching the standard pattern used elsewhere in the codebase for `createEl('textarea')` / `createEl('select')` / `createEl('input')`.
+
+> **Note on `getSettingDefinitions()`** — The `PluginSettingTab` does not yet implement Obsidian 1.13.0+'s declarative settings API, so StoryLine's settings won't appear in Obsidian's global settings search on 1.13.0+. This is tracked as a future enhancement; the entire settings tab uses the imperative `new Setting(...)` pattern with hundreds of controls and adopting the declarative API is a large refactor that is out of scope for this patch release.
+
 ## Version 1.10.51
 
 ### Bug Fixes
