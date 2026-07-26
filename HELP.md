@@ -56,7 +56,9 @@ StoryLine transforms your Obsidian vault into a full-featured book planning and 
 - [Link Scanner & Detected Links](#link-scanner--detected-links)
 - [Cross-Entity References](#cross-entity-references)
 - [Codex Linking](#codex-linking)
+- [Linking & Matching](#linking--matching)
 - [Hide / Show Built-in Fields](#hide--show-built-in-fields)
+- [Reordering Fields & Sections](#reordering-fields--sections)
 - [Tag Type Overrides](#tag-type-overrides)
 - [Export](#export)
 - [Import (Scrivener)](#import-scrivener)
@@ -227,6 +229,7 @@ Track your story's plotlines (tags) across the narrative. Two view modes are ava
 
 #### Common Features
 - **Rename** or **delete** plotlines across all scenes at once.
+- **Descriptions / notes** *(new in 1.10.51)* — click the **file-text** (📄) icon on a plotline header to add a short note reminding you what the plotline is supposed to do. The description is shown under the plotline header in list view, and is carried over when you rename the plotline. Useful for tracking open threads ("the mage in the tower") without resorting to a full plotline for every small detail.
 - Visualize plotline density and coverage.
 - Scenes default to **reading order** (chapter). Toggle to chronological order from the toolbar.
 
@@ -302,6 +305,7 @@ A hierarchical worldbuilding and location management system. Locations are acces
 - **Standalone locations** (not linked to any world) appear in a separate section.
 - **Unlinked locations** — places referenced in scenes but without a profile show a "Create" button.
 - Click any node to open its detail editor.
+- **Drag-and-drop reparenting** *(new in 1.10.51)* — drag any location node and drop it onto another location (to make that its parent) or onto a world (to move it into that world as a top-level location). Cycles are prevented automatically. This is a fast way to reorganise your hierarchy without opening each location's Hierarchy section.
 
 #### Detail Editor
 - **World profiles** have eight collapsible sections: Overview, Geography & Environment, Culture & Society, Politics & Power, Magic & Technology, Beliefs & Mythology, Economy & Trade, History & Lore.
@@ -798,9 +802,15 @@ Each scene can have an external **notes file** for editorial comments, reminders
 
 ---
 
-## Arc Points *(new in 1.10.18)*
+## Arc Points
 
-Arc Points mark key turning points in your story — moments where the plot pivots, a character makes a crucial decision, or the stakes change. They are still regular scenes with all the same fields (word count, status, characters, etc.); the Arc Point flag is just an extra label.
+Arc Points *(introduced in 1.10.18, [issue #128](https://github.com/PixeroJan/obsidian-storyline/issues/128))* mark **arc milestones** — planned narrative beats on a character's arc journey, such as "Mira discovers she is dying" or "Jonas burns the archive". They let you plan at *arc granularity* alongside scene granularity, without conflating the two.
+
+An Arc Point is a regular scene file with one extra frontmatter boolean: `arcAnchor: true`. This is independent of `status` — it describes what the node *means narratively* (an arc milestone), not where it is in the production pipeline. A common workflow is to create Arc Points as lightweight **stub scenes** (`status: stub`) for beats you intend to write later — possibly in a future book — then let them grow into fully-written scenes over time. The Arc Point flag stays on when a stub becomes a real scene, because the scene *is* the arc beat; removing it would be semantically wrong. `status` continues to evolve from `stub` → `draft` → `done` on its own track.
+
+> **Why use stub scenes instead of just notes?** Because Arc Points render on the Subway map and Board alongside real scenes, giving you a visual arc landscape across your story (and, with the `_Plotline` naming convention, across a series). Without the flag, stub scenes are indistinguishable from real scenes and create noise in word counts, the Validator, and the Timeline. The Arc Point flag + the **All / Scenes / Arc Points** filter let you switch between the two lenses in one click.
+
+> **Tip:** The Arc Point flag is a single boolean — it doesn't record *which* arc a milestone belongs to or *what kind* of beat it is (inciting incident, midpoint, climax, etc.). To track that, pair Arc Points with [plotlines](#plotlines-view) (e.g. a `_Mira` plotline for Mira's character arc) and/or a [custom scene field](#custom-scene-fields) for the beat type. The `_`-prefix naming convention is a common way to group arc-milestone plotlines separately from story-thread plotlines.
 
 ### How to mark a scene as an Arc Point
 
@@ -893,6 +903,14 @@ Create reusable templates for common scene types:
 4. When creating new scenes, choose a template to pre-fill fields.
 
 Templates are stored in settings and available across all projects.
+
+### Default PoV character *(new in 1.10.51)*
+
+If your story never changes point of view, set **Settings → Scene Cards → Default PoV character** to your protagonist. Every newly-created scene will then have that character pre-filled as its PoV, saving you a pick on every new scene. Leave it blank to choose the PoV manually each time. This works alongside [Default scene frontmatter](#settings) and [custom field defaults](#custom-field-templates) — StoryLine's own `pov` key wins on conflict.
+
+### Sort suggestions by frequency *(new in 1.10.51)*
+
+Enable **Settings → Scene Cards → Sort suggestions by frequency** to make the character and location autocomplete suggestions in the Scene Inspector appear in order of how often each one is already used across your scenes (most-used first, then alphabetically). Off by default (alphabetical only). Handy for large projects where your main character should sit at the top of the list instead of being buried in the middle.
 
 ---
 
@@ -1253,6 +1271,8 @@ The toolbar provides entity-type filter buttons:
 - **Click a scene node** — fires the scene select callback.
 - **Legend** — a color legend shows all node types and relationship edge colors.
 
+> **Note on layout stability *(1.10.51)*:** The Story Graph now uses a cooling schedule (alpha decay) plus collision detection and velocity capping, so it settles smoothly instead of jittering on graphs with many connections. If you have a very large cast, the graph may still take a moment to settle — drag a few hub nodes to nudge the layout.
+
 ### How Links Are Detected
 
 The Story Graph uses the **Link Scanner** to find connections. See [Link Scanner & Detected Links](#link-scanner--detected-links).
@@ -1361,6 +1381,37 @@ Enabled categories appear as tag-pill input sections in the Inspector, right bel
 
 ---
 
+## Linking & Matching
+
+The **Linking & Matching** section appears at the bottom of every Character, Location, and Codex entry editor. It controls how the [Link Scanner](#link-scanner--detected-links) matches plain-text mentions of that entity in your scene prose and turns them into detected links.
+
+### Fields
+
+- **Type** *(entryType)* — an optional sub-type for the entry (e.g., a "Sword" type for an Items entry, or a "Potion" type). Free-text; used for your own organisation.
+- **Aliases** *(aliases)* — alternative names that should also link to this entry. Comma-separated. For example, a character "Elizabeth Bennet" might have aliases `Lizzy, Miss Bennet`. The Link Scanner matches any alias in addition to the primary name.
+- **Case-sensitive matching** *(caseSensitive)* — when on, the name and aliases only match text with the exact same capitalisation. Off by default (case-insensitive), which is usually what you want for prose. Turn it on for entries whose name is a common word (e.g., a location called "Hope") to avoid matching every occurrence of "hope" in your writing.
+- **Exclude terms** *(excludeTerms)* — phrases that suppress a match when they appear adjacent to (or overlapping) a potential match. For example, if "The Tower" is a location but you also write "the tower of paperwork", adding `paperwork` as an exclude term prevents the latter from being detected as a link. Exclude terms are **contextual**: they only suppress the specific match they overlap, not every mention in the scene.
+
+### How it works
+
+When the Link Scanner runs (on load and after every edit), it scans each scene's body text for occurrences of every entity's name + aliases, respecting the case-sensitivity and exclude-term rules. Matches appear as pills in the **Detected in text** section of the Scene Inspector. You can then promote a detected link to a Codex category, a character, or a location via the right-click menu.
+
+### Where the data lives
+
+The fields are stored in each entity's frontmatter:
+
+```yaml
+# In a Codex entry
+aliases: [Lizzy, Miss Bennet]
+caseSensitive: false
+excludeTerms: [paperwork]
+entryType: Sword
+```
+
+Characters and Locations use the same fields (Issue #228 extended this section from the Codex to Characters and Locations).
+
+---
+
 ## Hide / Show Built-in Fields
 
 Every character, location, and codex detail editor comes with a set of built-in fields (e.g., Fears, Belief, Atmosphere, Significance). If you don't use all of them, you can **hide** the ones you don't need to keep your editor clean.
@@ -1398,6 +1449,35 @@ An eye-off button on each section header lets you hide a whole category in one c
 - Hidden categories are stored per entity type alongside hidden fields.
 - Hiding a category does not delete its data — values stay in frontmatter and reappear when un-hidden.
 - Applies to Character, Codex, and Location views.
+
+---
+
+## Reordering Fields & Sections
+
+You can change the order of fields inside a section, and the order of sections themselves, in the Character, Codex, and Location detail editors. This lets you put the fields you use most towards the top — for example, moving the **Hierarchy** section under Locations up so you don't have to scroll past everything else to set a parent.
+
+### Reordering fields within a section
+
+1. Open any character, location, or codex detail editor.
+2. **Hover** over a field label — small **up/down chevron buttons** (⌃/⌄) appear to the right of the label.
+3. Click a chevron to move that field up or down within its section.
+
+Both built-in fields and your [custom (universal) fields](#custom-field-templates) can be reordered, and they interleave freely — a custom field can sit between two built-in fields.
+
+### Reordering sections
+
+Custom sections you've added (via **+ Add Section** at the bottom of an editor) can be moved between slots:
+
+1. Hover the section header — up/down chevron buttons appear.
+2. Click to move the whole section earlier or later in the form.
+
+Built-in sections (like Hierarchy under Locations) are fixed in position; if a built-in section sits too low for your workflow, you can hide the sections above it that you don't need (see [Hide / Show Built-in Fields](#hide--show-built-in-fields)) to bring it closer to the top.
+
+### Where the order is saved
+
+Field and section order is saved per project in `System/field-templates.json` and persists across sessions. Each category (character, each codex category, location) keeps its own order.
+
+> **Note:** The scene Inspector (Scene Details sidebar) uses a fixed built-in field order. Custom scene fields appear in a "Custom Fields" block after the built-ins. Reordering built-in scene fields is not yet supported.
 
 ---
 

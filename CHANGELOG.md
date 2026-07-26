@@ -6,6 +6,37 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.51
+
+### Bug Fixes
+
+- **Timeline drag-and-drop no longer scrolls to the top (regression)** — Reordering scenes by drag-and-drop in the Timeline view, and creating a new scene via Quick Add, used to reset the scroll position to the top of the list, making it nearly impossible to work with projects that have 100+ scenes. The 1.10.43 fix moved the scroll restore into a second `requestAnimationFrame`, but with large lists the browser frequently hadn't finished laying out the rebuilt DOM by that frame, so `scrollTop` was set before the content reached its final height and the browser then reset scroll to 0 once layout completed. There was also a typo (`scrollEl.left` instead of `scrollEl.scrollLeft`) that meant the horizontal scroll position was never saved. The restore now runs three times — immediately, on the next rAF, and after a 50ms timeout — so whichever runs after layout completes wins. The Quick Add "scroll to new scene" logic got the same robust retry. Affects `views/TimelineView.ts`.
+
+- **Writing stats no longer lost on crash / force-quit** *([#238](https://github.com/PixeroJan/obsidian-storyline/issues/238))* — Writing history was flushed only on plugin unload, and the unload path swallowed any save error silently. If Obsidian crashed, was force-quit, or the unload handler threw, the entire session's words were lost. Stats now autosave on a 60-second debounce after every scene edit, with a 5-minute safety-net interval, and the final unload flush surfaces errors to the console instead of swallowing them. `flushSession` also gained a lazy-start fallback so a session that began before the scene scan completed still records words.
+
+- **Over-aggressive stats sanitisation relaxed** *([#238](https://github.com/PixeroJan/obsidian-storyline/issues/238))* — `startSession` previously deleted today's history entry if it was ≥ 50% of the project's total word count, which wiped legitimate data for small/early-stage projects where a single productive day can easily exceed half the manuscript. The threshold is now ≥ 90% **and** more than 10,000 words, so only genuinely corrupted entries (from the old 0-baseline bug) are cleared.
+
+- **Story Graph no longer jitters on large graphs** — The force-directed layout used constant force magnitudes for all 350 ticks with no cooling and no collision detection, so high-degree hubs were pulled in conflicting directions and never settled. The simulation now uses an alpha-decay cooling schedule (d3-force-style), collision detection between nodes, velocity capping, and higher damping (0.88) so the graph settles smoothly even with many connections.
+
+- **Multi-select empty-form gap removed** — Custom multi-select fields (in character, location, and codex editors, and in the scene Inspector) left a visible gap between the label and the input when no pills were present, making it unclear which label belonged to which input. The empty pills row now collapses entirely (`:empty { display: none }`) so the label sits directly above the input in empty forms.
+
+### New Features
+
+- **Plotline descriptions / notes** — Plotlines (tags) could only carry a name and a color; there was no way to annotate what a plotline is supposed to do. Each plotline now has an optional description/notes field (click the 📄 icon on a plotline header in list view). The description is shown under the header, carried over on rename, and removed on delete. Stored per-project in `System/plotlines.json`.
+
+- **Default PoV character** — A new **Settings → Scene Cards → Default PoV character** picker auto-assigns a character as the PoV of every newly-created scene. Useful for single-PoV stories so you don't have to pick it each time. Leave blank to choose manually.
+
+- **Drag-and-drop location hierarchy** — In the Locations view (Codex), you can now drag a location node and drop it onto another location (to reparent it) or onto a world (to move it into that world as a top-level location). Cycles are prevented automatically. This is a fast way to reorganise your hierarchy without opening each location's Hierarchy section.
+
+- **Frequency-based suggestion sorting** — A new **Settings → Scene Cards → Sort suggestions by frequency** toggle makes character and location autocomplete suggestions in the Scene Inspector appear in order of how often each one is already used across your scenes (most-used first, then alphabetically). Off by default (alphabetical only).
+
+### Documentation
+
+- New **Linking & Matching** section in HELP explains the Type, Aliases, Case-sensitive matching, and Exclude terms fields and how the Link Scanner uses them.
+- New **Reordering Fields & Sections** section documents the up/down chevron controls for reordering fields within a section and moving custom sections between slots.
+- The **Arc Points** section now opens with a plain-language explanation of what an Arc Point is and a tip on how to categorise arc-point *types*.
+- The **Plotlines View**, **Locations View**, **Scene Templates**, and **Story Graph** sections document the new features above.
+
 ## Version 1.10.50
 
 ### Bug Fixes

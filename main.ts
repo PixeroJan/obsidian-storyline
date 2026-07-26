@@ -91,6 +91,10 @@ export default class SceneCardsPlugin extends Plugin {
     private nativeTooltipObserver: MutationObserver | null = null;
     /** Disables native spell-check inside StoryLine UI inputs (issue #189) */
     private spellcheckObserver: MutationObserver | null = null;
+    /** Issue #238 — debounced writing-stats flush+save (60s) */
+    private writingStatsSaveTimer: number | null = null;
+    /** Issue #238 — periodic autosave interval id (5 min) */
+    private writingStatsIntervalId: number | null = null;
 
     async onload(): Promise<void> {
         await this.loadSettings();
@@ -267,6 +271,16 @@ export default class SceneCardsPlugin extends Plugin {
             // Initialize writing tracker from per-project System/stats.json
             const stats = this.sceneManager.queryService.getStatistics();
             this.writingTracker.startSession(stats.totalWords);
+
+            // Issue #238 — periodic autosave of writing stats so a crash or
+            // force-quit no longer loses the whole session. A debounced save
+            // runs 60s after the last scene change, and a safety-net interval
+            // flushes+persists every 5 minutes regardless of activity.
+            this.scheduleWritingStatsSave();
+            this.writingStatsIntervalId = window.setInterval(
+                () => this.scheduleWritingStatsSave(true),
+                5 * 60_000,
+            );
 
             // Refresh all open views now that the project is set — this ensures
             // PlotGrid and other views that opened before bootstrapProjects reload
@@ -623,6 +637,9 @@ export default class SceneCardsPlugin extends Plugin {
             this.app.vault.on('modify', (file) => {
                 if (file instanceof TFile) {
                     this.sceneManager.handleFileChange(file).then(() => debouncedRefresh());
+                    // Issue #238 — schedule a debounced writing-stats save on
+                    // any scene edit so stats survive crashes/force-quits.
+                    this.scheduleWritingStatsSave();
                 }
             })
         );
@@ -917,6 +934,16 @@ export default class SceneCardsPlugin extends Plugin {
     }
 
     onunload(): void {
+        // Issue #238 — clear the periodic autosave interval and any pending
+        // debounced save, then do a final immediate flush+persist.
+        if (this.writingStatsIntervalId) {
+            window.clearInterval(this.writingStatsIntervalId);
+            this.writingStatsIntervalId = null;
+        }
+        if (this.writingStatsSaveTimer) {
+            window.clearTimeout(this.writingStatsSaveTimer);
+            this.writingStatsSaveTimer = null;
+        }
         // Flush writing session into daily history and persist to System/stats.json
         try {
             const stats = this.sceneManager.queryService.getStatistics();
@@ -925,8 +952,10 @@ export default class SceneCardsPlugin extends Plugin {
                 this.writingTracker.stopSprint(stats.totalWords);
             }
             this.writingTracker.flushSession(stats.totalWords);
-            this.saveProjectSystemData();
-        } catch { /* best effort */ }
+            void this.saveProjectSystemData();
+        } catch (e) {
+            console.warn('[StoryLine] final writing-stats flush failed', e);
+        }
 
         if (this.nativeTooltipObserver) {
             this.nativeTooltipObserver.disconnect();
@@ -1096,7 +1125,7 @@ export default class SceneCardsPlugin extends Plugin {
     /** Per-project field keys that live in System/ files, not data.json */
     private static readonly PROJECT_DATA_KEYS: string[] = [
         'tagColors', 'tagTypeOverrides', 'characterAliases', 'ignoredCharacters',
-        'writingTrackerData', 'useProjectColors',
+        'writingTrackerData', 'useProjectColors', 'plotlineDescriptions',
         // Legacy plotgrid data stored directly in data.json (before file-based storage)
         'rows', 'columns', 'cells', 'zoom', 'stickyHeaders',
         // Legacy / per-project keys that don't belong in global settings
@@ -1491,6 +1520,10 @@ export default class SceneCardsPlugin extends Plugin {
         this.settings.tagTypeOverrides = isRecord(plotlines.tagTypeOverrides)
             ? (plotlines.tagTypeOverrides as Record<string, string>)
             : {};
+        // Issue #238 feedback — per-project plotline descriptions/notes
+        this.settings.plotlineDescriptions = isRecord(plotlines.plotlineDescriptions)
+            ? (plotlines.plotlineDescriptions as Record<string, string>)
+            : {};
 
         // Per-project colour overrides (if the project has them stored)
         if (isRecord(plotlines.projectColors)) {
@@ -1599,6 +1632,34 @@ export default class SceneCardsPlugin extends Plugin {
     }
 
     /**
+     * Issue #238 — flush the writing session into daily history and persist
+     * System/stats.json. Debounced by default (60s after the last change) so
+     * rapid edits don't hammer the filesystem; pass `true` to flush
+     * immediately (used by the 5-minute safety-net interval and on unload).
+     */
+    scheduleWritingStatsSave(immediate = false): void {
+        if (this.writingStatsSaveTimer) {
+            window.clearTimeout(this.writingStatsSaveTimer);
+            this.writingStatsSaveTimer = null;
+        }
+        const flush = () => {
+            try {
+                if (!this.sceneManager?.activeProject) return;
+                const stats = this.sceneManager.queryService.getStatistics();
+                this.writingTracker.flushSession(stats.totalWords);
+                void this.saveProjectSystemData();
+            } catch (e) {
+                console.warn('[StoryLine] writing-stats autosave failed', e);
+            }
+        };
+        if (immediate) {
+            flush();
+        } else {
+            this.writingStatsSaveTimer = window.setTimeout(flush, 60_000);
+        }
+    }
+
+    /**
      * Save per-project data from in-memory settings to System/ files.
      * Called when settings are saved or before switching projects.
      */
@@ -1608,6 +1669,7 @@ export default class SceneCardsPlugin extends Plugin {
         const plotlinesPayload: Record<string, unknown> = {
             tagColors: this.settings.tagColors || {},
             tagTypeOverrides: this.settings.tagTypeOverrides || {},
+            plotlineDescriptions: this.settings.plotlineDescriptions || {},
         };
 
         if (this.settings.useProjectColors) {

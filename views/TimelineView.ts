@@ -1236,15 +1236,19 @@ export class TimelineView extends ItemView {
                 }
                 const file = await this.sceneManager.createScene(sceneData);
                 this.refresh();
-                // Scroll to the newly created scene card
-                window.requestAnimationFrame(() => {
+                // Scroll to the newly created scene card. With 100+ scenes
+                // the rebuilt DOM may not be laid out within a single frame,
+                // so retry after a short timeout as well.
+                const scrollToNew = () => {
                     const newEntry = this.rootContainer?.querySelector(
                         `[data-path="${CSS.escape(file.path)}"]`
                     );
                     if (newEntry) {
                         newEntry.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
-                });
+                };
+                window.requestAnimationFrame(scrollToNew);
+                window.setTimeout(scrollToNew, 50);
                 if (openAfter) {
                     await this.app.workspace.getLeaf('tab').openFile(file, { state: { mode: 'source', source: false } });
                 }
@@ -1784,22 +1788,28 @@ export class TimelineView extends ItemView {
             this._lastCacheVersion = this.sceneManager.cacheVersion;
             // Save scroll position before re-render
             const scrollEl = this.rootContainer.querySelector('.story-line-main-area');
-            const savedScroll = scrollEl ? { top: scrollEl.scrollTop, left: scrollEl.left } : null;
+            const savedScroll = scrollEl
+                ? { top: (scrollEl as HTMLElement).scrollTop, left: (scrollEl as HTMLElement).scrollLeft }
+                : null;
             const prevSelectedPath = this.selectedScene?.filePath ?? null;
             this.renderView(this.rootContainer);
-            // Restore scroll position after re-render. Use a second
-            // requestAnimationFrame so the browser has time to lay out
-            // the rebuilt DOM before we set scrollTop — otherwise the
-            // new content may not have its full height yet and the
-            // scroll position is lost (especially with 100+ scenes).
+            // Restore scroll position after re-render. With 100+ scenes the
+            // rebuilt DOM may not have its final height within a single
+            // animation frame, so we restore immediately, then again on the
+            // next frame, then once more after a short timeout — whichever
+            // runs after layout completes wins. Without this, the browser
+            // resets scroll to 0 once the full content height is realised.
             if (savedScroll) {
-                window.requestAnimationFrame(() => {
-                    const newScrollEl = this.rootContainer?.querySelector('.story-line-main-area');
+                const restore = () => {
+                    const newScrollEl = this.rootContainer?.querySelector('.story-line-main-area') as HTMLElement | null;
                     if (newScrollEl) {
                         newScrollEl.scrollTop = savedScroll.top;
                         newScrollEl.scrollLeft = savedScroll.left;
                     }
-                });
+                };
+                restore();
+                window.requestAnimationFrame(restore);
+                window.setTimeout(restore, 50);
             }
             if (prevSelectedPath) {
                 const updated = this.sceneManager.getScene(prevSelectedPath);

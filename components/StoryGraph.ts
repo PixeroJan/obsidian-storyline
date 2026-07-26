@@ -462,25 +462,41 @@ export class StoryGraph {
     private runSimulation(): void {
         let iterations = 0;
         const maxIterations = 350;
+        // Issue #238 feedback — cooling schedule (d3-force-style alpha decay).
+        // Forces are scaled by `alpha`, which decays each tick so the system
+        // settles instead of jittering forever on high-degree hubs.
+        let alpha = 1;
+        const alphaDecay = 0.012;   // ~0.99^350 ≈ 0.013 by the final tick
+        const alphaMin = 0.02;
+        // Velocity cap prevents explosive jumps when many springs pull a hub.
+        const maxVelocity = 12;
 
         const tick = () => {
             if (!this.svg) return;
             iterations++;
 
-            this.applyForces();
+            this.applyForces(alpha);
 
             for (const node of this.nodes) {
                 if (node === this.dragging) continue;
+                // Cap velocity to avoid jitter spikes on high-degree nodes
+                const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+                if (speed > maxVelocity) {
+                    node.vx = (node.vx / speed) * maxVelocity;
+                    node.vy = (node.vy / speed) * maxVelocity;
+                }
                 node.x += node.vx;
                 node.y += node.vy;
-                node.vx *= 0.82;
-                node.vy *= 0.82;
+                // Higher damping (0.88) than before (0.82) for faster settling
+                node.vx *= 0.88;
+                node.vy *= 0.88;
                 node.x = Math.max(50, Math.min(this.width - 50, node.x));
                 node.y = Math.max(50, Math.min(this.height - 50, node.y));
             }
 
             this.renderSVG();
 
+            alpha = Math.max(alphaMin, alpha * (1 - alphaDecay));
             if (iterations < maxIterations) {
                 this.animFrame = window.requestAnimationFrame(tick);
             }
@@ -489,13 +505,13 @@ export class StoryGraph {
         this.animFrame = window.requestAnimationFrame(tick);
     }
 
-    private applyForces(): void {
+    private applyForces(alpha: number): void {
         const repulsion = 4000;
         const springLength = 100;
         const springK = 0.025;
         const centerGravity = 0.0012;
 
-        // Repulsion between all nodes
+        // Repulsion between all nodes (scaled by alpha)
         for (let i = 0; i < this.nodes.length; i++) {
             for (let j = i + 1; j < this.nodes.length; j++) {
                 const a = this.nodes[i];
@@ -503,7 +519,7 @@ export class StoryGraph {
                 const dx = b.x - a.x;
                 const dy = b.y - a.y;
                 const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-                const force = repulsion / (dist * dist);
+                const force = (repulsion / (dist * dist)) * alpha;
                 const fx = (dx / dist) * force;
                 const fy = (dy / dist) * force;
                 a.vx -= fx;
@@ -513,7 +529,7 @@ export class StoryGraph {
             }
         }
 
-        // Spring forces along edges
+        // Spring forces along edges (scaled by alpha)
         for (const edge of this.edges) {
             const a = this.nodes.find(n => n.id === edge.source);
             const b = this.nodes.find(n => n.id === edge.target);
@@ -522,7 +538,7 @@ export class StoryGraph {
             const dy = b.y - a.y;
             const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
             const displacement = dist - springLength;
-            const force = springK * displacement;
+            const force = springK * displacement * alpha;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
             a.vx += fx;
@@ -531,10 +547,35 @@ export class StoryGraph {
             b.vy -= fy;
         }
 
-        // Center gravity
+        // Center gravity (scaled by alpha)
         for (const node of this.nodes) {
-            node.vx += (this.width / 2 - node.x) * centerGravity;
-            node.vy += (this.height / 2 - node.y) * centerGravity;
+            node.vx += (this.width / 2 - node.x) * centerGravity * alpha;
+            node.vy += (this.height / 2 - node.y) * centerGravity * alpha;
+        }
+
+        // Issue #238 feedback — collision detection so nodes don't overlap
+        // and then violently repel. Treat each node as a circle of radius
+        // proportional to its weight; push overlapping pairs apart.
+        for (let i = 0; i < this.nodes.length; i++) {
+            for (let j = i + 1; j < this.nodes.length; j++) {
+                const a = this.nodes[i];
+                const b = this.nodes[j];
+                const ra = this.nodeRadius(a) + 2;
+                const rb = this.nodeRadius(b) + 2;
+                const minDist = ra + rb;
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < minDist && dist > 0.01) {
+                    const overlap = (minDist - dist) / 2;
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+                    a.x -= nx * overlap;
+                    a.y -= ny * overlap;
+                    b.x += nx * overlap;
+                    b.y += ny * overlap;
+                }
+            }
         }
     }
 

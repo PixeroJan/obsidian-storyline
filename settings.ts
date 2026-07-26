@@ -664,6 +664,9 @@ export interface SceneCardsSettings {
     // Tag / plotline color assignments (custom overrides)
     tagColors: Record<string, string>;
 
+    // Plotline descriptions/notes keyed by plotline tag (issue #238 feedback)
+    plotlineDescriptions: Record<string, string>;
+
     // Plotline colour HSL adjustments (applied to scheme colours)
     plotlineHue: number;
     plotlineSaturation: number;
@@ -816,6 +819,13 @@ export interface SceneCardsSettings {
     writeFieldsAsWikilinks?: boolean;
 
     /**
+     * Issue #238 feedback — when true, character/location suggestions in the
+     * scene Inspector are sorted by how often they appear across scenes (most
+     * used first), then alphabetically. Default false (alphabetical).
+     */
+    sortByFrequency?: boolean;
+
+    /**
      * Issue #71 — when true, custom field values defined via Universal Field
      * Templates are mirrored to top-level YAML keys (in addition to the
      * `universalFields:` block) so they are visible to Obsidian Properties,
@@ -871,6 +881,13 @@ export interface SceneCardsSettings {
      * on conflict.
      */
     defaultSceneFrontmatter?: string;
+
+    /**
+     * Issue #238 feedback — name of the character to auto-assign as PoV on
+     * every newly-created scene. Empty string means no default (manual pick).
+     * Stored as the character's display name (matches the `pov` field format).
+     */
+    defaultPovCharacter?: string;
 
     /**
      * Type of separator to insert between scenes in manuscript exports.
@@ -941,6 +958,8 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
 
     tagColors: {},
 
+    plotlineDescriptions: {},
+
     plotlineHue: 0,
     plotlineSaturation: 0,
     plotlineLightness: 0,
@@ -996,6 +1015,8 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     timelineDragScrollZone: 60,
     sprintEndSound: true,
     writeFieldsAsWikilinks: true,
+
+    sortByFrequency: false,
     universalFieldsMirrorTopLevel: true,
     seriesArcView: false,
     warnOnCrossBookMove: true,
@@ -1003,6 +1024,8 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     excludeChecklistFromWordcount: false,
     defaultProjectLanguage: 'en',
     defaultSceneFrontmatter: '',
+
+    defaultPovCharacter: '',
     exportSceneSeparatorType: 'blank',
     exportSceneSeparatorCustom: '',
 };
@@ -1607,6 +1630,16 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
+            .setName('Sort suggestions by frequency')
+            .setDesc('Issue #238 feedback — when on, character and location suggestions in the scene Inspector are sorted by how often they appear across scenes (most used first), then alphabetically. Off = alphabetical only.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.sortByFrequency === true)
+                .onChange(async (value) => {
+                    this.plugin.settings.sortByFrequency = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
             .setName('Mirror custom fields to top-level YAML')
             .setDesc('Issue #71 — when on, universal field values are also written as top-level YAML keys (using each template\'s "top-level key") so they show up in Obsidian properties, bases, and dataview. Reserved StoryLine keys are skipped automatically.')
             .addToggle(toggle => toggle
@@ -1720,6 +1753,26 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     fontFamily: 'var(--font-monospace)',
                 });
             });
+
+        // ── Issue #238 feedback — Default PoV character ──
+        const povSetting = new Setting(containerEl)
+            .setName('Default PoV character')
+            .setDesc('Auto-assign this character as the PoV of every newly-created scene. Useful for single-PoV stories so you don\'t have to pick it each time. Leave blank to choose manually.');
+        const povSelect = povSetting.controlEl.createEl('select');
+        povSelect.setCssStyles({ width: '200px' });
+        const noneOpt = povSelect.createEl('option', { value: '' });
+        noneOpt.text = '— None (pick manually) —';
+        const characters = this.plugin.characterManager?.getAll?.() ?? [];
+        const sortedChars = [...characters].sort((a, b) => (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()));
+        for (const c of sortedChars) {
+            const opt = povSelect.createEl('option', { value: c.name });
+            opt.text = c.name;
+        }
+        povSelect.value = this.plugin.settings.defaultPovCharacter || '';
+        povSelect.addEventListener('change', async () => {
+            this.plugin.settings.defaultPovCharacter = povSelect.value;
+            await this.plugin.saveSettings();
+        });
 
         const focusDetails = containerEl.createEl('details', { cls: 'story-line-color-section' });
         focusDetails.createEl('summary', { text: 'Focus mode settings' });

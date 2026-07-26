@@ -843,6 +843,18 @@ export class StorylineView extends ItemView {
             this.openRenamePlotlineModal(plotline);
         });
 
+        // Description button (issue #238 feedback — annotate a plotline)
+        const descBtn = actions.createEl('button', {
+            cls: 'clickable-icon storyline-action-btn',
+            attr: { 'aria-label': 'Edit plotline description', title: 'Edit description' }
+        });
+        const descIcon = descBtn.createSpan();
+        obsidian.setIcon(descIcon, 'file-text');
+        descBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openPlotlineDescriptionModal(plotline);
+        });
+
         // Add scenes button
         const addToPlotBtn = actions.createEl('button', {
             cls: 'clickable-icon storyline-action-btn',
@@ -908,6 +920,20 @@ export class StorylineView extends ItemView {
         });
 
         const body = section.createDiv('storyline-body');
+
+        // Plotline description (issue #238 feedback) — shown if one is set
+        const desc = this.plugin.settings.plotlineDescriptions?.[plotline];
+        if (desc && desc.trim().length > 0) {
+            const descEl = body.createDiv('plotline-description');
+            descEl.setCssStyles({
+                fontStyle: 'italic',
+                color: 'var(--text-muted)',
+                fontSize: 'var(--font-ui-small)',
+                marginBottom: '8px',
+                whiteSpace: 'pre-wrap',
+            });
+            descEl.textContent = desc.trim();
+        }
 
         // Group scenes by act for visual flow
         const actGroups = new Map<string, Scene[]>();
@@ -1071,7 +1097,54 @@ export class StorylineView extends ItemView {
                         return;
                     }
                     const count = await this.sceneManager.renameTag(plotline, slug);
+                    // Carry over the description to the new tag name
+                    const desc = this.plugin.settings.plotlineDescriptions?.[plotline];
+                    if (desc) {
+                        this.plugin.settings.plotlineDescriptions[slug] = desc;
+                        delete this.plugin.settings.plotlineDescriptions[plotline];
+                        await this.plugin.saveSettings();
+                    }
                     new Notice(`Renamed plotline in ${count} scene${count !== 1 ? 's' : ''}`);
+                    this.refresh();
+                    modal.close();
+                });
+            });
+        modal.open();
+    }
+
+    // ── Plotline description (issue #238 feedback) ────────
+
+    private openPlotlineDescriptionModal(plotline: string): void {
+        const modal = new Modal(this.app);
+        modal.titleEl.setText(`Plotline description — ${this.formatPlotlineName(plotline)}`);
+        let desc = this.plugin.settings.plotlineDescriptions?.[plotline] || '';
+
+        const setting = new Setting(modal.contentEl)
+            .setName('Description / notes')
+            .setDesc('A short note reminding you what this plotline is supposed to do. Shown under the plotline header in list view.');
+        const ta = setting.controlEl.createEl('textarea');
+        ta.setCssStyles({ width: '100%', minHeight: '120px', resize: 'vertical' });
+        ta.setValue(desc);
+        ta.addEventListener('input', () => (desc = ta.value));
+
+        new Setting(modal.contentEl)
+            .addButton((btn: ButtonComponent) => {
+                btn.setButtonText('Clear').onClick(async () => {
+                    delete this.plugin.settings.plotlineDescriptions[plotline];
+                    await this.plugin.saveSettings();
+                    this.refresh();
+                    modal.close();
+                });
+            })
+            .addButton((btn: ButtonComponent) => {
+                btn.setButtonText('Save').setCta().onClick(async () => {
+                    const trimmed = desc.trim();
+                    if (trimmed.length === 0) {
+                        delete this.plugin.settings.plotlineDescriptions[plotline];
+                    } else {
+                        this.plugin.settings.plotlineDescriptions[plotline] = trimmed;
+                    }
+                    await this.plugin.saveSettings();
                     this.refresh();
                     modal.close();
                 });
@@ -1095,6 +1168,11 @@ export class StorylineView extends ItemView {
             .addButton((btn: ButtonComponent) => {
                 btn.setButtonText('Delete').setClass('mod-warning').onClick(async () => {
                     const count = await this.sceneManager.deleteTag(plotline);
+                    // Also remove any stored description for the deleted plotline
+                    if (this.plugin.settings.plotlineDescriptions?.[plotline]) {
+                        delete this.plugin.settings.plotlineDescriptions[plotline];
+                        await this.plugin.saveSettings();
+                    }
                     new Notice(`Removed plotline from ${count} scene${count !== 1 ? 's' : ''}`);
                     this.refresh();
                     modal.close();

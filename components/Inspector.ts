@@ -383,7 +383,7 @@ export class InspectorComponent {
                         if (!names.has(ch.name.toLowerCase())) names.set(ch.name.toLowerCase(), ch.name);
                     }
                 }
-                return Array.from(names.values()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+                return this.sortByFrequency(Array.from(names.values()), 'character');
             },
             onChange: async (val) => {
                 await this.sceneManager.updateScene(scene.filePath, { pov: val });
@@ -410,7 +410,7 @@ export class InspectorComponent {
                         if (!names.has(ch.name.toLowerCase())) names.set(ch.name.toLowerCase(), ch.name);
                     }
                 }
-                return Array.from(names.values()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+                return this.sortByFrequency(Array.from(names.values()), 'character');
             },
             onChange: async (values) => {
                 await this.sceneManager.updateScene(scene.filePath, { characters: values });
@@ -1517,9 +1517,26 @@ export class InspectorComponent {
             if (!names.has(key)) names.set(key, name);
         }
 
-        return Array.from(names.values()).sort((a, b) =>
-            a.toLowerCase().localeCompare(b.toLowerCase())
-        );
+        return this.sortByFrequency(Array.from(names.values()), 'location');
+    }
+
+    /**
+     * Issue #238 feedback — sort suggestion names by frequency (most-used
+     * first) when the setting is enabled, falling back to alphabetical.
+     */
+    private sortByFrequency(names: string[], kind: 'character' | 'location'): string[] {
+        if (this.plugin.settings.sortByFrequency !== true) {
+            return names.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        }
+        const freq = kind === 'character'
+            ? this.sceneManager.queryService.getCharacterFrequencies()
+            : this.sceneManager.queryService.getLocationFrequencies();
+        return names.sort((a, b) => {
+            const fa = freq.get(a.toLowerCase()) || 0;
+            const fb = freq.get(b.toLowerCase()) || 0;
+            if (fa !== fb) return fb - fa;
+            return a.toLowerCase().localeCompare(b.toLowerCase());
+        });
     }
 
     /**

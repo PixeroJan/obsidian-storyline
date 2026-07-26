@@ -318,6 +318,18 @@ export class LocationView extends ItemView {
         const isCollapsed = this.collapsedTreeNodes.has(world.filePath);
 
         const header = node.createDiv('location-tree-header');
+        // Issue #238 feedback — drag-and-drop locations onto a world to assign
+        header.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            header.addClass('location-tree-drop-target');
+        });
+        header.addEventListener('dragleave', () => header.removeClass('location-tree-drop-target'));
+        header.addEventListener('drop', (e) => {
+            e.preventDefault();
+            header.removeClass('location-tree-drop-target');
+            const locName = e.dataTransfer?.getData('application/x-storyline-location');
+            if (locName) void this.reparentLocation(locName, { world: world.name, parent: undefined });
+        });
         const chevron = header.createSpan('location-tree-chevron');
 
         const worldLocations = this.locationManager.getLocationsForWorld(world.name);
@@ -386,6 +398,30 @@ export class LocationView extends ItemView {
 
         const header = node.createDiv('location-tree-header');
         header.setCssStyles({ paddingLeft: `${depth * 20}px` });
+
+        // Issue #238 feedback — drag this location to reparent it
+        header.setAttribute('draggable', 'true');
+        header.addEventListener('dragstart', (e) => {
+            e.dataTransfer?.setData('application/x-storyline-location', loc.name);
+            e.dataTransfer?.setData('text/plain', loc.name);
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+        });
+        // Allow dropping other locations onto this one to make it their parent
+        header.addEventListener('dragover', (e) => {
+            const dragged = e.dataTransfer?.types?.includes('application/x-storyline-location');
+            if (!dragged) return;
+            e.preventDefault();
+            header.addClass('location-tree-drop-target');
+        });
+        header.addEventListener('dragleave', () => header.removeClass('location-tree-drop-target'));
+        header.addEventListener('drop', (e) => {
+            e.preventDefault();
+            header.removeClass('location-tree-drop-target');
+            const locName = e.dataTransfer?.getData('application/x-storyline-location');
+            if (locName && locName !== loc.name) {
+                void this.reparentLocation(locName, { world: loc.world, parent: loc.name });
+            }
+        });
 
         const chevron = header.createSpan('location-tree-chevron');
         if (childLocations.length > 0) {
@@ -478,6 +514,34 @@ export class LocationView extends ItemView {
     }
 
     // ── Tree node context menu (promote/demote, book membership) ───────
+
+    /**
+     * Issue #238 feedback — reparent a location by drag-and-drop. Updates the
+     * location's `world` and `parent` fields and persists. Prevents cycles
+     * (dropping a location onto itself or one of its own descendants).
+     */
+    private async reparentLocation(
+        locName: string,
+        target: { world?: string; parent?: string },
+    ): Promise<void> {
+        const loc = this.locationManager.getAllLocations().find(l => l.name === locName);
+        if (!loc) return;
+        // Prevent dropping a location onto itself or one of its descendants
+        if (target.parent) {
+            let ancestor: StoryLocation | undefined = loc;
+            const seen = new Set<string>();
+            while (ancestor && !seen.has(ancestor.filePath)) {
+                seen.add(ancestor.filePath);
+                if (ancestor.name === target.parent) return; // would create a cycle
+                ancestor = ancestor.parent
+                    ? this.locationManager.getAllLocations().find(l => l.name === ancestor!.parent)
+                    : undefined;
+            }
+        }
+        const updated: StoryLocation = { ...loc, world: target.world, parent: target.parent };
+        await this.locationManager.saveLocation(updated);
+        this.plugin.refreshOpenViews();
+    }
 
     private showItemContextMenu(item: WorldOrLocation, e: MouseEvent): void {
         const menu = new obsidian.Menu();

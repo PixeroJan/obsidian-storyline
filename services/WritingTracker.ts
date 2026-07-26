@@ -65,18 +65,22 @@ export class WritingTracker {
     startSession(currentTotalWords: number): void {
         // If the project word count isn't available yet, don't start — keep
         // baseline null so getSessionWords / flushSession remain no-ops.
+        // (flushSession has its own lazy-start fallback — see below.)
         if (currentTotalWords <= 0) return;
 
         this.baselineWords = currentTotalWords;
         this.lastKnownTotal = currentTotalWords;
         this.sessionStart = Date.now();
 
-        // Sanitise: if today's stored value is unreasonably large (≥ 50% of
-        // the entire project), it's almost certainly corrupted from the old
-        // 0-baseline bug.  Clear it.
+        // Sanitise: if today's stored value is unreasonably large (≥ 90% of
+        // the entire project AND more than 10,000 words), it's almost
+        // certainly corrupted from the old 0-baseline bug.  Clear it.
+        // (Issue #238 — the previous 50% threshold wiped legitimate data
+        // for small/early-stage projects where a single productive day can
+        // easily exceed half the manuscript.)
         const today = this.todayKey();
         const stored = this.history[today] || 0;
-        if (stored > 0 && stored >= currentTotalWords * 0.5) {
+        if (stored > 10_000 && stored >= currentTotalWords * 0.9) {
             delete this.history[today];
         }
     }
@@ -117,7 +121,14 @@ export class WritingTracker {
      * last flush is recorded, so daily history is never double-counted.
      */
     flushSession(currentTotalWords: number): void {
-        if (this.baselineWords === null) return;   // session never started
+        // Issue #238 — lazy-start: if startSession() bailed because the
+        // project word count wasn't available yet (scene scan not done at
+        // layout-ready), start now so the session still records words.
+        if (this.baselineWords === null) {
+            if (currentTotalWords <= 0) return;
+            this.startSession(currentTotalWords);
+            return; // first flush records nothing (baseline == current)
+        }
         const totalSessionWords = this.getSessionWords(currentTotalWords);
         const increment = totalSessionWords - this._flushedSessionWords;
         if (increment > 0) {

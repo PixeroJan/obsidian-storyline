@@ -228,6 +228,39 @@ export class SceneQueryService {
     }
 
     /**
+     * Issue #238 feedback — count how many scenes reference each character
+     * (as a `characters` list member or as `pov`). Returns a map keyed by the
+     * original-cased name. Used for frequency-based suggestion sorting.
+     */
+    getCharacterFrequencies(): Map<string, number> {
+        const counts = new Map<string, number>();
+        const bump = (name: string) => {
+            if (!name) return;
+            const key = name.toLowerCase();
+            counts.set(key, (counts.get(key) || 0) + 1);
+        };
+        for (const scene of this.sceneStore.sceneValues()) {
+            if (scene.characters) scene.characters.forEach(bump);
+            if (scene.pov) bump(scene.pov);
+        }
+        return counts;
+    }
+
+    /**
+     * Issue #238 feedback — count how many scenes reference each location.
+     */
+    getLocationFrequencies(): Map<string, number> {
+        const counts = new Map<string, number>();
+        for (const scene of this.sceneStore.sceneValues()) {
+            if (scene.location) {
+                const key = scene.location.toLowerCase();
+                counts.set(key, (counts.get(key) || 0) + 1);
+            }
+        }
+        return counts;
+    }
+
+    /**
      * Get project statistics
      */
     getStatistics(excludeArcAnchor = false) {

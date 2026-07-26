@@ -932,6 +932,12 @@ export class SceneManager implements ISceneStore {
             sceneData.universalFields = this.seedSceneUniversalDefaults(sceneData.universalFields) as Record<string, string | string[]> | undefined;
         }
 
+        // Issue #238 feedback \u2014 apply the default PoV character when the
+        // caller didn't supply one. Only applies to real scenes (not notes).
+        if (!isNote && sceneData.pov === undefined && this.plugin.settings.defaultPovCharacter) {
+            sceneData.pov = this.plugin.settings.defaultPovCharacter;
+        }
+
         // Issue #77 \u2014 parse the user's "Default scene frontmatter" YAML
         // snippet into extra keys to merge. StoryLine keys win on conflict.
         const extraFm = isNote ? undefined : this.parseDefaultSceneFrontmatter();
