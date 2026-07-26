@@ -149,10 +149,14 @@ export class SceneQueryService {
     ): Map<string, Scene[]> {
         const groups = this.getScenesGroupedBy(field, filter, sort);
 
-        // Add empty groups for defined acts/chapters
+        // Add empty groups for defined acts/chapters.
+        // Issue #239 — use getActDisplayLabel for the key so that act 0
+        // ("Prologue") and act 99 ("Epilogue") merge with the column their
+        // scenes are grouped under, instead of spawning a parallel
+        // "Act 0" / "Act 99" column that never receives scenes.
         if (field === 'act' && definedActs) {
             for (const act of definedActs) {
-                const key = `Act ${act}`;
+                const key = getActDisplayLabel(act);
                 if (!groups.has(key)) {
                     groups.set(key, []);
                 }

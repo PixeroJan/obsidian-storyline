@@ -6,6 +6,12 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.53
+
+### Bug Fixes
+
+- **Duplicate Prologue / Epilogue columns in Kanban** *([#239](https://github.com/PixeroJan/obsidian-storyline/issues/239))* — When a project had act `0` (Prologue) or act `99` (Epilogue) in its defined acts — which happens as soon as any scene stores its act as the number `0` or `99`, or the project's `definedActs` array contains them — the Kanban board rendered two separate columns for each: an empty `Act 0` / `Act 99` column (created from `definedActs`) and the real `Prologue` / `Epilogue` column holding the scenes (created from `getActDisplayLabel`). Numbered acts (1–98) were unaffected because both code paths produced the same `Act N` key. The empty-column key is now built with `getActDisplayLabel` so Prologue/Epilogue merge with their scene column instead of spawning a parallel `Act 0` / `Act 99` column. Affects `services/SceneQueryService.ts`.
+
 ## Version 1.10.52
 
 ### Bug Fixes
