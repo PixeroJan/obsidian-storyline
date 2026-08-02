@@ -6,6 +6,16 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.54
+
+### Bug Fixes
+
+- **System JSON writes no longer trigger a recurring autosave loop** *([#242](https://github.com/PixeroJan/obsidian-storyline/issues/242))* — After StoryLine wrote its project `System/*.json` files, those writes emitted new vault `modify` events that re-armed `scheduleWritingStatsSave()`, rewriting the four System JSON files roughly every 60 seconds while Obsidian sat idle. The vault `modify` handler now skips files under the active project's `System/` folder before scheduling a writing-stats save, so the plugin's own writes can't feed back into the timer. `writeSystemJson()` additionally compares the serialized JSON with the existing file contents and skips the write when they're identical, so the 5-minute safety-net interval (from #238) no longer rewrites unchanged files. Affects `main.ts`.
+
+- **Character count setting now applies to the Manuscript view** *([#240](https://github.com/PixeroJan/obsidian-storyline/issues/240))* — With the "Default project language" set to a CJK locale and "Count unit for scene lengths" set to Characters, the Manuscript view footer still calculated and displayed words. The footer (both the initial render and the live `updateFooter` refresh) now honours `settings.countUnit`, summing `charcount` and labelling the result `chars` when the unit is `chars` — consistent with the Board, Timeline, and Stats views. Affects `views/ManuscriptView.ts`.
+
+- **Em dash (`—`) no longer counted as a word** *([#243](https://github.com/PixeroJan/obsidian-storyline/issues/243))* — `tokenizeWords` split on whitespace and kept every non-empty token, so a standalone em dash (commonly used to mark dialogue) was counted as a word, inflating scene word counts relative to Obsidian's native counter. Tokens now must contain at least one letter or digit (`/\p{L}|\p{N}/u`), matching Obsidian's behaviour. This affected every view and the persisted frontmatter word count, not just the Manuscript view. Affects `utils/locale.ts`.
+
 ## Version 1.10.53
 
 ### Bug Fixes

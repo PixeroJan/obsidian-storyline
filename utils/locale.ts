@@ -423,7 +423,11 @@ export function tokenizeWords(text: string, locale: StoryLineLocale = DEFAULT_ST
     const profile = getLocaleProfile(locale);
 
     if (!SCRIPTIO_CONTINUA_SCRIPTS.has(profile.script)) {
-        return text.split(/\s+/).filter(w => w.length > 0);
+        // Issue #243 — drop pure-punctuation tokens (e.g. an em dash "—"
+        // surrounded by whitespace) so they aren't counted as words. A
+        // token counts as a word only if it contains at least one letter
+        // or digit. This matches Obsidian's native word counter.
+        return text.split(/\s+/).filter(w => w.length > 0 && /\p{L}|\p{N}/u.test(w));
     }
 
     const seg = getSegmenter(profile.code, 'word');

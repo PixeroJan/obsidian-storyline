@@ -442,6 +442,7 @@ export class ManuscriptView extends ItemView {
         );
 
         let totalWords = 0;
+        let totalChars = 0;
         let lastAct: string | number | undefined;
         let lastChapter: string | number | undefined;
         // Issue #105 — track the previous scene block so we can mark it
@@ -518,12 +519,16 @@ export class ManuscriptView extends ItemView {
 
             if (!(this.plugin.settings.excludeArcAnchorFromWordcount && scene.arcAnchor)) {
                 totalWords += scene.wordcount ?? 0;
+                totalChars += scene.charcount ?? 0;
             }
         }
 
-        // Footer
-        const wordLabel = totalWords === 1 ? 'word' : 'words';
-        this.footerEl.setText(`${scenes.length} scenes · ${totalWords.toLocaleString()} ${wordLabel}`);
+        // Footer — Issue #240: honour the user's countUnit setting ('words'
+        // or 'chars') instead of always showing a word count.
+        const useChars = this.plugin.settings.countUnit === 'chars';
+        const value = useChars ? totalChars : totalWords;
+        const unitLabel = useChars ? 'chars' : (value === 1 ? 'word' : 'words');
+        this.footerEl.setText(`${scenes.length} scenes · ${value.toLocaleString()} ${unitLabel}`);
 
         // Eagerly mount the first few editors immediately (don't wait for IntersectionObserver)
         this._isMounting = true;
@@ -1252,13 +1257,18 @@ export class ManuscriptView extends ItemView {
             : this.sceneManager.queryService.getFilteredScenes(this.currentFilter, this.currentSort)
                 .filter(s => !s.corkboardNote);
         let totalWords = 0;
+        let totalChars = 0;
         for (const s of scenes) {
             if (!(this.plugin.settings.excludeArcAnchorFromWordcount && s.arcAnchor)) {
                 totalWords += s.wordcount ?? 0;
+                totalChars += s.charcount ?? 0;
             }
         }
-        const wordLabel = totalWords === 1 ? 'word' : 'words';
-        this.footerEl.setText(`${scenes.length} scenes · ${totalWords.toLocaleString()} ${wordLabel}`);
+        // Issue #240 — honour the user's countUnit setting.
+        const useChars = this.plugin.settings.countUnit === 'chars';
+        const value = useChars ? totalChars : totalWords;
+        const unitLabel = useChars ? 'chars' : (value === 1 ? 'word' : 'words');
+        this.footerEl.setText(`${scenes.length} scenes · ${value.toLocaleString()} ${unitLabel}`);
     }
 
     /** Apply focus-mode effects via CSS custom properties; static rules live in styles.css. */

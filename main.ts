@@ -639,7 +639,17 @@ export default class SceneCardsPlugin extends Plugin {
                     this.sceneManager.handleFileChange(file).then(() => debouncedRefresh());
                     // Issue #238 — schedule a debounced writing-stats save on
                     // any scene edit so stats survive crashes/force-quits.
-                    this.scheduleWritingStatsSave();
+                    // Issue #242 — skip StoryLine's own System/ files here;
+                    // otherwise saveProjectSystemData()'s JSON writes emit
+                    // modify events that re-arm this timer in a ~60s loop.
+                    // Also skip files outside the active project's content
+                    // tree so unrelated vault edits don't trigger a save.
+                    const sysFolder = this.getProjectSystemFolder();
+                    const isSystemFile = file.path === sysFolder
+                        || file.path.startsWith(sysFolder + '/');
+                    if (!isSystemFile) {
+                        this.scheduleWritingStatsSave();
+                    }
                 }
             })
         );
@@ -1498,7 +1508,22 @@ export default class SceneCardsPlugin extends Plugin {
             if (!await adapter.exists(systemFolder)) {
                 await this.app.vault.createFolder(systemFolder);
             }
-            await adapter.write(`${systemFolder}/${filename}`, JSON.stringify(data, null, 2));
+            const filePath = `${systemFolder}/${filename}`;
+            const serialized = JSON.stringify(data, null, 2);
+            // Issue #242 — skip the write when the serialized content is
+            // identical to what's already on disk. The 5-minute safety-net
+            // interval calls saveProjectSystemData() unconditionally, so
+            // without this guard every cycle rewrites all four System JSON
+            // files and emits modify events even when nothing changed.
+            if (await adapter.exists(filePath)) {
+                try {
+                    const existing = await adapter.read(filePath);
+                    if (existing === serialized) return;
+                } catch {
+                    /* fall through to write */
+                }
+            }
+            await adapter.write(filePath, serialized);
         } catch (e) {
             void e;
         }
