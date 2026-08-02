@@ -6,6 +6,12 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.55
+
+### Bug Fixes
+
+- **Build output now matches the released main.js artifact** — The committed `package-lock.json` was pinned to `1.10.42` while `package.json` had advanced to `1.10.54`, so the Obsidian community scanner's clean-room rebuild (via `npm ci`) resolved a different dependency tree than the one used to build the uploaded `main.js`, producing a byte-different artifact and triggering the "Build output does not match" warning. The lockfile is now regenerated from the current `package.json` so `npm ci` reproduces the exact release build. Affects `package-lock.json`.
+
 ## Version 1.10.54
 
 ### Bug Fixes
