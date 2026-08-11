@@ -246,7 +246,6 @@ export class LocationView extends ItemView {
                 return item.books.some(b => b.toLowerCase() === lower);
             };
             worlds = worlds.filter(w => {
-                this.renderLocationNode(tree, loc, scenes, 0, orphanRoots.map(location => location.name));
                 // Keep the world if any of its child locations are in the book.
                 return this.locationManager.getLocationsForWorld(w.name).some(inBook);
             });

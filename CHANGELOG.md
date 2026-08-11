@@ -6,6 +6,12 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.57
+
+### Bug Fixes
+
+- **Release builds and LocationView lint cleanups** — Fixed the manual release workflow's BOM-sensitive `versions.json` parsing and removed an accidental location render call that caused unsafe-value warnings during linting.
+
 ## Version 1.10.56
 
 ### New Features
