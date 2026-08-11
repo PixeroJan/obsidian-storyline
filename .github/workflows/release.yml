@@ -61,7 +61,7 @@ jobs:
           # package-lock.json — sync root package version
           node -e "const fs=require('fs');const l=JSON.parse(fs.readFileSync('package-lock.json'));l.version='$VERSION';if(l.packages&&l.packages[''])l.packages[''].version='$VERSION';fs.writeFileSync('package-lock.json',JSON.stringify(l,null,2)+'\n')"
           # versions.json — add/overwrite the entry with the current minAppVersion
-          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('manifest.json'));const v=JSON.parse(fs.readFileSync('versions.json'));v['$VERSION']=m.minAppVersion;fs.writeFileSync('versions.json',JSON.stringify(v,null,2)+'\n')"
+          node -e "const fs=require('fs');const readJson=f=>JSON.parse(fs.readFileSync(f,'utf8').replace(/^\\uFEFF/,''));const m=readJson('manifest.json');const v=readJson('versions.json');v['$VERSION']=m.minAppVersion;fs.writeFileSync('versions.json',JSON.stringify(v,null,2)+'\n')"
           # Keep the versioned files in the build workspace. The release
           # action creates the remote tag and release after the build.
 
