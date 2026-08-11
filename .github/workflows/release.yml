@@ -62,23 +62,8 @@ jobs:
           node -e "const fs=require('fs');const l=JSON.parse(fs.readFileSync('package-lock.json'));l.version='$VERSION';if(l.packages&&l.packages[''])l.packages[''].version='$VERSION';fs.writeFileSync('package-lock.json',JSON.stringify(l,null,2)+'\n')"
           # versions.json — add/overwrite the entry with the current minAppVersion
           node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('manifest.json'));const v=JSON.parse(fs.readFileSync('versions.json'));v['$VERSION']=m.minAppVersion;fs.writeFileSync('versions.json',JSON.stringify(v,null,2)+'\n')"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add manifest.json package.json package-lock.json versions.json
-          if git diff --cached --quiet; then
-            echo "Version files already contain $VERSION"
-          else
-            git commit -m "chore: release $VERSION"
-            # The release tag below transfers this commit without requiring
-            # a push to a potentially protected branch.
-          fi
-          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
-            echo "Tag $VERSION already exists"
-          else
-            git tag "$VERSION"
-            # softprops/action-gh-release creates the remote tag and release
-            # from this local tag after the build succeeds.
-          fi
+          # Keep the versioned files in the build workspace. The release
+          # action creates the remote tag and release after the build.
 
       - name: Setup Node
         uses: actions/setup-node@v5
