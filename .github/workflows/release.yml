@@ -76,7 +76,8 @@ jobs:
             echo "Tag $VERSION already exists"
           else
             git tag "$VERSION"
-            git push origin "$VERSION"
+            # softprops/action-gh-release creates the remote tag and release
+            # from this local tag after the build succeeds.
           fi
 
       - name: Setup Node
