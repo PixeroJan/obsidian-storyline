@@ -194,6 +194,10 @@ export interface Character {
      * belongs to a series.
      */
     books?: string[];
+    /** Stable book UUIDs parallel to books; preferred for series filtering. */
+    booksById?: string[];
+    /** Persistent manual order within the Codex character overview. */
+    sortOrder?: number;
 
     // ── Meta ───────────────────────────────────────────
     /** Created date */
@@ -665,6 +669,7 @@ export const CHARACTER_FIELD_KEYS: (keyof Character)[] = [
     'startingPoint', 'goal', 'expectedChange',
     'habits', 'props',
     'books',
+    'booksById', 'sortOrder',
     'entryType', 'caseSensitive', 'excludeTerms',
 ];
 

@@ -24,6 +24,7 @@ import {
     supportsSyllableMetrics,
     isScriptioContinuaLocale,
     DEFAULT_STORYLINE_LOCALE,
+    getQuotePair,
     type StoryLineLocale,
 } from '../utils/locale';
 
@@ -1079,7 +1080,7 @@ export class StatsView extends ItemView {
         for (const scene of withBody) {
             const body = scene.body!;
             const total = body.length;
-            const dlg = countDialogueCharacters(body, locale);
+            const dlg = countDialogueCharacters(body, locale, getQuotePair(this.plugin.settings.quoteStyle));
             totalDlg += dlg;
             totalAll += total;
             const k = scene.act !== undefined ? getActDisplayLabel(scene.act) : 'No Act';

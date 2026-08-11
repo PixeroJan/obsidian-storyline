@@ -47,6 +47,10 @@ interface LocationBase {
      * belongs to a series.
      */
     books?: string[];
+    /** Stable book UUIDs parallel to books; preferred for series filtering. */
+    booksById?: string[];
+    /** Persistent manual order within Codex overviews. */
+    sortOrder?: number;
 
     // ── Linking & Matching (Issue #228) ───────────────
     /** Optional sub-type badge (e.g. "City", "Stronghold"). */
@@ -295,6 +299,7 @@ export const WORLD_FIELD_KEYS: (keyof StoryWorld)[] = [
     'name', 'image', 'gallery', 'nickname', 'description', 'geography', 'culture', 'politics',
     'magicTechnology', 'beliefs', 'economy', 'history',
     'books',
+    'booksById', 'sortOrder',
     'entryType', 'caseSensitive', 'excludeTerms',
 ];
 
@@ -303,6 +308,7 @@ export const LOCATION_FIELD_KEYS: (keyof StoryLocation)[] = [
     'name', 'image', 'gallery', 'nickname', 'locationType', 'world', 'parent', 'description',
     'atmosphere', 'significance', 'inhabitants', 'connectedLocations', 'mapNotes',
     'books',
+    'booksById', 'sortOrder',
     'entryType', 'caseSensitive', 'excludeTerms',
 ];
 /* eslint-enable @typescript-eslint/no-redundant-type-constituents -- end of file-wide suppression block opened at line 1 */

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { ItemView, WorkspaceLeaf, Menu, Notice, TFile, Modal, Setting, MarkdownRenderer } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Menu, Notice, TFile, Modal, Setting, MarkdownRenderer, normalizePath } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { Scene, SceneFilter, SortConfig, BoardGroupBy, SceneStatus, SceneTemplate, BUILTIN_BEAT_SHEETS, getStatusOrder, getStatusConfig, resolveStatusCfg } from '../models/Scene';
 import { openConfirmModal } from '../components/ConfirmModal';
@@ -44,6 +44,7 @@ export class BoardView extends ItemView {
     private _pendingRefresh: number | null = null;
     private boardMode: BoardMode = 'corkboard';
     private corkboardPositions: Map<string, { x: number; y: number; z: number; h?: number }> = new Map();
+    private corkboardPositionAliases: Map<string, Set<string>> = new Map();
     private corkboardJustDragged: Set<string> = new Set();
     private corkboardPersistTimer: number | null = null;
     private corkboardLoadedProjectFile: string | null = null;
@@ -558,7 +559,7 @@ export class BoardView extends ItemView {
 
         scenes.forEach((scene, index) => {
           try {
-            const existing = this.corkboardPositions.get(scene.filePath);
+            const existing = this.getCorkboardPosition(scene.filePath);
             const col = index % 4;
             const row = Math.floor(index / 4);
             const pos = existing || {
@@ -567,11 +568,11 @@ export class BoardView extends ItemView {
                 z: currentMaxZ() + 1,
             };
             if (!existing) {
-                this.corkboardPositions.set(scene.filePath, pos);
+                this.setCorkboardPosition(scene.filePath, pos);
                 if (this._corkboardProjectLoaded) this.schedulePersistCorkboardLayout();
             } else if (!Number.isFinite(existing.z)) {
                 pos.z = currentMaxZ() + 1;
-                this.corkboardPositions.set(scene.filePath, pos);
+                this.setCorkboardPosition(scene.filePath, pos);
                 if (this._corkboardProjectLoaded) this.schedulePersistCorkboardLayout();
             }
 
@@ -900,7 +901,7 @@ export class BoardView extends ItemView {
                 window.removeEventListener('pointerup', onUp);
                 const finalHeight = parseFloat(cardEl.style.height);
                 if (finalHeight > 0) {
-                    const pos = this.corkboardPositions.get(scene.filePath);
+                    const pos = this.getCorkboardPosition(scene.filePath);
                     if (pos) {
                         pos.h = finalHeight;
                         this.schedulePersistCorkboardLayout();
@@ -918,10 +919,10 @@ export class BoardView extends ItemView {
         const newPath = await this.sceneManager.moveNoteToSceneFolder(oldPath);
         // Update corkboard position key if the file moved
         if (newPath !== oldPath) {
-            const pos = this.corkboardPositions.get(oldPath);
+            const pos = this.getCorkboardPosition(oldPath);
             if (pos) {
-                this.corkboardPositions.delete(oldPath);
-                this.corkboardPositions.set(newPath, pos);
+                this.deleteCorkboardPosition(oldPath);
+                this.setCorkboardPosition(newPath, pos);
                 this.schedulePersistCorkboardLayout();
             }
         }
@@ -943,11 +944,11 @@ export class BoardView extends ItemView {
         });
 
         // Position the duplicate offset from the original
-        const origPos = this.corkboardPositions.get(scene.filePath);
+        const origPos = this.getCorkboardPosition(scene.filePath);
         const pos = origPos
             ? { x: origPos.x + 30, y: origPos.y + 30, z: this.getCurrentMaxCorkboardZ() + 1 }
             : this.getNextQuickNotePosition();
-        this.corkboardPositions.set(file.path, pos);
+        this.setCorkboardPosition(file.path, pos);
         this.schedulePersistCorkboardLayout();
 
         this.refreshBoard();
@@ -981,8 +982,8 @@ export class BoardView extends ItemView {
                 left: `${pendingX}px`,
                 top: `${pendingY}px`,
             });
-            const current = this.corkboardPositions.get(scenePath);
-            this.corkboardPositions.set(scenePath, { x: pendingX, y: pendingY, z: current?.z ?? 1 });
+            const current = this.getCorkboardPosition(scenePath);
+            this.setCorkboardPosition(scenePath, { x: pendingX, y: pendingY, z: current?.z ?? 1 });
         };
 
         const onPointerMove = (e: PointerEvent) => {
@@ -1057,7 +1058,7 @@ export class BoardView extends ItemView {
             startClientX = e.clientX;
             startClientY = e.clientY;
 
-            const pos = this.corkboardPositions.get(scenePath) || {
+            const pos = this.getCorkboardPosition(scenePath) || {
                 x: parseFloat(node.style.left || '0') || 0,
                 y: parseFloat(node.style.top || '0') || 0,
                 z: Number.parseInt(node.style.zIndex || '1', 10) || 1,
@@ -1419,17 +1420,76 @@ export class BoardView extends ItemView {
 
         this.corkboardLoadedProjectFile = projectPath;
         this.corkboardPositions.clear();
+        this.corkboardPositionAliases.clear();
         this._corkboardProjectLoaded = !!projectPath;
 
         const saved = this.sceneManager.getCorkboardPositions();
+        const selected = new Map<string, { priority: number; pos: { x: number; y: number; z: number; h?: number } }>();
         for (const [path, pos] of Object.entries(saved)) {
             const x = Number(pos?.x);
             const y = Number(pos?.y);
             const z = Number(pos?.z);
             if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
             const h = Number(pos?.h);
-            this.corkboardPositions.set(path, { x, y, z: Number.isFinite(z) ? z : 1, ...(Number.isFinite(h) && h > 0 ? { h } : {}) });
+            const entry = { x, y, z: Number.isFinite(z) ? z : 1, ...(Number.isFinite(h) && h > 0 ? { h } : {}) };
+            const resolved = this.resolveCorkboardPath(path);
+            const aliases = this.corkboardPositionAliases.get(resolved.path) ?? new Set<string>();
+            aliases.add(path);
+            this.corkboardPositionAliases.set(resolved.path, aliases);
+            const previous = selected.get(resolved.path);
+            if (!previous || resolved.priority < previous.priority) {
+                selected.set(resolved.path, { priority: resolved.priority, pos: entry });
+            }
         }
+        for (const [path, value] of selected) {
+            this.corkboardPositions.set(path, value.pos);
+        }
+    }
+
+    /** Resolve full-vault, project-relative, and legacy board path keys. */
+    private resolveCorkboardPath(path: string): { path: string; priority: number } {
+        const normalized = normalizePath(path);
+        const project = this.sceneManager.activeProject;
+        const base = project?.sceneFolder.replace(/\/Scenes\/?$/, '') ?? '';
+        if (!base) return { path: normalized, priority: 2 };
+
+        const baseName = base.split('/').pop() ?? '';
+        const baseParent = base.includes('/') ? base.slice(0, base.lastIndexOf('/')) : '';
+        const basePrefix = `${base}/`;
+        const duplicatedBasePrefix = `${baseName}/${base}/`;
+
+        if (normalized.startsWith('Notes/') || normalized.startsWith('Scenes/') || normalized.startsWith('Archive/')) {
+            return { path: normalizePath(`${base}/${normalized}`), priority: 1 };
+        }
+        if (normalized.startsWith(basePrefix)) {
+            return { path: normalized, priority: 2 };
+        }
+        if (normalized.startsWith(duplicatedBasePrefix)) {
+            return { path: normalizePath(normalized.slice(baseName.length + 1)), priority: 2 };
+        }
+        if (normalized.startsWith(`${baseName}/`) && baseParent) {
+            return { path: normalizePath(`${baseParent}/${normalized}`), priority: 0 };
+        }
+        return { path: normalized, priority: 2 };
+    }
+
+    private getCorkboardPosition(path: string): { x: number; y: number; z: number; h?: number } | undefined {
+        return this.corkboardPositions.get(this.resolveCorkboardPath(path).path);
+    }
+
+    private setCorkboardPosition(path: string, position: { x: number; y: number; z: number; h?: number }): void {
+        const normalized = normalizePath(path);
+        const resolved = this.resolveCorkboardPath(normalized).path;
+        this.corkboardPositions.set(resolved, position);
+        const aliases = this.corkboardPositionAliases.get(resolved) ?? new Set<string>();
+        aliases.add(normalized);
+        this.corkboardPositionAliases.set(resolved, aliases);
+    }
+
+    private deleteCorkboardPosition(path: string): void {
+        const resolved = this.resolveCorkboardPath(path).path;
+        this.corkboardPositions.delete(resolved);
+        this.corkboardPositionAliases.delete(resolved);
     }
 
     private schedulePersistCorkboardLayout(): void {
@@ -1445,7 +1505,11 @@ export class BoardView extends ItemView {
     private async persistCorkboardLayout(): Promise<void> {
         const payload: Record<string, { x: number; y: number; z?: number; h?: number }> = {};
         for (const [path, pos] of this.corkboardPositions.entries()) {
-            payload[path] = { x: pos.x, y: pos.y, z: pos.z, ...(pos.h ? { h: pos.h } : {}) };
+            const serialized = { x: pos.x, y: pos.y, z: pos.z, ...(pos.h ? { h: pos.h } : {}) };
+            payload[path] = serialized;
+            for (const alias of this.corkboardPositionAliases.get(path) ?? []) {
+                payload[alias] = serialized;
+            }
         }
         await this.sceneManager.setCorkboardPositions(payload);
         this.plugin.viewSnapshotService.scheduleAutoSave();
@@ -1570,14 +1634,15 @@ export class BoardView extends ItemView {
     }
 
     private moveCorkboardLayer(scenePath: string, direction: 'top' | 'up' | 'down' | 'bottom'): void {
-        const target = this.corkboardPositions.get(scenePath);
+        const layoutPath = this.resolveCorkboardPath(scenePath).path;
+        const target = this.getCorkboardPosition(scenePath);
         if (!target) return;
 
         const entries = Array.from(this.corkboardPositions.entries());
         if (entries.length < 2) return;
 
         entries.sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0));
-        const index = entries.findIndex(([path]) => path === scenePath);
+        const index = entries.findIndex(([path]) => path === layoutPath);
         if (index < 0) return;
 
         if (direction === 'top' && index < entries.length - 1) {
@@ -3565,7 +3630,7 @@ export class BoardView extends ItemView {
         });
 
         const pos = this.getNextQuickNotePosition();
-        this.corkboardPositions.set(file.path, pos);
+        this.setCorkboardPosition(file.path, pos);
         this.schedulePersistCorkboardLayout();
 
         this.refreshBoard();
@@ -3676,7 +3741,7 @@ export class BoardView extends ItemView {
                 window.removeEventListener('pointerup', onUp);
                 const finalHeight = parseFloat(cardEl.style.height);
                 if (finalHeight > 0) {
-                    const pos = this.corkboardPositions.get(scene.filePath);
+                    const pos = this.getCorkboardPosition(scene.filePath);
                     if (pos) {
                         pos.h = finalHeight;
                         this.schedulePersistCorkboardLayout();
@@ -3812,7 +3877,7 @@ export class BoardView extends ItemView {
         });
 
         const pos = this.getNextQuickNotePosition();
-        this.corkboardPositions.set(file.path, pos);
+        this.setCorkboardPosition(file.path, pos);
         this.schedulePersistCorkboardLayout();
         this.refreshBoard();
     }
@@ -3843,7 +3908,7 @@ export class BoardView extends ItemView {
             corkboardNoteImage: imagePath,
         });
 
-        this.corkboardPositions.set(file.path, {
+        this.setCorkboardPosition(file.path, {
             x: worldX,
             y: worldY,
             z: this.getCurrentMaxCorkboardZ() + 1,

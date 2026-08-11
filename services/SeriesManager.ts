@@ -41,7 +41,9 @@ export class SeriesManager {
             if (!data.name || !Array.isArray(data.bookOrder)) return null;
             return {
                 name: data.name,
+                seriesUuid: typeof data.seriesUuid === 'string' ? data.seriesUuid : undefined,
                 bookOrder: data.bookOrder,
+                bookIds: Array.isArray(data.bookIds) ? data.bookIds : undefined,
                 created: data.created || '',
             };
         } catch {
@@ -72,6 +74,61 @@ export class SeriesManager {
         const folder = this.getActiveSeriesFolder();
         if (!folder) return null;
         return this.loadSeriesMetadata(folder);
+    }
+
+    /**
+     * Idempotently upgrade an existing series while a project is scanned.
+     * Legacy folder-name fields remain populated for the old plugin contract.
+     */
+    async ensureProjectSeriesIdentity(project: import('../models/StoryLineProject').StoryLineProject): Promise<void> {
+        if (!project.seriesId && !project.seriesUuid) return;
+        const baseFolder = deriveProjectFoldersFromFilePath(project.filePath).baseFolder;
+        const seriesFolder = baseFolder.substring(0, baseFolder.lastIndexOf('/'));
+        const meta = await this.loadSeriesMetadata(seriesFolder);
+        if (!meta || !project.bookId) return;
+
+        let metadataChanged = false;
+        if (!meta.seriesUuid) {
+            meta.seriesUuid = crypto.randomUUID();
+            metadataChanged = true;
+        }
+        if (!meta.bookIds) meta.bookIds = [];
+        if (!meta.bookIds.includes(project.bookId)) {
+            meta.bookIds.push(project.bookId);
+            metadataChanged = true;
+        }
+        if (metadataChanged) await this.saveSeriesMetadata(seriesFolder, meta);
+
+        let projectChanged = false;
+        if (project.seriesUuid !== meta.seriesUuid) {
+            project.seriesUuid = meta.seriesUuid;
+            projectChanged = true;
+        }
+        if (!project.seriesId) {
+            project.seriesId = seriesFolder.split('/').pop() ?? '';
+            projectChanged = true;
+        }
+        if (projectChanged) await this.plugin.sceneManager.saveProjectFrontmatter(project);
+    }
+
+    /**
+     * Recover series membership for pre-UUID projects whose frontmatter did
+     * not contain seriesId. The old series layout records the book folder in
+     * series.json, so require that explicit bookOrder match before inferring.
+     */
+    async inferLegacyProjectSeries(project: import('../models/StoryLineProject').StoryLineProject): Promise<void> {
+        if (project.seriesId || project.seriesUuid) return;
+
+        const baseFolder = deriveProjectFoldersFromFilePath(project.filePath).baseFolder;
+        const separator = baseFolder.lastIndexOf('/');
+        if (separator < 0) return;
+
+        const seriesFolder = baseFolder.substring(0, separator);
+        const bookFolderName = baseFolder.substring(separator + 1);
+        const meta = await this.loadSeriesMetadata(seriesFolder);
+        if (!meta || !meta.bookOrder.some(book => book.toLowerCase() === bookFolderName.toLowerCase())) return;
+
+        project.seriesId = seriesFolder.split('/').pop() ?? '';
     }
 
     // ── Create ─────────────────────────────────────────
@@ -149,9 +206,14 @@ export class SeriesManager {
 
         // Write series.json
         const now = new Date().toISOString().split('T')[0];
+        const seriesUuid = crypto.randomUUID();
+        const bookId = project.bookId ?? crypto.randomUUID();
+        project.bookId = bookId;
         const meta: SeriesMetadata = {
             name: seriesName,
+            seriesUuid,
             bookOrder: [bookBaseName],
+            bookIds: [bookId],
             created: now,
         };
         await this.saveSeriesMetadata(seriesFolder, meta);
@@ -163,6 +225,8 @@ export class SeriesManager {
             .find(p => normalizePath(p.filePath) === newProjectFile);
         if (updatedProject) {
             updatedProject.seriesId = safeName;
+            updatedProject.seriesUuid = seriesUuid;
+            updatedProject.bookId = bookId;
             await this.plugin.sceneManager.setActiveProject(updatedProject);
             await this.plugin.sceneManager.saveProjectFrontmatter(updatedProject);
         }
@@ -225,9 +289,15 @@ export class SeriesManager {
 
         // Update series.json
         const safeName = seriesFolder.split('/').pop() ?? '';
+        const seriesUuid = meta.seriesUuid ?? crypto.randomUUID();
+        meta.seriesUuid = seriesUuid;
+        const bookId = project.bookId ?? crypto.randomUUID();
+        project.bookId = bookId;
         if (!meta.bookOrder.includes(bookBaseName)) {
             meta.bookOrder.push(bookBaseName);
         }
+        meta.bookIds = meta.bookIds ?? [];
+        if (!meta.bookIds.includes(bookId)) meta.bookIds.push(bookId);
         await this.saveSeriesMetadata(seriesFolder, meta);
 
         // Re-scan and set active with seriesId
@@ -237,6 +307,8 @@ export class SeriesManager {
             .find(p => normalizePath(p.filePath) === newProjectFile);
         if (updatedProject) {
             updatedProject.seriesId = safeName;
+            updatedProject.seriesUuid = seriesUuid;
+            updatedProject.bookId = bookId;
             await this.plugin.sceneManager.setActiveProject(updatedProject);
             await this.plugin.sceneManager.saveProjectFrontmatter(updatedProject);
         }
@@ -252,7 +324,7 @@ export class SeriesManager {
      */
     async removeProjectFromSeries(): Promise<void> {
         const project = this.plugin.sceneManager.activeProject;
-        if (!project?.seriesId) throw new Error('Project is not in a series');
+        if (!project?.seriesId && !project?.seriesUuid) throw new Error('Project is not in a series');
 
         const seriesFolder = this.plugin.sceneManager.getSeriesFolder();
         if (!seriesFolder) throw new Error('Cannot determine series folder');
@@ -278,6 +350,9 @@ export class SeriesManager {
 
         // Update series.json
         meta.bookOrder = meta.bookOrder.filter(b => b !== bookBaseName);
+        if (project.bookId && meta.bookIds) {
+            meta.bookIds = meta.bookIds.filter(id => id !== project.bookId);
+        }
         await this.saveSeriesMetadata(seriesFolder, meta);
 
         // Re-scan and clear seriesId
@@ -287,11 +362,20 @@ export class SeriesManager {
             .find(p => normalizePath(p.filePath) === newProjectFile);
         if (updatedProject) {
             delete updatedProject.seriesId;
+            delete updatedProject.seriesUuid;
             await this.plugin.sceneManager.setActiveProject(updatedProject);
             await this.plugin.sceneManager.saveProjectFrontmatter(updatedProject);
         }
 
         new Notice(`Project removed from series "${meta.name}"`);
+    }
+
+    /** Rename only the display name in series.json; folder identity is unchanged. */
+    async renameSeriesName(seriesFolder: string, newName: string): Promise<void> {
+        const meta = await this.loadSeriesMetadata(seriesFolder);
+        if (!meta) throw new Error('Invalid series folder — no series.json found');
+        meta.name = newName.trim();
+        await this.saveSeriesMetadata(seriesFolder, meta);
     }
 
     // ── Scan for series folders ────────────────────────

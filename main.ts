@@ -61,6 +61,8 @@ import { FieldTemplateService } from './services/FieldTemplateService';
 import { SeriesManager } from './services/SeriesManager';
 import { buildFormattingToolbar } from './components/FormattingToolbar';
 import { setupMobileKeyboardHandling } from './components/MobileAdapter';
+import { EditorView } from '@codemirror/view';
+import { getQuotePair } from './utils/locale';
 
 /**
  * StoryLine Plugin for Obsidian
@@ -100,6 +102,22 @@ export default class SceneCardsPlugin extends Plugin {
         await this.loadSettings();
         registerCustomStatuses(this.settings.customStatuses || []);
         this.applyImageSizingVariables();
+
+        // Convert only newly typed ASCII double quotes in Obsidian's editor.
+        // Paste and existing text use their original characters.
+        this.registerEditorExtension(EditorView.domEventHandlers({
+            beforeinput: (event, view) => {
+                if (event.inputType !== 'insertText' || event.data !== '"') return false;
+                const position = view.state.selection.main.head;
+                const line = view.state.doc.lineAt(position);
+                const previous = position > line.from ? view.state.sliceDoc(position - 1, position) : '';
+                const openingContext = position === line.from || !previous || /[\s([\]{}—–-]/.test(previous);
+                const [open, close] = getQuotePair(this.settings.quoteStyle);
+                view.dispatch(view.state.replaceSelection(open === close || openingContext ? open : close));
+                event.preventDefault();
+                return true;
+            },
+        }));
 
         // Issue #189 — disable native spell-check in all StoryLine UI inputs,
         // textareas and contenteditables. Obsidian's "Disable spell check" only
@@ -516,7 +534,7 @@ export default class SceneCardsPlugin extends Plugin {
             name: 'Remove current project from series',
             callback: async () => {
                 const project = this.sceneManager.activeProject;
-                if (!project?.seriesId) {
+                if (!project?.seriesId && !project?.seriesUuid) {
                     new Notice('This project is not part of a series.');
                     return;
                 }
@@ -2882,7 +2900,7 @@ export default class SceneCardsPlugin extends Plugin {
         list.createEl('li', { text: 'All characters, locations and codex entries' });
         list.createEl('li', { text: 'All notes, research and archive items' });
         list.createEl('li', { text: 'Project settings and view data' });
-        if (activeProject.seriesId) {
+        if (activeProject.seriesId || activeProject.seriesUuid) {
             list.createEl('li', { text: 'The book will also be removed from its series.' });
         }
         warningEl.createEl('p', {
@@ -2938,7 +2956,7 @@ export default class SceneCardsPlugin extends Plugin {
             new Notice('No active project');
             return;
         }
-        if (project.seriesId) {
+        if (project.seriesId || project.seriesUuid) {
             new Notice('This project is already part of a series.');
             return;
         }
@@ -2982,7 +3000,7 @@ export default class SceneCardsPlugin extends Plugin {
             new Notice('No active project');
             return;
         }
-        if (project.seriesId) {
+        if (project.seriesId || project.seriesUuid) {
             new Notice('This project is already part of a series.');
             return;
         }
@@ -3090,7 +3108,7 @@ class ProjectSwitcherModal extends FuzzySuggestModal<StoryLineProject> {
     }
 
     getItemText(project: StoryLineProject): string {
-        return project.title + (project.seriesId ? ` [${project.seriesId}]` : '');
+        return project.title + (project.seriesId || project.seriesUuid ? ` [${project.seriesId ?? project.seriesUuid}]` : '');
     }
 
     onChooseItem(project: StoryLineProject): void {
@@ -3370,7 +3388,12 @@ class SeriesManagementModal extends Modal {
                 const row = bookList.createDiv({ cls: 'sl-series-book-row' });
 
 
-                row.createSpan({ cls: 'sl-series-book-name', text: bookName });
+                const bookProject = this.plugin.sceneManager.getProjects().find(p => {
+                    const fp = normalizePath(p.filePath);
+                    return fp.startsWith(normalizePath(folder) + '/')
+                        && (p.title === bookName || fp.split('/').slice(-2, -1)[0] === bookName);
+                });
+                row.createSpan({ cls: 'sl-series-book-name', text: bookProject?.title ?? bookName });
 
                 const bookActions = row.createDiv({ cls: 'sl-series-book-actions' });
 
@@ -3419,7 +3442,7 @@ class SeriesManagementModal extends Modal {
 
         new Setting(modal.contentEl)
             .setName('Series name')
-            .setDesc('The series folder will also be renamed. All links are updated automatically.')
+            .setDesc('Updates the series display name in series.json only. The folder identity stays unchanged.')
             .addText((text: TextComponent) => {
                 text.setValue(meta.name);
                 text.onChange((v: string) => (newName = v));
@@ -3434,34 +3457,7 @@ class SeriesManagementModal extends Modal {
                         return;
                     }
                     try {
-                        // Pre-flight: ensure auto-update links is on
-                        this.plugin.seriesManager.checkLinkSettings();
-
-                        const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '-');
-                        const parentPath = folder.substring(0, folder.lastIndexOf('/'));
-                        const newFolder = normalizePath(`${parentPath}/${safeName}`);
-
-                        // Rename folder on disk (updates all vault links)
-                        if (normalizePath(folder) !== newFolder) {
-                            const folderFile = this.app.vault.getAbstractFileByPath(folder);
-                            if (folderFile) {
-                                await this.app.fileManager.renameFile(folderFile, newFolder);
-                            }
-                        }
-
-                        // Update series.json with new name
-                        meta.name = newName.trim();
-                        await this.plugin.seriesManager.saveSeriesMetadata(newFolder, meta);
-
-                        // Update seriesId on all books inside the (now renamed) folder
-                        await this.plugin.sceneManager.scanProjects();
-                        const projects = this.plugin.sceneManager.getProjects();
-                        for (const p of projects) {
-                            if (normalizePath(p.filePath).startsWith(normalizePath(newFolder) + '/')) {
-                                p.seriesId = safeName;
-                                await this.plugin.sceneManager.saveProjectFrontmatter(p);
-                            }
-                        }
+                        await this.plugin.seriesManager.renameSeriesName(folder, newName.trim());
 
                         new Notice(`Series renamed to "${newName.trim()}"`);
                         modal.close();
@@ -3488,7 +3484,8 @@ class SeriesManagementModal extends Modal {
         const projects = this.plugin.sceneManager.getProjects();
         const bookProject = projects.find(p => {
             const fp = normalizePath(p.filePath);
-            return fp.startsWith(normalizePath(folder) + '/') && p.title === bookName;
+            return fp.startsWith(normalizePath(folder) + '/')
+                && (p.title === bookName || fp.split('/').slice(-2, -1)[0] === bookName);
         });
 
         if (!bookProject) {
@@ -3536,7 +3533,8 @@ class SeriesManagementModal extends Modal {
         const projects = this.plugin.sceneManager.getProjects();
         const bookProject = projects.find(p => {
             const fp = normalizePath(p.filePath);
-            return fp.startsWith(normalizePath(folder) + '/') && p.title === bookName;
+            return fp.startsWith(normalizePath(folder) + '/')
+                && (p.title === bookName || fp.split('/').slice(-2, -1)[0] === bookName);
         });
 
         if (!bookProject) {
@@ -3603,7 +3601,8 @@ class SeriesManagementModal extends Modal {
         const projects = this.plugin.sceneManager.getProjects();
         const bookProject = projects.find(p => {
             const fp = normalizePath(p.filePath);
-            return fp.startsWith(normalizePath(folder) + '/') && p.title === bookName;
+            return fp.startsWith(normalizePath(folder) + '/')
+                && (p.title === bookName || fp.split('/').slice(-2, -1)[0] === bookName);
         });
 
         if (!bookProject) {
@@ -3617,7 +3616,7 @@ class SeriesManagementModal extends Modal {
 
         new Setting(modal.contentEl)
             .setName('New title')
-            .setDesc('The book folder and project file will be renamed. All links are updated automatically.')
+            .setDesc('Updates the book display title only. The folder and file identity stay unchanged.')
             .addText((text: TextComponent) => {
                 text.setValue(bookProject.title);
                 text.onChange((v: string) => (newTitle = v));
@@ -3632,7 +3631,6 @@ class SeriesManagementModal extends Modal {
                         return;
                     }
                     try {
-                        this.plugin.seriesManager.checkLinkSettings();
                         await this.plugin.sceneManager.renameProject(bookProject, newTitle.trim());
                         new Notice(`Book renamed to "${newTitle.trim()}"`);
                         modal.close();
@@ -3649,7 +3647,7 @@ class SeriesManagementModal extends Modal {
 
     private async addBookToSeries(folder: string, meta: SeriesMetadata) {
         // Show a dropdown of projects not already in any series
-        const projects = this.plugin.sceneManager.getProjects().filter(p => !p.seriesId);
+        const projects = this.plugin.sceneManager.getProjects().filter(p => !p.seriesId && !p.seriesUuid);
 
         if (projects.length === 0) {
             new Notice('No standalone projects found to add. Create a new project first.');

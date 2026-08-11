@@ -6,6 +6,22 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.56
+
+### New Features
+
+- **Stable book and series identities** — New projects receive UUID-based book identities, while series metadata now supports stable UUIDs and ordered book IDs alongside the existing folder-name fields. Existing projects and series are upgraded automatically without breaking legacy metadata or links.
+- **Quotation mark styles** — Added configurable quotation mark styles for dialogue input and dialogue statistics, including straight quotes, curly quotes, guillemets, and corner brackets.
+- **Manual Codex sorting** — Characters and locations can be manually ordered with persistent drag-and-drop sorting. Location hierarchy and reparenting remain supported.
+
+### Bug Fixes
+
+- **Legacy series membership recovery** — Older books nested inside a series folder are recovered from a validated `series.json` `bookOrder` entry even when their frontmatter lacks a series identifier.
+- **Book renames no longer move files** — Renaming a book changes its display title only; its folder, filename, and existing links remain unchanged.
+- **Series display-name renames are non-destructive** — Renaming a series updates its metadata name without renaming the folder or cascading changes through its books.
+- **Location hierarchy duplicates** — Locations with unresolved or legacy parent references no longer render as duplicate roots or orphan entries.
+- **Scene notes refresh correctly** — Scene note folders are created when needed, and open StoryLine views refresh after notes are written.
+
 ## Version 1.10.55
 
 ### Bug Fixes
@@ -236,7 +252,7 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 - **Scene separators in manuscript exports** — you can now insert a separator between scenes when exporting a manuscript to Markdown, Word, PDF, or HTML. Choose between a **Blank Line** (default, unchanged behaviour), **`* * *`** (centered asterisks), or a **Custom Separator** (any UTF-8 text, e.g. `~ ~ ~`). The setting lives in **Settings → Export & Import → Scene separator** and is also exposed per-export in the Export modal so you can override it without changing the global default. Separators are skipped at act and chapter boundaries, where a heading already provides visual separation. *(PR #174 by @spv2008, with adjustments.)*
 
   Implementation notes:
-  - **Markdown exports emit plain text** (`* * *` or the custom string) rather than an HTML `<div>`, so the exported `.md` file stays portable for Scribe and other markdown consumers.
+  - **Markdown exports emit plain text** (`* * *` or the custom string) rather than an HTML `<div>`, so the exported `.md` file stays portable across markdown consumers.
   - **HTML/PDF exports** wrap the separator in a styled `<div class="scene-separator">` (centered, 1.5em vertical margin).
   - **Word exports** render the separator as a centered paragraph with 240tw spacing before/after.
   - The original regex-based `decodeHtmlEntities` in `DocxConverter` is retained (the PR's `DOMParser` replacement was reverted for portability).

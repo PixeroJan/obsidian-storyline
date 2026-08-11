@@ -365,6 +365,8 @@ export class CharacterManager {
             habits: safeFm.habits,
             props: safeFm.props,
             books: this.parseStringList(safeFm.books),
+            booksById: this.parseStringList(safeFm.booksById),
+            sortOrder: Number.isFinite(Number(safeFm.sortOrder)) ? Number(safeFm.sortOrder) : undefined,
             // ── Linking & Matching (Issue #228 round-trip fix) ──
             // These were written by saveCharacter (via CHARACTER_FIELD_KEYS)
             // but never read back, so the UI reverted to defaults on reload.

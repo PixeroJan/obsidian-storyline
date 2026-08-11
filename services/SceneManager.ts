@@ -140,7 +140,7 @@ export class SceneManager implements ISceneStore {
 
     /** Computed character folder for the active project (series-aware) */
     getCharacterFolder(): string {
-        if (this._activeProject?.seriesId) {
+        if (this._activeProject?.seriesId || this._activeProject?.seriesUuid) {
             return normalizePath(`${this.getSeriesCodexFolder()}/Characters`);
         }
         if (this._activeProject) return this._activeProject.characterFolder;
@@ -150,7 +150,7 @@ export class SceneManager implements ISceneStore {
 
     /** Computed location folder for the active project (series-aware) */
     getLocationFolder(): string {
-        if (this._activeProject?.seriesId) {
+        if (this._activeProject?.seriesId || this._activeProject?.seriesUuid) {
             return normalizePath(`${this.getSeriesCodexFolder()}/Locations`);
         }
         if (this._activeProject) return this._activeProject.locationFolder;
@@ -160,7 +160,7 @@ export class SceneManager implements ISceneStore {
 
     /** Computed codex folder for the active project (series-aware) */
     getCodexFolder(): string {
-        if (this._activeProject?.seriesId) {
+        if (this._activeProject?.seriesId || this._activeProject?.seriesUuid) {
             return this.getSeriesCodexFolder();
         }
         if (this._activeProject) return this._activeProject.codexFolder;
@@ -207,7 +207,7 @@ export class SceneManager implements ISceneStore {
      * Only meaningful when the active project has a seriesId.
      */
     getSeriesFolder(): string | null {
-        if (this._activeProject?.seriesId) {
+        if (this._activeProject?.seriesId || this._activeProject?.seriesUuid) {
             const base = deriveProjectFoldersFromFilePath(this._activeProject.filePath).baseFolder;
             return base.substring(0, base.lastIndexOf('/'));
         }
@@ -243,6 +243,11 @@ export class SceneManager implements ISceneStore {
         return this._activeProject?.title ?? null;
     }
 
+    /** Stable UUID used by Scribe and preferred for cross-book membership. */
+    getCurrentBookId(): string | null {
+        return this._activeProject?.bookId ?? null;
+    }
+
     /**
      * Scan the StoryLine root folder for project .md files
      * (files with `type: storyline` in frontmatter).
@@ -268,6 +273,11 @@ export class SceneManager implements ISceneStore {
                 const content = await adapter.read(filePath);
                 const project = this.parseProjectContent(content, filePath);
                 if (project) {
+                    await this.ensureBookId(project, content);
+                    if (this.plugin.seriesManager) {
+                        await this.plugin.seriesManager.inferLegacyProjectSeries(project);
+                        await this.plugin.seriesManager.ensureProjectSeriesIdentity(project);
+                    }
                     await this.detectLegacyFolders(project);
                     this.projects.set(filePath, project);
                 }
@@ -332,6 +342,11 @@ export class SceneManager implements ISceneStore {
                     const content = await this.app.vault.adapter.read(savedPath);
                     const project = this.parseProjectContent(content, savedPath);
                     if (project) {
+                        await this.ensureBookId(project, content);
+                        if (this.plugin.seriesManager) {
+                            await this.plugin.seriesManager.inferLegacyProjectSeries(project);
+                            await this.plugin.seriesManager.ensureProjectSeriesIdentity(project);
+                        }
                         await this.detectLegacyFolders(project);
                         this.projects.set(savedPath, project);
                     }
@@ -405,6 +420,7 @@ export class SceneManager implements ISceneStore {
             title,
             created: now,
             language: projectLocale,
+            bookId: crypto.randomUUID(),
         };
         const content = `---\n${stringifyYaml(frontmatter)}---\n${description}\n`;
 
@@ -421,6 +437,7 @@ export class SceneManager implements ISceneStore {
             await this.ensureFolder(folders.characterFolder);
             await this.ensureFolder(folders.locationFolder);
             await this.ensureFolder(folders.notesFolder);
+            await this.ensureFolder(folders.sceneNotesFolder);
             await this.ensureFolder(folders.archiveFolder);
             await this.ensureFolder(folders.researchFolder);
 
@@ -453,6 +470,7 @@ export class SceneManager implements ISceneStore {
                 filePath,
                 title,
                 created: now,
+                bookId: frontmatter.bookId as string,
                 description,
                 locale: projectLocale,
                 ...folders,
@@ -505,12 +523,19 @@ export class SceneManager implements ISceneStore {
         }
     }
 
-    /**
-     * Rename a project: renames the .md file, the project folder, updates
-     * frontmatter title, and series.json bookOrder if applicable.
-     * Uses fileManager.renameFile() so all vault links stay valid.
-     */
+    /** Rename a project's display title without moving its folder or file. */
     async renameProject(project: StoryLineProject, newTitle: string): Promise<StoryLineProject> {
+        project.title = newTitle.trim();
+        await this.saveProjectFrontmatter(project);
+        if (this._activeProject?.filePath === project.filePath) {
+            this._activeProject = project;
+            await this.plugin.saveSettings();
+        }
+        return project;
+    }
+
+    /** Explicit legacy folder/file rename operation, kept separate from title rename. */
+    async renameProjectFolder(project: StoryLineProject, newTitle: string): Promise<StoryLineProject> {
         const safeName = newTitle.replace(/[\\/:*?"<>|]/g, '-');
         const folders = deriveProjectFoldersFromFilePath(project.filePath);
         const oldBaseFolder = folders.baseFolder;
@@ -560,7 +585,7 @@ export class SceneManager implements ISceneStore {
         }
 
         // If in a series, update bookOrder in series.json
-        if (project.seriesId) {
+        if (project.seriesId || project.seriesUuid) {
             const seriesFolder = this.getSeriesFolder();
             if (seriesFolder) {
                 const meta = await this.plugin.seriesManager.loadSeriesMetadata(seriesFolder);
@@ -601,7 +626,7 @@ export class SceneManager implements ISceneStore {
         const baseFolder = normalizePath(folders.baseFolder);
 
         // ── Remove from series metadata (if applicable) ──────────────
-        if (project.seriesId) {
+        if (project.seriesId || project.seriesUuid) {
             // Series folder is the parent of the book's base folder.
             const seriesFolder = baseFolder.substring(0, baseFolder.lastIndexOf('/'));
             const meta = await this.plugin.seriesManager.loadSeriesMetadata(seriesFolder);
@@ -738,11 +763,35 @@ export class SceneManager implements ISceneStore {
                 filterPresets: Array.isArray(fm.filterPresets) ? fm.filterPresets : [],
                 corkboardPositions: {},
                 seriesId: fm.seriesId || undefined,
+                bookId: typeof fm.bookId === 'string' ? fm.bookId : undefined,
+                seriesUuid: typeof fm.seriesUuid === 'string' ? fm.seriesUuid : undefined,
                 coverImage: fm.coverImage || undefined,
                 activeBeatSheet: fm.activeBeatSheet || undefined,
             };
         } catch {
             return null;
+        }
+    }
+
+    /** Assign the additive Scribe book identity to legacy projects on first scan. */
+    private async ensureBookId(project: StoryLineProject, content: string): Promise<void> {
+        if (project.bookId) return;
+        project.bookId = crypto.randomUUID();
+        const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+        if (!fmMatch) return;
+        try {
+            const existingFm = (parseYaml(fmMatch[1]) || {}) as Record<string, unknown>;
+            existingFm.bookId = project.bookId;
+            const body = content.slice(fmMatch[0].length);
+            const updated = `---\n${stringifyYaml(existingFm)}---${body}`;
+            const file = this.app.vault.getAbstractFileByPath(project.filePath);
+            if (file instanceof TFile) {
+                await this.app.vault.modify(file, updated);
+            } else {
+                await this.app.vault.adapter.write(project.filePath, updated);
+            }
+        } catch {
+            // Identity remains in memory; a later normal save can persist it.
         }
     }
 
@@ -2202,6 +2251,7 @@ export class SceneManager implements ISceneStore {
         const file = this.app.vault.getAbstractFileByPath(notesPath);
         if (file && file instanceof TFile) {
             await this.app.vault.modify(file, content);
+            void this.plugin.refreshOpenViews();
         }
     }
 
@@ -2268,6 +2318,7 @@ export class SceneManager implements ISceneStore {
             const path = `${sysFolder}/board.json`;
             if (!await adapter.exists(path)) {
                 this._activeProject.corkboardPositions = {};
+                this.plugin.invalidateCorkboardCache();
                 return;
             }
             const raw = JSON.parse(await adapter.read(path));
@@ -2286,8 +2337,12 @@ export class SceneManager implements ISceneStore {
                 }
             }
             this._activeProject.corkboardPositions = positions;
+            this.plugin.invalidateCorkboardCache();
         } catch {
-            if (this._activeProject) this._activeProject.corkboardPositions = {};
+            if (this._activeProject) {
+                this._activeProject.corkboardPositions = {};
+                this.plugin.invalidateCorkboardCache();
+            }
         }
     }
 
@@ -2352,6 +2407,10 @@ export class SceneManager implements ISceneStore {
         existingFm.type = 'storyline';
         existingFm.title = project.title;
         existingFm.created = project.created;
+
+        if (project.bookId) {
+            existingFm.bookId = project.bookId;
+        }
 
         // Multi-language support — persist BCP-47 locale.
         if (project.locale) {
@@ -2421,6 +2480,11 @@ export class SceneManager implements ISceneStore {
             existingFm.seriesId = project.seriesId;
         } else {
             delete existingFm.seriesId;
+        }
+        if (project.seriesUuid) {
+            existingFm.seriesUuid = project.seriesUuid;
+        } else {
+            delete existingFm.seriesUuid;
         }
 
         // Cover image

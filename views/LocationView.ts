@@ -60,7 +60,7 @@ export class LocationView extends ItemView {
     /** Current search/filter text for overview tree */
     private searchText: string = '';
     /** Current sort mode for the overview tree */
-    private sortBy: 'name' | 'modified' | 'created' | 'type' = 'name';
+    private sortBy: 'name' | 'modified' | 'created' | 'type' | 'manual' = 'name';
     /**
      * When true and the active project belongs to a series, the tree hides
      * worlds and locations whose `books[]` field excludes the current book.
@@ -190,17 +190,19 @@ export class LocationView extends ItemView {
             { value: 'modified', label: 'Last edited' },
             { value: 'created', label: 'Date created' },
             { value: 'type', label: 'Type' },
+            { value: 'manual', label: 'Manual' },
         ]) {
             const el = sortSelect.createEl('option', { text: opt.label, value: opt.value });
             if (this.sortBy === opt.value) el.selected = true;
         }
         sortSelect.addEventListener('change', () => {
-            this.sortBy = sortSelect.value as 'type' | 'name' | 'created' | 'modified';
+            this.sortBy = sortSelect.value as 'type' | 'name' | 'created' | 'modified' | 'manual';
             this.renderOverview(container);
         });
 
         // Series book filter
         const currentBook = this.plugin.sceneManager.getCurrentBookTitle();
+        const currentBookId = this.plugin.sceneManager.getCurrentBookId();
         const inSeries = !!this.plugin.sceneManager.getSeriesFolder();
         if (inSeries && currentBook) {
             const filterToggle = searchRow.createEl('button', {
@@ -237,11 +239,14 @@ export class LocationView extends ItemView {
         if (this.bookFilterActive && currentBook) {
             const lower = currentBook.toLowerCase();
             const inBook = (item: WorldOrLocation) => {
+                if (currentBookId && item.booksById && item.booksById.length > 0) {
+                    return item.booksById.includes(currentBookId);
+                }
                 if (!item.books || item.books.length === 0) return true;
                 return item.books.some(b => b.toLowerCase() === lower);
             };
             worlds = worlds.filter(w => {
-                if (inBook(w)) return true;
+                this.renderLocationNode(tree, loc, scenes, 0, orphanRoots.map(location => location.name));
                 // Keep the world if any of its child locations are in the book.
                 return this.locationManager.getLocationsForWorld(w.name).some(inBook);
             });
@@ -249,8 +254,14 @@ export class LocationView extends ItemView {
         }
 
         // Apply sort
-        const sortItems = <T extends { name: string; locationType?: string; modified?: string; created?: string }>(arr: T[]) => {
-            if (this.sortBy === 'modified') {
+        const sortItems = <T extends { name: string; locationType?: string; modified?: string; created?: string; sortOrder?: number }>(arr: T[]) => {
+            if (this.sortBy === 'manual') {
+                arr.sort((a, b) => {
+                    const ao = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                    const bo = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                    return ao !== bo ? ao - bo : a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+                });
+            } else if (this.sortBy === 'modified') {
                 arr.sort((a, b) => (b.modified ?? '').localeCompare(a.modified ?? ''));
             } else if (this.sortBy === 'created') {
                 arr.sort((a, b) => (b.created ?? '').localeCompare(a.created ?? ''));
@@ -280,8 +291,9 @@ export class LocationView extends ItemView {
         const tree = container.createDiv('location-tree');
 
         // Render each world and its locations
+        const worldOrder = worlds.map(world => world.filePath);
         for (const world of worlds) {
-            this.renderWorldNode(tree, world, scenes);
+            this.renderWorldNode(tree, world, scenes, worldOrder);
         }
 
         // Orphan locations (not linked to a world)
@@ -290,7 +302,11 @@ export class LocationView extends ItemView {
                 const divider = tree.createDiv('location-orphan-divider');
                 divider.createSpan({ text: 'Standalone Locations' });
             }
-            for (const loc of orphanLocations) {
+            const orphanRoots = orphanLocations.filter(loc =>
+                !loc.parent || !orphanLocations.some(parent =>
+                    parent.name.toLowerCase() === loc.parent!.toLowerCase()),
+            );
+            for (const loc of orphanRoots) {
                 this.renderLocationNode(tree, loc, scenes, 0);
             }
         }
@@ -313,13 +329,26 @@ export class LocationView extends ItemView {
         }
     }
 
-    private renderWorldNode(parent: HTMLElement, world: StoryWorld, scenes: Scene[]): void {
+    private renderWorldNode(
+        parent: HTMLElement,
+        world: StoryWorld,
+        scenes: Scene[],
+        siblingOrder: string[] = [],
+    ): void {
         const node = parent.createDiv('location-tree-node location-world-node');
         const isCollapsed = this.collapsedTreeNodes.has(world.filePath);
 
         const header = node.createDiv('location-tree-header');
+        header.setAttribute('draggable', 'true');
+        header.addEventListener('dragstart', (e) => {
+            e.dataTransfer?.setData('application/x-storyline-world', world.filePath);
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+        });
         // Issue #238 feedback — drag-and-drop locations onto a world to assign
         header.addEventListener('dragover', (e) => {
+            const isWorldDrag = e.dataTransfer?.types?.includes('application/x-storyline-world');
+            const isLocationDrag = e.dataTransfer?.types?.includes('application/x-storyline-location');
+            if (!isWorldDrag && !isLocationDrag) return;
             e.preventDefault();
             header.addClass('location-tree-drop-target');
         });
@@ -327,6 +356,11 @@ export class LocationView extends ItemView {
         header.addEventListener('drop', (e) => {
             e.preventDefault();
             header.removeClass('location-tree-drop-target');
+            const sourceWorld = e.dataTransfer?.getData('application/x-storyline-world');
+            if (sourceWorld && sourceWorld !== world.filePath) {
+                void this.reorderWorlds(sourceWorld, world.filePath, siblingOrder);
+                return;
+            }
             const locName = e.dataTransfer?.getData('application/x-storyline-location');
             if (locName) void this.reparentLocation(locName, { world: world.name, parent: undefined });
         });
@@ -384,16 +418,29 @@ export class LocationView extends ItemView {
         // Children
         if (!isCollapsed && worldLocations.length > 0) {
             const children = node.createDiv('location-tree-children');
-            const topLevel = this.locationManager.getTopLevelLocations(world.name);
+            const allLocations = this.locationManager.getAllLocations();
+            const topLevel = worldLocations.filter(loc =>
+                !loc.parent || !allLocations.some(parent =>
+                    parent.name.toLowerCase() === loc.parent!.toLowerCase()),
+            );
+            this.sortLocations(topLevel);
+            const siblingOrder = topLevel.map(location => location.name);
             for (const loc of topLevel) {
-                this.renderLocationNode(children, loc, scenes, 1);
+                this.renderLocationNode(children, loc, scenes, 1, siblingOrder);
             }
         }
     }
 
-    private renderLocationNode(parent: HTMLElement, loc: StoryLocation, scenes: Scene[], depth: number): void {
+    private renderLocationNode(
+        parent: HTMLElement,
+        loc: StoryLocation,
+        scenes: Scene[],
+        depth: number,
+        siblingOrder: string[] = [],
+    ): void {
         const node = parent.createDiv('location-tree-node');
         const childLocations = this.locationManager.getChildLocations(loc.name);
+        this.sortLocations(childLocations);
         const isCollapsed = this.collapsedTreeNodes.has(loc.filePath);
 
         const header = node.createDiv('location-tree-header');
@@ -419,7 +466,15 @@ export class LocationView extends ItemView {
             header.removeClass('location-tree-drop-target');
             const locName = e.dataTransfer?.getData('application/x-storyline-location');
             if (locName && locName !== loc.name) {
-                void this.reparentLocation(locName, { world: loc.world, parent: loc.name });
+                const draggedLocation = this.locationManager.getAllLocations().find(location => location.name === locName);
+                const sameGroup = draggedLocation
+                    && (draggedLocation.world ?? '').toLowerCase() === (loc.world ?? '').toLowerCase()
+                    && (draggedLocation.parent ?? '').toLowerCase() === (loc.parent ?? '').toLowerCase();
+                if (sameGroup) {
+                    void this.reorderLocations(locName, loc.name, siblingOrder);
+                } else {
+                    void this.reparentLocation(locName, { world: loc.world, parent: loc.name });
+                }
             }
         });
 
@@ -485,10 +540,20 @@ export class LocationView extends ItemView {
         // Child locations
         if (!isCollapsed && childLocations.length > 0) {
             const children = node.createDiv('location-tree-children');
+            const childOrder = childLocations.map(location => location.name);
             for (const child of childLocations) {
-                this.renderLocationNode(children, child, scenes, depth + 1);
+                this.renderLocationNode(children, child, scenes, depth + 1, childOrder);
             }
         }
+    }
+
+    private sortLocations(locations: StoryLocation[]): void {
+        if (this.sortBy !== 'manual') return;
+        locations.sort((a, b) => {
+            const ao = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+            const bo = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+            return ao !== bo ? ao - bo : a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+        });
     }
 
     private renderUnlinkedLocation(parent: HTMLElement, name: string, scenes: Scene[]): void {
@@ -543,6 +608,75 @@ export class LocationView extends ItemView {
         this.plugin.refreshOpenViews();
     }
 
+    private async reorderLocations(sourceName: string, targetName: string, visibleOrder: string[] = []): Promise<void> {
+        const allLocations = this.locationManager.getAllLocations();
+        const source = allLocations.find(location => location.name === sourceName);
+        const target = allLocations.find(location => location.name === targetName);
+        if (!source || !target) return;
+
+        const sameGroup = (source.world ?? '').toLowerCase() === (target.world ?? '').toLowerCase()
+            && (source.parent ?? '').toLowerCase() === (target.parent ?? '').toLowerCase();
+        if (!sameGroup) return;
+
+        const allSiblings = allLocations
+            .filter(location =>
+                (location.world ?? '').toLowerCase() === (target.world ?? '').toLowerCase()
+                && (location.parent ?? '').toLowerCase() === (target.parent ?? '').toLowerCase(),
+            );
+        const byName = new Map(allSiblings.map(location => [location.name, location]));
+        const siblings = visibleOrder.length > 0
+            ? [
+                ...visibleOrder.map(name => byName.get(name)).filter((location): location is StoryLocation => !!location),
+                ...allSiblings.filter(location => !visibleOrder.includes(location.name)),
+            ]
+            : allSiblings.sort((a, b) => {
+                const ao = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                const bo = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                return ao !== bo ? ao - bo : a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+            });
+        const sourceIndex = siblings.findIndex(location => location.name === sourceName);
+        const targetIndex = siblings.findIndex(location => location.name === targetName);
+        if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+
+        const [moved] = siblings.splice(sourceIndex, 1);
+        siblings.splice(targetIndex, 0, moved);
+        await Promise.all(siblings.map((location, index) =>
+            location.sortOrder === index
+                ? Promise.resolve()
+                : this.locationManager.saveLocation({ ...location, sortOrder: index }),
+        ));
+        this.sortBy = 'manual';
+        await this.plugin.refreshOpenViews();
+    }
+
+    private async reorderWorlds(sourcePath: string, targetPath: string, visibleOrder: string[] = []): Promise<void> {
+        const allWorlds = this.locationManager.getAllWorlds();
+        const byPath = new Map(allWorlds.map(world => [world.filePath, world]));
+        const ordered = visibleOrder.length > 0
+            ? [
+                ...visibleOrder.map(path => byPath.get(path)).filter((world): world is StoryWorld => !!world),
+                ...allWorlds.filter(world => !visibleOrder.includes(world.filePath)),
+            ]
+            : allWorlds.sort((a, b) => {
+                const ao = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                const bo = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                return ao !== bo ? ao - bo : a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+            });
+        const sourceIndex = ordered.findIndex(world => world.filePath === sourcePath);
+        const targetIndex = ordered.findIndex(world => world.filePath === targetPath);
+        if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+
+        const [moved] = ordered.splice(sourceIndex, 1);
+        ordered.splice(targetIndex, 0, moved);
+        await Promise.all(ordered.map((world, index) =>
+            world.sortOrder === index
+                ? Promise.resolve()
+                : this.locationManager.saveWorld({ ...world, sortOrder: index }),
+        ));
+        this.sortBy = 'manual';
+        await this.plugin.refreshOpenViews();
+    }
+
     private showItemContextMenu(item: WorldOrLocation, e: MouseEvent): void {
         const menu = new obsidian.Menu();
         const sm = this.plugin.sceneManager;
@@ -552,6 +686,7 @@ export class LocationView extends ItemView {
             : null;
         const projectLocFolder = sm.getProjectLocalLocationFolder();
         const currentBook = sm.getCurrentBookTitle();
+        const currentBookId = sm.getCurrentBookId();
 
         menu.addItem(it => it.setTitle(item.name).setDisabled(true));
         menu.addSeparator();
@@ -575,8 +710,9 @@ export class LocationView extends ItemView {
         if (seriesFolder && currentBook) {
             const lower = currentBook.toLowerCase();
             const allBooks = !item.books || item.books.length === 0;
-            const inBook = allBooks
-                || (item.books?.some(b => b.toLowerCase() === lower) ?? false);
+            const inBook = currentBookId && item.booksById && item.booksById.length > 0
+                ? item.booksById.includes(currentBookId)
+                : allBooks || (item.books?.some(b => b.toLowerCase() === lower) ?? false);
 
             if (allBooks) {
                 menu.addItem(it =>
@@ -618,7 +754,18 @@ export class LocationView extends ItemView {
 
     private async setItemBooks(item: WorldOrLocation, books: string[]): Promise<void> {
         try {
-            const updated = { ...item, books: books.length ? books : undefined } as WorldOrLocation;
+            const projects = this.sceneManager.getProjects();
+            const booksById = books
+                .map(book => projects.find(project => {
+                    const base = project.filePath.substring(0, project.filePath.lastIndexOf('/')).split('/').pop() ?? '';
+                    return project.title.toLowerCase() === book.toLowerCase() || base.toLowerCase() === book.toLowerCase();
+                })?.bookId)
+                .filter((id): id is string => !!id);
+            const updated = {
+                ...item,
+                books: books.length ? books : undefined,
+                booksById: booksById.length ? booksById : undefined,
+            } as WorldOrLocation;
             if (updated.type === 'world') {
                 await this.locationManager.saveWorld(updated);
             } else {

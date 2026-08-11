@@ -68,6 +68,10 @@ export interface StoryLineProject {
     // ── Series ──────────────────────────────────────
     /** Optional series ID — links this project to a series (matches series.json name) */
     seriesId?: string;
+    /** Stable UUID identity for this book. Legacy projects receive one on scan. */
+    bookId?: string;
+    /** Stable UUID identity for the series; seriesId remains for legacy compatibility. */
+    seriesUuid?: string;
     /** Vault-relative path to a cover image for the project */
     coverImage?: string;
     /** Name of the last applied beat sheet template */
@@ -83,8 +87,12 @@ export interface StoryLineProject {
 export interface SeriesMetadata {
     /** Display name of the series */
     name: string;
+    /** Stable UUID identity for the series. */
+    seriesUuid?: string;
     /** Ordered list of book folder names within the series folder */
     bookOrder: string[];
+    /** Ordered list of stable book UUIDs parallel to bookOrder. */
+    bookIds?: string[];
     /** ISO date string when the series was created */
     created: string;
 }

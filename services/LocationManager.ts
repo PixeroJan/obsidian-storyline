@@ -108,6 +108,8 @@ export class LocationManager {
                 economy: fmEff.economy,
                 history: fmEff.history,
                 books: this.parseStringList(fmEff.books),
+                booksById: this.parseStringList(fmEff.booksById),
+                sortOrder: Number.isFinite(Number(fmEff.sortOrder)) ? Number(fmEff.sortOrder) : undefined,
                 // ── Linking & Matching (Issue #228 round-trip fix) ──
                 entryType: fmEff.entryType,
                 caseSensitive: fmEff.caseSensitive === true || fmEff.caseSensitive === 'true',
@@ -144,6 +146,8 @@ export class LocationManager {
                 connectedLocations: fmEff.connectedLocations,
                 mapNotes: fmEff.mapNotes,
                 books: this.parseStringList(fmEff.books),
+                booksById: this.parseStringList(fmEff.booksById),
+                sortOrder: Number.isFinite(Number(fmEff.sortOrder)) ? Number(fmEff.sortOrder) : undefined,
                 // ── Linking & Matching (Issue #228 round-trip fix) ──
                 entryType: fmEff.entryType,
                 caseSensitive: fmEff.caseSensitive === true || fmEff.caseSensitive === 'true',
@@ -211,8 +215,11 @@ export class LocationManager {
     /** Get top-level locations for a world (have world but no parent) */
     getTopLevelLocations(worldName: string): StoryLocation[] {
         const lower = worldName.toLowerCase();
-        return this.getAllLocations().filter(
-            l => l.world?.toLowerCase() === lower && !l.parent
+        const allLocations = this.getAllLocations();
+        return allLocations.filter(l =>
+            l.world?.toLowerCase() === lower
+            && (!l.parent || !allLocations.some(parent =>
+                parent.name.toLowerCase() === l.parent!.toLowerCase())),
         );
     }
 

@@ -24,6 +24,28 @@ export type StoryLineLocale = string;
 export const DEFAULT_STORYLINE_LOCALE: StoryLineLocale = 'en';
 export const AUTO_DETECT_LOCALE = 'auto';
 
+export type QuoteStyle =
+    | 'straight'
+    | 'curly'
+    | 'high'
+    | 'low-high'
+    | 'guillemets'
+    | 'reverse-guillemets';
+
+export const QUOTE_STYLE_OPTIONS: ReadonlyArray<{ value: QuoteStyle; label: string; open: string; close: string }> = [
+    { value: 'straight', label: 'Straight "text"', open: '"', close: '"' },
+    { value: 'curly', label: 'Curly “text”', open: '“', close: '”' },
+    { value: 'high', label: 'High ”text”', open: '”', close: '”' },
+    { value: 'low-high', label: 'Low-high „text“', open: '„', close: '“' },
+    { value: 'guillemets', label: 'Guillemets «text»', open: '«', close: '»' },
+    { value: 'reverse-guillemets', label: 'Reverse guillemets »text«', open: '»', close: '«' },
+];
+
+export function getQuotePair(style: QuoteStyle | undefined): readonly [string, string] {
+    const option = QUOTE_STYLE_OPTIONS.find(candidate => candidate.value === style);
+    return option ? [option.open, option.close] : ['"', '"'];
+}
+
 /** Writing-system classification used to pick segmentation/wrapping strategy. */
 export type ScriptKind = 'latin' | 'cyrillic' | 'cjk' | 'thai' | 'arabic' | 'devanagari';
 
@@ -465,9 +487,16 @@ export function isCjkWrapToken(text: string): boolean {
 // ── Dialogue ────────────────────────────────────────────
 
 /** Sum character counts of all balanced dialogue quote pairs in `text`. */
-export function countDialogueCharacters(text: string, locale: StoryLineLocale = DEFAULT_STORYLINE_LOCALE): number {
+export function countDialogueCharacters(
+    text: string,
+    locale: StoryLineLocale = DEFAULT_STORYLINE_LOCALE,
+    selectedPair?: readonly [string, string],
+): number {
     let total = 0;
-    for (const [open, close] of getDialogueQuotePairs(locale)) {
+    const pairs: ReadonlyArray<readonly [string, string]> = selectedPair
+        ? [selectedPair, ...getDialogueQuotePairs(locale).filter(([open, close]) => open !== selectedPair[0] || close !== selectedPair[1])]
+        : getDialogueQuotePairs(locale);
+    for (const [open, close] of pairs) {
         if (!open || !close) continue;
         let start = 0;
         // Same-character pairs (like `"`) need a different walk so we don't

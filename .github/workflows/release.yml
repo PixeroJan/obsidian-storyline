@@ -1,0 +1,104 @@
+name: Release
+
+# Builds main.js, manifest.json, and styles.css on Ubuntu (matching the
+# Obsidian community plugin scanner's environment) and attaches them to a
+# GitHub Release whenever a tag matching the version pattern is pushed.
+#
+# Usage:
+#   1. Bump manifest.json / package.json / package-lock.json / versions.json
+#   2. Commit and push to main
+#   3. git tag 1.10.55 && git push origin 1.10.55
+#   4. The workflow builds on Linux and publishes the release automatically.
+
+on:
+  push:
+    tags:
+      # Matches tags like 1.10.55, 1.9.0, 2.0.1 — plain semver, no leading "v".
+      - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    # Manual trigger from the Actions tab — enter the version to release.
+    # The workflow bumps manifest.json / package.json / package-lock.json /
+    # versions.json, commits, tags, builds, and publishes in one go.
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.10.56)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need full history + write access for the version-bump commit.
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve release version
+        id: rel
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing version $VERSION"
+
+      - name: Bump version files (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VERSION="${{ steps.rel.outputs.version }}"
+          # manifest.json
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('manifest.json'));m.version='$VERSION';fs.writeFileSync('manifest.json',JSON.stringify(m,null,2)+'\n')"
+          # package.json
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version='$VERSION';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+          # package-lock.json — sync root package version
+          node -e "const fs=require('fs');const l=JSON.parse(fs.readFileSync('package-lock.json'));l.version='$VERSION';if(l.packages&&l.packages[''])l.packages[''].version='$VERSION';fs.writeFileSync('package-lock.json',JSON.stringify(l,null,2)+'\n')"
+          # versions.json — add/overwrite the entry with the current minAppVersion
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('manifest.json'));const v=JSON.parse(fs.readFileSync('versions.json'));v['$VERSION']=m.minAppVersion;fs.writeFileSync('versions.json',JSON.stringify(v,null,2)+'\n')"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json package.json package-lock.json versions.json
+          git commit -m "chore: release $VERSION"
+          git push
+          git tag "$VERSION"
+          git push origin "$VERSION"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (exact lockfile)
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Verify build artifacts exist
+        run: |
+          test -f main.js      || { echo "main.js missing";  exit 1; }
+          test -f manifest.json || { echo "manifest.json missing"; exit 1; }
+          test -f styles.css    || { echo "styles.css missing"; exit 1; }
+
+      - name: Create / update GitHub Release with build assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.rel.outputs.version }}
+          # Use the tag name as the release title.
+          name: ${{ steps.rel.outputs.version }}
+          # Pull release notes from the matching CHANGELOG section.
+          body: |
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for release notes.
+          files: |
+            main.js
+            manifest.json
+            styles.css
+          fail_on_unmatched_files: true

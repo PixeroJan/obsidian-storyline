@@ -3230,6 +3230,15 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     transition: background 0.15s, transform 0.1s;
 }
 
+.character-overview-card[draggable="true"] {
+    cursor: grab;
+}
+
+.character-overview-card.is-dragging {
+    opacity: 0.55;
+    cursor: grabbing;
+}
+
 .character-overview-card:hover {
     background: var(--sc-card-hover);
     transform: translateY(-2px);

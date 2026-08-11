@@ -7,7 +7,7 @@ import type { UniversalFieldTemplate } from './services/FieldTemplateService';
 import { ColorCodingMode, CustomStatusDef, SceneStatus, SceneTemplate, ViewType, getStatusConfig, getStatusOrder, registerCustomStatuses } from './models/Scene';
 import { App, Modal, Notice, PluginSettingTab, Setting, TFolder, TextAreaComponent, AbstractInputSuggest } from 'obsidian';
 import * as obsidian from 'obsidian';
-import { SUPPORTED_STORYLINE_LOCALES, normalizeStoryLineLocale } from './utils/locale';
+import { QUOTE_STYLE_OPTIONS, SUPPORTED_STORYLINE_LOCALES, normalizeStoryLineLocale, type QuoteStyle } from './utils/locale';
 
 // ═══════════════════════════════════════════════════════
 //  COLOR PALETTES — Catppuccin + Mood-based
@@ -872,6 +872,8 @@ export interface SceneCardsSettings {
      * `language:` value is in their frontmatter.
      */
     defaultProjectLanguage?: string;
+    /** Quote pair used when typing an ASCII double quote in Obsidian's editor. */
+    quoteStyle: QuoteStyle;
 
     /**
      * Issue #77 — raw YAML snippet merged into the frontmatter of every
@@ -1023,6 +1025,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     excludeCommentsFromWordcount: true,
     excludeChecklistFromWordcount: false,
     defaultProjectLanguage: 'en',
+    quoteStyle: 'straight',
     defaultSceneFrontmatter: '',
 
     defaultPovCharacter: '',
@@ -1733,6 +1736,21 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 });
             });
 
+        new Setting(containerEl)
+            .setName('Quotation marks')
+            .setDesc('Quote pair inserted when you type a plain double quote in the editor. Existing text and pasted text are unchanged.')
+            .addDropdown(dropdown => {
+                for (const option of QUOTE_STYLE_OPTIONS) {
+                    dropdown.addOption(option.value, option.label);
+                }
+                dropdown.setValue(this.plugin.settings.quoteStyle ?? 'straight');
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.quoteStyle = value as QuoteStyle;
+                    await this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                });
+            });
+
         // ── Issue #77 — Default scene frontmatter ──
         // Placeholder holds a YAML code sample (not English prose), so store it
         // in a constant to keep it out of the sentence-case UI rule's AST checks.
@@ -2265,10 +2283,10 @@ export class SceneCardsSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Create series from this book')
-            .setDesc(activeProject?.seriesId ? 'This book already belongs to a series.' : 'Wrap the current book in a new series.')
+            .setDesc(activeProject?.seriesId || activeProject?.seriesUuid ? 'This book already belongs to a series.' : 'Wrap the current book in a new series.')
             .addButton(btn => btn
                 .setButtonText('Create series???')
-                .setDisabled(!activeProject || !!activeProject.seriesId)
+                .setDisabled(!activeProject || !!activeProject.seriesId || !!activeProject.seriesUuid)
                 .onClick(() => {
                     (this.plugin.app as unknown as { commands: { executeCommandById: (id: string) => void } }).commands.executeCommandById('storyline:create-series');
                 }));

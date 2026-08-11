@@ -65,7 +65,7 @@ export class CharacterView extends ItemView {
     /** Current search/filter text for overview grid */
     private searchText: string = '';
     /** Current sort mode for the overview grid */
-    private sortBy: 'name' | 'modified' | 'created' | 'role' = 'name';
+    private sortBy: 'name' | 'modified' | 'created' | 'role' | 'manual' = 'name';
     /**
      * When true and the active project belongs to a series, the overview
      * grid hides characters whose `books[]` field excludes the current
@@ -268,18 +268,20 @@ export class CharacterView extends ItemView {
             { value: 'modified', label: 'Last edited' },
             { value: 'created', label: 'Date created' },
             { value: 'role', label: 'Role' },
+            { value: 'manual', label: 'Manual' },
         ]) {
             const el = sortSelect.createEl('option', { text: opt.label, value: opt.value });
             if (this.sortBy === opt.value) el.selected = true;
         }
         sortSelect.addEventListener('change', () => {
-            this.sortBy = sortSelect.value as 'name' | 'role' | 'created' | 'modified';
+            this.sortBy = sortSelect.value as 'name' | 'role' | 'created' | 'modified' | 'manual';
             this.renderCharacterOverview(container);
         });
 
         // Series book filter — only meaningful when the active project belongs
         // to a series and characters are shared at series level.
         const currentBook = this.plugin.sceneManager.getCurrentBookTitle();
+        const currentBookId = this.plugin.sceneManager.getCurrentBookId();
         const inSeries = !!this.plugin.sceneManager.getSeriesFolder();
         if (inSeries && currentBook) {
             const filterToggle = searchRow.createEl('button', {
@@ -327,6 +329,9 @@ export class CharacterView extends ItemView {
         if (this.bookFilterActive && currentBook) {
             const lower = currentBook.toLowerCase();
             fileCharacters = fileCharacters.filter(c => {
+                if (currentBookId && c.booksById && c.booksById.length > 0) {
+                    return c.booksById.includes(currentBookId);
+                }
                 if (!c.books || c.books.length === 0) return true;
                 return c.books.some(b => b.toLowerCase() === lower);
             });
@@ -336,14 +341,20 @@ export class CharacterView extends ItemView {
         if (this.sortBy === 'role') {
             const roleOrder: Record<string, number> = { protagonist: 0, antagonist: 1, supporting: 2, minor: 3 };
             fileCharacters.sort((a, b) => {
-                const ra = roleOrder[getPrimaryRole(a.role).toLowerCase()] ?? 99;
-                const rb = roleOrder[getPrimaryRole(b.role).toLowerCase()] ?? 99;
+                const ra = roleOrder[getPrimaryRole(a).toLowerCase()] ?? 99;
+                const rb = roleOrder[getPrimaryRole(b).toLowerCase()] ?? 99;
                 return ra !== rb ? ra - rb : a.name.localeCompare(b.name);
             });
         } else if (this.sortBy === 'modified') {
             fileCharacters.sort((a, b) => (b.modified ?? '').localeCompare(a.modified ?? ''));
         } else if (this.sortBy === 'created') {
             fileCharacters.sort((a, b) => (b.created ?? '').localeCompare(a.created ?? ''));
+        } else if (this.sortBy === 'manual') {
+            fileCharacters.sort((a, b) => {
+                const ao = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                const bo = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                return ao !== bo ? ao - bo : a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+            });
         } else {
             fileCharacters.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
         }
@@ -353,8 +364,9 @@ export class CharacterView extends ItemView {
             const grid = container.createDiv('character-overview-grid');
 
             // Render characters that have dedicated files
+            const visibleOrder = fileCharacters.map(character => character.filePath);
             for (const char of fileCharacters) {
-                this.renderOverviewCard(grid, char, scenes, aliasMap);
+                this.renderOverviewCard(grid, char, scenes, aliasMap, visibleOrder);
             }
 
             // Find characters from scenes that don't have files yet
@@ -446,8 +458,29 @@ export class CharacterView extends ItemView {
         });
     }
 
-    private renderOverviewCard(grid: HTMLElement, char: Character, scenes: Scene[], aliasMap?: Map<string, string>): void {
+    private renderOverviewCard(
+        grid: HTMLElement,
+        char: Character,
+        scenes: Scene[],
+        aliasMap?: Map<string, string>,
+        visibleOrder: string[] = [],
+    ): void {
         const card = grid.createDiv('character-overview-card');
+        let wasDragged = false;
+        card.draggable = true;
+        card.addEventListener('dragstart', (event) => {
+            wasDragged = true;
+            card.addClass('is-dragging');
+            event.dataTransfer?.setData('application/x-storyline-character', char.filePath);
+            if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+        });
+        card.addEventListener('dragend', () => card.removeClass('is-dragging'));
+        card.addEventListener('dragover', (event) => event.preventDefault());
+        card.addEventListener('drop', (event) => {
+            event.preventDefault();
+            const source = event.dataTransfer?.getData('application/x-storyline-character');
+            if (source && source !== char.filePath) void this.reorderCharacters(source, char.filePath, visibleOrder);
+        });
 
         // Role badges — supports string or string[] (issue #72 Tier 1)
         const roleList = getRoleList(char.role);
@@ -573,6 +606,10 @@ export class CharacterView extends ItemView {
         }
 
         card.addEventListener('click', () => {
+            if (wasDragged) {
+                wasDragged = false;
+                return;
+            }
             this.selectedCharacter = char.filePath;
             this.renderView(this.rootContainer!);
         });
@@ -583,6 +620,33 @@ export class CharacterView extends ItemView {
             e.preventDefault();
             this.showCharacterContextMenu(char, e);
         });
+    }
+
+    private async reorderCharacters(sourcePath: string, targetPath: string, visibleOrder: string[] = []): Promise<void> {
+        const allCharacters = this.characterManager.getAllCharacters();
+        const byPath = new Map(allCharacters.map(character => [character.filePath, character]));
+        const ordered = visibleOrder.length > 0
+            ? [
+                ...visibleOrder.map(path => byPath.get(path)).filter((character): character is Character => !!character),
+                ...allCharacters.filter(character => !visibleOrder.includes(character.filePath)),
+            ]
+            : allCharacters.sort((a, b) => {
+                const ao = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                const bo = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                return ao !== bo ? ao - bo : a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+            });
+        const sourceIndex = ordered.findIndex(c => c.filePath === sourcePath);
+        const targetIndex = ordered.findIndex(c => c.filePath === targetPath);
+        if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+        const [moved] = ordered.splice(sourceIndex, 1);
+        ordered.splice(targetIndex, 0, moved);
+        await Promise.all(ordered.map((character, index) =>
+            character.sortOrder === index
+                ? Promise.resolve()
+                : this.characterManager.saveCharacter({ ...character, sortOrder: index }),
+        ));
+        this.sortBy = 'manual';
+        this.renderView(this.rootContainer!);
     }
 
     private renderUnlinkedCard(grid: HTMLElement, name: string, scenes: Scene[], aliasMap?: Map<string, string>): void {
@@ -3081,6 +3145,7 @@ export class CharacterView extends ItemView {
             : null;
         const projectCharFolder = sm.getProjectLocalCharacterFolder();
         const currentBook = sm.getCurrentBookTitle();
+        const currentBookId = sm.getCurrentBookId();
 
         menu.addItem(item =>
             item.setTitle(char.name).setDisabled(true));
@@ -3106,8 +3171,9 @@ export class CharacterView extends ItemView {
         // Toggle current-book membership (only meaningful in series mode)
         if (seriesFolder && currentBook) {
             const lower = currentBook.toLowerCase();
-            const inBook = !char.books || char.books.length === 0
-                || char.books.some(b => b.toLowerCase() === lower);
+            const inBook = currentBookId && char.booksById && char.booksById.length > 0
+                ? char.booksById.includes(currentBookId)
+                : !char.books || char.books.length === 0 || char.books.some(b => b.toLowerCase() === lower);
             const allBooks = !char.books || char.books.length === 0;
 
             if (allBooks) {
@@ -3160,7 +3226,18 @@ export class CharacterView extends ItemView {
 
     private async setCharacterBooks(char: Character, books: string[]): Promise<void> {
         try {
-            const updated: Character = { ...char, books: books.length ? books : undefined };
+            const projects = this.sceneManager.getProjects();
+            const booksById = books
+                .map(book => projects.find(project => {
+                    const base = project.filePath.substring(0, project.filePath.lastIndexOf('/')).split('/').pop() ?? '';
+                    return project.title.toLowerCase() === book.toLowerCase() || base.toLowerCase() === book.toLowerCase();
+                })?.bookId)
+                .filter((id): id is string => !!id);
+            const updated: Character = {
+                ...char,
+                books: books.length ? books : undefined,
+                booksById: booksById.length ? booksById : undefined,
+            };
             await this.characterManager.saveCharacter(updated);
             await this.plugin.refreshOpenViews();
         } catch (err) {

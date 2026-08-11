@@ -20,10 +20,10 @@ export function renderProjectSelector(
     const active = plugin.sceneManager.activeProject;
 
     // Series indicator — show series name above/before the project selector
-    if (active?.seriesId) {
+    if (active?.seriesId || active?.seriesUuid) {
         const seriesBadge = wrapper.createSpan({
             cls: 'project-selector-series-badge',
-            text: active.seriesId,
+            text: active.seriesId ?? active.seriesUuid ?? '',
         });
         obsidian.setIcon(seriesBadge.createSpan({ cls: 'project-selector-series-icon', prepend: true }), 'library');
     }
