@@ -69,9 +69,8 @@ jobs:
             echo "Version files already contain $VERSION"
           else
             git commit -m "chore: release $VERSION"
-            # actions/checkout leaves HEAD detached, so push explicitly to
-            # the branch that was used for the manual workflow dispatch.
-            git push origin "HEAD:${GITHUB_REF_NAME}"
+            # The release tag below transfers this commit without requiring
+            # a push to a potentially protected branch.
           fi
           if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
             echo "Tag $VERSION already exists"
