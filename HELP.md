@@ -150,6 +150,7 @@ StoryLine provides seven interconnected views plus a sidebar navigator. Switch b
 The main workspace — a Kanban-style board that displays your scenes as cards.
 
 - **Group by:** Act, Chapter, Status, or POV (use the dropdown in the toolbar).
+- **Status order** — when grouped by Status, columns follow the default progression: Idea, Outlined, Draft, Written, Revised, Final. Custom statuses follow in their configured order.
 - **Drag and drop** cards between columns to reassign act, chapter, status, or POV.
 - **Color-coded cards** based on status, POV, emotion, act, or tag (configurable in settings).
 - **Quick actions:** right-click any card for a context menu with edit, duplicate, delete, and open options.
@@ -1525,6 +1526,21 @@ Export your project in six formats. Access via the **Export** button in the view
 |-------|-------------|
 | **Outline** | Metadata table, summary statistics, character list, location/world list, plotline list, notes |
 | **Manuscript** | Full scene content assembled in act → chapter → sequence order |
+
+### Range Exports *(new in 1.10.58)*
+
+To export only part of a manuscript, choose **Scenes** or **Chapters** from the **Content** dropdown:
+
+- **Scenes** — the input is labelled **Scenes to export** and matches scene `sequence` numbers.
+- **Chapters** — the input is labelled **Chapters to export** and matches numeric `chapter` values.
+
+Enter single values and inclusive ranges separated by commas, for example:
+
+```text
+1-5, 8, 9, 11, 13-18
+```
+
+The selected scenes are exported in the normal act → chapter → sequence order. Range exports are available in Markdown, Word, PDF, HTML, CSV, and JSON formats.
 
 ### Format Options
 

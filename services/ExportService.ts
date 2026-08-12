@@ -13,6 +13,12 @@ import { StoryLocation } from '../models/Location';
 
 export type ExportFormat = 'md' | 'json' | 'html' | 'csv' | 'docx' | 'pdf';
 export type ExportScope = 'manuscript' | 'outline';
+export type ExportRangeField = 'sequence' | 'chapter';
+
+export interface ExportRange {
+    field: ExportRangeField;
+    sequenceRanges: Array<{ start: number; end: number }>;
+}
 
 /** Per-export options chosen by the user in the Export dialog. */
 export interface ExportOptions {
@@ -46,6 +52,7 @@ export class ExportService {
     };
     private separatorType: 'blank' | 'asterisks' | 'custom' = 'blank';
     private separatorCustom = '';
+    private exportRange: ExportRange | null = null;
 
     constructor(app: App, sceneManager: SceneManager, characterManager: CharacterManager, locationManager: LocationManager) {
         this.app = app;
@@ -73,6 +80,11 @@ export class ExportService {
     setSeparatorSettings(type: 'blank' | 'asterisks' | 'custom', custom: string): void {
         this.separatorType = type;
         this.separatorCustom = custom;
+    }
+
+    /** Limit the export to selected scene sequence or chapter numbers, or clear the range filter. */
+    setExportRange(range?: ExportRange): void {
+        this.exportRange = range ?? null;
     }
 
     /**
@@ -135,6 +147,17 @@ export class ExportService {
         if (!this.exportOptions.includeCorkboardNotes) {
             scenes = scenes.filter(s => !this.isCorkboardNoteScene(s));
         }
+        if (this.exportRange) {
+            const selectedRanges = this.exportRange.sequenceRanges;
+            scenes = scenes.filter(scene => {
+                const rawValue = this.exportRange!.field === 'sequence' ? scene.sequence : scene.chapter;
+                if (rawValue === undefined) return false;
+                const value = Number(rawValue);
+                return Number.isFinite(value) && selectedRanges.some(range =>
+                    value >= range.start && value <= range.end
+                );
+            });
+        }
         scenes.sort((a, b) => {
             // Primary: act, then chapter, then sequence.
             // compareActChapter handles missing values (sort last), pure-numeric
@@ -147,6 +170,16 @@ export class ExportService {
             return (a.sequence ?? 9999) - (b.sequence ?? 9999);
         });
         return scenes;
+    }
+
+    private getExportLabel(scope: ExportScope): string {
+        const base = scope === 'manuscript' ? 'Manuscript' : 'Outline';
+        if (!this.exportRange) return base;
+        const rangeText = this.exportRange.sequenceRanges
+            .map(range => range.start === range.end ? String(range.start) : `${range.start}-${range.end}`)
+            .join(',');
+        const rangeLabel = this.exportRange.field === 'sequence' ? 'Scenes' : 'Chapters';
+        return `${base} - ${rangeLabel} ${rangeText}`;
     }
 
     private timestamp(): string {
@@ -171,7 +204,7 @@ export class ExportService {
             this.buildOutlineMd(lines, scenes);
         }
 
-        const filename = `${project.title} - ${scope === 'manuscript' ? 'Manuscript' : 'Outline'} (${this.timestamp()}).md`;
+        const filename = `${project.title} - ${this.getExportLabel(scope)} (${this.timestamp()}).md`;
         const filePath = await this.writeExportFile(project, filename, lines.join('\n'));
         new Notice(`Exported to ${filename}`);
         return filePath;
@@ -466,7 +499,7 @@ export class ExportService {
             };
         }
 
-        const filename = `${project.title} - ${scope === 'manuscript' ? 'Manuscript' : 'Outline'} (${this.timestamp()}).json`;
+        const filename = `${project.title} - ${this.getExportLabel(scope)} (${this.timestamp()}).json`;
         const filePath = await this.writeExportFile(project, filename, JSON.stringify(data, null, 2));
         new Notice(`Exported to ${filename}`);
         return filePath;
@@ -482,7 +515,7 @@ export class ExportService {
         const html = this.buildPdfHtml(project, scenes, scope);
 
         // Save HTML file to Exports folder
-        const filename = `${project.title} - ${scope === 'manuscript' ? 'Manuscript' : 'Outline'} (${this.timestamp()}).html`;
+        const filename = `${project.title} - ${this.getExportLabel(scope)} (${this.timestamp()}).html`;
         const filePath = await this.writeExportFile(project, filename, html);
 
         // Also open print dialog for direct PDF save.
@@ -747,7 +780,7 @@ ${body}
         }
 
         const csv = rows.map(row => row.map(cell => this.csvEscape(cell)).join(',')).join('\r\n');
-        const filename = `${project.title} - ${scope === 'manuscript' ? 'Manuscript' : 'Outline'} (${this.timestamp()}).csv`;
+        const filename = `${project.title} - ${this.getExportLabel(scope)} (${this.timestamp()}).csv`;
         // sep=, hint for Excel locale delimiter detection
         const csvWithBom = 'sep=,\r\n' + csv;
         const filePath = await this.writeCsvExportFile(project, filename, csvWithBom);
@@ -1038,7 +1071,7 @@ ${body}
 
         // Save the DOCX file
         const arrayBuffer = await blob.arrayBuffer();
-        const filename = `${project.title} - ${scope === 'manuscript' ? 'Manuscript' : 'Outline'} (${this.timestamp()}).docx`;
+        const filename = `${project.title} - ${this.getExportLabel(scope)} (${this.timestamp()}).docx`;
 
         const projectFolder = project.sceneFolder.replace(/\/Scenes\/?$/, '');
         const exportFolder = `${projectFolder}/Exports`;
@@ -1190,7 +1223,7 @@ ${body}
         }
 
         // Save the PDF file
-        const filename = `${project.title} - ${scope === 'manuscript' ? 'Manuscript' : 'Outline'} (${this.timestamp()}).pdf`;
+        const filename = `${project.title} - ${this.getExportLabel(scope)} (${this.timestamp()}).pdf`;
 
         const projectFolder = project.sceneFolder.replace(/\/Scenes\/?$/, '');
         const exportFolder = `${projectFolder}/Exports`;

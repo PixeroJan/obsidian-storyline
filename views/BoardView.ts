@@ -4025,6 +4025,16 @@ export class BoardView extends ItemView {
             const chB = b.match(/^Chapter\s+(.+)$/);
             if (chA && chB) return compareActChapter(chA[1], chB[1]);
 
+            if (this.groupBy === 'status') {
+                const statusOrder = getStatusOrder();
+                const aIndex = statusOrder.indexOf(a);
+                const bIndex = statusOrder.indexOf(b);
+                if (aIndex !== bIndex) {
+                    return (aIndex === -1 ? statusOrder.length : aIndex)
+                        - (bIndex === -1 ? statusOrder.length : bIndex);
+                }
+            }
+
             // Status / POV / mixed: locale string compare with numeric awareness.
             return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
         });

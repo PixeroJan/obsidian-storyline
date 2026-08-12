@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-misused-promises -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { Modal, Setting, Notice, DropdownComponent, ToggleComponent } from 'obsidian';
-import { ExportService, ExportFormat, ExportScope } from '../services/ExportService';
+import { ExportService, ExportFormat, ExportRange, ExportScope } from '../services/ExportService';
 import type SceneCardsPlugin from '../main';
+
+type ExportContent = ExportScope | 'scenes' | 'chapters';
 
 /**
  * Modal that lets the user pick format (MD / JSON / HTML) and scope
@@ -13,6 +15,8 @@ export class ExportModal extends Modal {
 
     private format: ExportFormat = 'md';
     private exportScope: ExportScope = 'manuscript';
+    private exportContent: ExportContent = 'manuscript';
+    private exportRangeText = '';
 
     // Per-export options (issues #85 / #87)
     private includeSceneTitles = true;
@@ -65,11 +69,18 @@ export class ExportModal extends Modal {
             .setDesc('What to include in the export')
             .addDropdown(dd => {
                 scopeDropdown = dd;
-                dd.addOption('outline', 'Outline (metadata, stats, table)');
                 dd.addOption('manuscript', 'Manuscript (scene text in order)');
-                dd.setValue(this.exportScope);
+                dd.addOption('chapters', 'Chapters');
+                dd.addOption('scenes', 'Scenes');
+                dd.addOption('outline', 'Outline (metadata, stats, table)');
+                dd.setValue(this.exportContent);
                 dd.onChange(v => {
-                    this.exportScope = v as ExportScope;
+                    this.exportContent = v as ExportContent;
+                    if (v === 'scenes' || v === 'chapters') {
+                        this.exportScope = 'manuscript';
+                    } else {
+                        this.exportScope = v as ExportScope;
+                    }
                     renderManuscriptOptions();
                 });
             });
@@ -88,7 +99,8 @@ export class ExportModal extends Modal {
                 dd.onChange(v => {
                     this.format = v as ExportFormat;
                     // Auto-switch to Manuscript when DOCX or PDF is selected
-                    if ((v === 'docx' || v === 'pdf') && this.exportScope !== 'manuscript') {
+                    if ((v === 'docx' || v === 'pdf') && this.exportContent === 'outline') {
+                        this.exportContent = 'manuscript';
                         this.exportScope = 'manuscript';
                         scopeDropdown?.setValue('manuscript');
                         renderManuscriptOptions();
@@ -105,6 +117,16 @@ export class ExportModal extends Modal {
 
         renderManuscriptOptions = () => {
             manuscriptOptions.empty();
+
+            if (this.exportContent === 'scenes' || this.exportContent === 'chapters') {
+                new Setting(manuscriptOptions)
+                    .setName(this.exportContent === 'scenes' ? 'Scenes to export' : 'Chapters to export')
+                    .setDesc('Enter single values or inclusive ranges, separated by commas.')
+                    .addText(text => text
+                        .setPlaceholder('1-5, 8, 9, 11, 13-18')
+                        .setValue(this.exportRangeText)
+                        .onChange(v => { this.exportRangeText = v; }));
+            }
 
             new Setting(manuscriptOptions)
                 .setName('Include inactive scenes')
@@ -194,6 +216,14 @@ export class ExportModal extends Modal {
         const exportBtn = actions.createEl('button', { text: 'Export', cls: 'mod-cta' });
         exportBtn.setAttr('type', 'button');
         exportBtn.addEventListener('click', async () => {
+            const exportRange = this.exportContent === 'scenes' || this.exportContent === 'chapters'
+                ? this.parseExportRange(this.exportRangeText)
+                : undefined;
+            if ((this.exportContent === 'scenes' || this.exportContent === 'chapters') && !exportRange) {
+                const valueLabel = this.exportContent === 'scenes' ? 'scene' : 'chapter';
+                new Notice(`Enter ${valueLabel} numbers like 1-4, 6, 8.`);
+                return;
+            }
             exportBtn.disabled = true;
             exportBtn.textContent = 'Exporting…';
             try {
@@ -207,6 +237,7 @@ export class ExportModal extends Modal {
                     this.sceneSeparatorType,
                     this.sceneSeparatorCustom
                 );
+                this.exportService.setExportRange(exportRange);
                 await this.exportService.export(this.format, this.exportScope);
                 this.close();
             } catch (err) {
@@ -223,6 +254,33 @@ export class ExportModal extends Modal {
 
     onClose(): void {
         this.contentEl.empty();
+    }
+
+    private parseExportRange(input: string): ExportRange | null {
+        const parts = input.split(',').map(part => part.trim());
+        if (!input.trim() || parts.some(part => part.length === 0)) return null;
+
+        const sequenceRanges: Array<{ start: number; end: number }> = [];
+        for (const part of parts) {
+            const match = /^(\d+)(?:\s*-\s*(\d+))?$/.exec(part);
+            if (!match) return null;
+
+            const first = Number(match[1]);
+            const second = match[2] === undefined ? first : Number(match[2]);
+            if (!Number.isSafeInteger(first) || !Number.isSafeInteger(second) || first < 1 || second < 1) {
+                return null;
+            }
+
+            sequenceRanges.push({
+                start: Math.min(first, second),
+                end: Math.max(first, second),
+            });
+        }
+
+        return {
+            field: this.exportContent === 'scenes' ? 'sequence' : 'chapter',
+            sequenceRanges,
+        };
     }
 }
 /* eslint-enable @typescript-eslint/no-misused-promises -- end of file-wide suppression block opened at line 1 */

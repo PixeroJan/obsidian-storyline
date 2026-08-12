@@ -6,6 +6,13 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.58
+
+### New Features
+
+- **Scene and chapter range exports** *([#251](https://github.com/PixeroJan/obsidian-storyline/issues/251))* — The Export dialog can now export selected scene sequence numbers or chapter numbers using comma-separated single values and inclusive ranges, such as `1-5, 8, 9, 11, 13-18` or `1-4, 6, 8`. The selection applies across Markdown, Word, PDF, HTML, CSV, and JSON exports, with invalid input rejected before export.
+- **Default status order in Kanban** *([#252](https://github.com/PixeroJan/obsidian-storyline/issues/252))* — Kanban columns grouped by Status now follow StoryLine's built-in progression (`Idea`, `Outlined`, `Draft`, `Written`, `Revised`, `Final`) followed by custom statuses, instead of alphabetical order.
+
 ## Version 1.10.57
 
 ### Bug Fixes
