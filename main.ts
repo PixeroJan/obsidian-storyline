@@ -1503,10 +1503,13 @@ export default class SceneCardsPlugin extends Plugin {
      * Read a JSON file from the current project's System/ folder.
      * Returns an empty object if the file doesn't exist or is invalid.
      */
-    private async readSystemJson(filename: string): Promise<Record<string, unknown>> {
+    private async readSystemJson(
+        filename: string,
+        systemFolder = this.getProjectSystemFolder(),
+    ): Promise<Record<string, unknown>> {
         try {
             const adapter = this.app.vault.adapter;
-            const filePath = `${this.getProjectSystemFolder()}/${filename}`;
+            const filePath = `${systemFolder}/${filename}`;
             if (!await adapter.exists(filePath)) return {};
             const txt = await adapter.read(filePath);
             return JSON.parse(txt);
@@ -1519,10 +1522,13 @@ export default class SceneCardsPlugin extends Plugin {
      * Write a JSON object to a file in the current project's System/ folder.
      * Creates the System/ folder if it doesn't exist.
      */
-    private async writeSystemJson(filename: string, data: Record<string, unknown>): Promise<void> {
+    private async writeSystemJson(
+        filename: string,
+        data: Record<string, unknown>,
+        systemFolder = this.getProjectSystemFolder(),
+    ): Promise<void> {
         try {
             const adapter = this.app.vault.adapter;
-            const systemFolder = this.getProjectSystemFolder();
             if (!await adapter.exists(systemFolder)) {
                 await this.app.vault.createFolder(systemFolder);
             }
@@ -1555,6 +1561,14 @@ export default class SceneCardsPlugin extends Plugin {
         const plotlines = await this.readSystemJson('plotlines.json');
         const characters = await this.readSystemJson('characters.json');
         const stats = await this.readSystemJson('stats.json');
+        const seriesFolder = this.sceneManager.getSeriesFolder();
+        const seriesSystemFolder = seriesFolder ? `${seriesFolder}/System` : null;
+        const seriesCodexCategories = seriesSystemFolder
+            ? await this.readSystemJson('codex-categories.json', seriesSystemFolder)
+            : {};
+        const hasSeriesCodexCategories = seriesSystemFolder
+            ? await this.app.vault.adapter.exists(`${seriesSystemFolder}/codex-categories.json`)
+            : false;
 
         // Overlay per-project data onto settings (used as working copy)
         this.settings.tagColors = isRecord(plotlines.tagColors)
@@ -1636,7 +1650,7 @@ export default class SceneCardsPlugin extends Plugin {
         const hasCustomSectionsFile = await this.app.vault.adapter.exists(
             `${this.getProjectSystemFolder()}/custom-sections.json`
         );
-        if (hasCustomSectionsFile) {
+        if (hasCustomSectionsFile || hasSeriesCodexCategories) {
             this.settings.characterCustomSections = Array.isArray(customSections.characterCustomSections)
                 ? (customSections.characterCustomSections as typeof this.settings.characterCustomSections)
                 : [];
@@ -1649,11 +1663,12 @@ export default class SceneCardsPlugin extends Plugin {
             this.settings.customLocationTypes = Array.isArray(customSections.customLocationTypes)
                 ? (customSections.customLocationTypes as string[])
                 : [];
-            this.settings.codexCustomCategories = Array.isArray(customSections.codexCustomCategories)
-                ? (customSections.codexCustomCategories as typeof this.settings.codexCustomCategories)
+            const codexCategories = hasSeriesCodexCategories ? seriesCodexCategories : customSections;
+            this.settings.codexCustomCategories = Array.isArray(codexCategories.codexCustomCategories)
+                ? (codexCategories.codexCustomCategories as typeof this.settings.codexCustomCategories)
                 : [];
-            this.settings.codexEnabledCategories = Array.isArray(customSections.codexEnabledCategories)
-                ? (customSections.codexEnabledCategories as string[])
+            this.settings.codexEnabledCategories = Array.isArray(codexCategories.codexEnabledCategories)
+                ? (codexCategories.codexEnabledCategories as string[])
                 : [];
         } else if (this._systemMigrationDone) {
             // Subsequent project switch with no System file — this is a new
@@ -1753,6 +1768,14 @@ export default class SceneCardsPlugin extends Plugin {
             codexCustomCategories: this.settings.codexCustomCategories || [],
             codexEnabledCategories: this.settings.codexEnabledCategories || [],
         });
+
+        const seriesFolder = this.sceneManager.getSeriesFolder();
+        if (seriesFolder) {
+            await this.writeSystemJson('codex-categories.json', {
+                codexCustomCategories: this.settings.codexCustomCategories || [],
+                codexEnabledCategories: this.settings.codexEnabledCategories || [],
+            }, `${seriesFolder}/System`);
+        }
     }
 
     /**

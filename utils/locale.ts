@@ -30,7 +30,11 @@ export type QuoteStyle =
     | 'high'
     | 'low-high'
     | 'guillemets'
-    | 'reverse-guillemets';
+    | 'reverse-guillemets'
+    | 'single-straight'
+    | 'single-curly'
+    | 'single-high'
+    | 'single-low-high';
 
 export const QUOTE_STYLE_OPTIONS: ReadonlyArray<{ value: QuoteStyle; label: string; open: string; close: string }> = [
     { value: 'straight', label: 'Straight "text"', open: '"', close: '"' },
@@ -39,6 +43,10 @@ export const QUOTE_STYLE_OPTIONS: ReadonlyArray<{ value: QuoteStyle; label: stri
     { value: 'low-high', label: 'Low-high „text“', open: '„', close: '“' },
     { value: 'guillemets', label: 'Guillemets «text»', open: '«', close: '»' },
     { value: 'reverse-guillemets', label: 'Reverse guillemets »text«', open: '»', close: '«' },
+    { value: 'single-straight', label: "Single straight 'text'", open: "'", close: "'" },
+    { value: 'single-curly', label: 'Single curly ‘text’', open: '‘', close: '’' },
+    { value: 'single-high', label: 'Single high ’text’', open: '’', close: '’' },
+    { value: 'single-low-high', label: 'Single low-high ‚text’', open: '‚', close: '’' },
 ];
 
 export function getQuotePair(style: QuoteStyle | undefined): readonly [string, string] {
@@ -494,7 +502,7 @@ export function countDialogueCharacters(
 ): number {
     let total = 0;
     const pairs: ReadonlyArray<readonly [string, string]> = selectedPair
-        ? [selectedPair, ...getDialogueQuotePairs(locale).filter(([open, close]) => open !== selectedPair[0] || close !== selectedPair[1])]
+        ? [selectedPair]
         : getDialogueQuotePairs(locale);
     for (const [open, close] of pairs) {
         if (!open || !close) continue;

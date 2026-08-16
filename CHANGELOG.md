@@ -6,6 +6,13 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.59
+
+### Bug Fixes
+
+- **Dialogue statistics support all configured quotation styles** *([#254](https://github.com/PixeroJan/obsidian-storyline/issues/254))* — Made dialogue counting use only the selected quotation pair, preventing narration from being counted as dialogue when multiple quote conventions appear in a manuscript.
+- **Custom Codex categories persist across books in a series** *([#253](https://github.com/PixeroJan/obsidian-storyline/issues/253))* — Series books now share their custom category definitions and enabled category list, while unrelated projects retain separate settings.
+
 ## Version 1.10.58
 
 ### New Features
