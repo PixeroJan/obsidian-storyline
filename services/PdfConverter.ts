@@ -72,10 +72,19 @@ export class SLMarkdownToPdfConverter {
         this.settings = { ...SL_DEFAULT_PDF_SETTINGS, ...settings };
     }
 
-    async convert(markdown: string, title: string): Promise<Uint8Array> {
+    async convert(
+        markdown: string,
+        title: string,
+        onProgress?: (stage: string, percent: number) => void,
+    ): Promise<Uint8Array> {
+        onProgress?.('Preparing PDF...', 5);
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+
         // Sanitize entire input upfront to prevent WinAnsi encoding errors
         const safeMarkdown = this.sanitizeForWinAnsi(markdown);
         const safeTitle = this.sanitizeForWinAnsi(title);
+        onProgress?.('Preparing PDF...', 10);
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
         const doc = await PDFDocument.create();
 
@@ -85,21 +94,29 @@ export class SLMarkdownToPdfConverter {
         doc.setProducer('pdf-lib');
 
         // Load fonts based on the chosen family
+        onProgress?.('Loading fonts...', 20);
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
         const fonts = await this.loadFonts(doc);
+        onProgress?.('Loading fonts...', 25);
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
         const pageSize = this.getPageDimensions();
         const { marginTop, marginBottom, marginLeft, marginRight } = this.settings;
         const contentWidth = pageSize[0] - marginLeft - marginRight;
 
         // Parse markdown into drawable blocks
-        const blocks = this.parseMarkdown(safeMarkdown);
+        onProgress?.('Reading Help content...', 30);
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+        const blocks = await this.parseMarkdown(safeMarkdown, onProgress);
+        onProgress?.('Reading Help content...', 35);
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
         // Render blocks across pages
         let page = doc.addPage(pageSize);
         let y = pageSize[1] - marginTop;
         let pageNumber = 1;
 
-        for (const block of blocks) {
+        for (const [index, block] of blocks.entries()) {
             switch (block.type) {
                 case 'heading': {
                     const fontSize = this.headingSize(block.level ?? 1);
@@ -221,6 +238,13 @@ export class SLMarkdownToPdfConverter {
                 y = pageSize[1] - marginTop;
                 pageNumber++;
             }
+
+            if (index % 20 === 0 || index === blocks.length - 1) {
+                const percent = 35 + Math.round(((index + 1) / Math.max(blocks.length, 1)) * 55);
+                onProgress?.('Rendering PDF...', percent);
+                // Yield periodically so progress updates can be painted by Obsidian.
+                await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+            }
         }
 
         // Draw page number on last page
@@ -228,17 +252,28 @@ export class SLMarkdownToPdfConverter {
             this.drawPageNumber(page, fonts.regular, pageNumber, pageSize);
         }
 
-        return doc.save();
+        onProgress?.('Finishing PDF...', 95);
+        const pdfBytes = await doc.save();
+        onProgress?.('PDF ready', 100);
+        return pdfBytes;
     }
 
     // ── Markdown parser ────────────────────────────────────────
 
-    private parseMarkdown(md: string): Block[] {
+    private async parseMarkdown(
+        md: string,
+        onProgress?: (stage: string, percent: number) => void,
+    ): Promise<Block[]> {
         const lines = md.split('\n');
         const blocks: Block[] = [];
         let i = 0;
 
         while (i < lines.length) {
+            if (i % 10 === 0) {
+                const percent = 30 + (i / Math.max(lines.length, 1)) * 5;
+                onProgress?.('Reading Help content...', Number(percent.toFixed(1)));
+                await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+            }
             const line = lines[i];
 
             // Heading
@@ -267,15 +302,24 @@ export class SLMarkdownToPdfConverter {
                 continue;
             }
 
-            // Paragraph — collect contiguous non-empty, non-heading, non-hr lines
+            // Paragraph — keep blocks bounded so large documentation sections do
+            // not become one expensive inline-formatting operation.
             const paraLines: string[] = [];
+            let paragraphLength = 0;
             while (i < lines.length) {
                 const l = lines[i];
                 if (l.trim() === '') break;
                 if (/^#{1,6}\s+/.test(l)) break;
                 if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(l.trim())) break;
+                if (paraLines.length > 0 && paragraphLength + l.length + 1 > 1000) break;
                 paraLines.push(l);
+                paragraphLength += l.length + 1;
                 i++;
+                if (i % 10 === 0) {
+                    const percent = 30 + (i / Math.max(lines.length, 1)) * 5;
+                    onProgress?.('Reading Help content...', Number(percent.toFixed(1)));
+                    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+                }
             }
 
             if (paraLines.length > 0) {
@@ -404,33 +448,41 @@ export class SLMarkdownToPdfConverter {
      */
     private parseInlineRuns(text: string): TextRun[] {
         const runs: TextRun[] = [];
-        // Regex to match **bold**, *italic*, ***bolditalic***
-        const pattern = /(\*{1,3})((?:(?!\1).)+?)\1/g;
-        let lastIndex = 0;
-        let match: RegExpExecArray | null;
+        let plainStart = 0;
+        let index = 0;
 
-        while ((match = pattern.exec(text)) !== null) {
-            // Text before this match
-            if (match.index > lastIndex) {
-                const before = text.slice(lastIndex, match.index);
-                if (before) runs.push({ text: before, bold: false, italic: false });
+        while (index < text.length) {
+            if (text[index] !== '*') {
+                index++;
+                continue;
             }
 
-            const stars = match[1].length;
-            const content = match[2];
-            runs.push({
-                text: content,
-                bold: stars >= 2,
-                italic: stars === 1 || stars === 3,
-            });
+            const marker = text.startsWith('***', index)
+                ? '***'
+                : text.startsWith('**', index)
+                    ? '**'
+                    : '*';
+            const closingIndex = text.indexOf(marker, index + marker.length);
+            if (closingIndex <= index + marker.length) {
+                index++;
+                continue;
+            }
 
-            lastIndex = match.index + match[0].length;
+            if (index > plainStart) {
+                runs.push({ text: text.slice(plainStart, index), bold: false, italic: false });
+            }
+
+            runs.push({
+                text: text.slice(index + marker.length, closingIndex),
+                bold: marker.length >= 2,
+                italic: marker.length === 1 || marker.length === 3,
+            });
+            index = closingIndex + marker.length;
+            plainStart = index;
         }
 
-        // Remaining text
-        if (lastIndex < text.length) {
-            const remaining = text.slice(lastIndex);
-            if (remaining) runs.push({ text: remaining, bold: false, italic: false });
+        if (plainStart < text.length) {
+            runs.push({ text: text.slice(plainStart), bold: false, italic: false });
         }
 
         if (runs.length === 0) {

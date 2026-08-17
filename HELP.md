@@ -222,7 +222,7 @@ Track your story's plotlines (tags) across the narrative. Two view modes are ava
 - **Scene labels & tag pills** display below each node for quick identification.
 - **Hover details** show title, subtitle, synopsis, Arc Point status, plotlines, and story date/time when available.
 - **Drag to pan** — click and drag the map to navigate large stories.
-- **Per-tag color picker** — click the palette (🎨) icon next to any plotline header to assign a custom color. Right-click a header for "Change color" / "Reset color".
+- **Per-tag color picker** — click the palette icon next to any plotline header to assign a custom color. Right-click a header for "Change color" / "Reset color".
 
 #### List View
 - Each plotline (tag) gets its own row showing which scenes it appears in.
@@ -230,7 +230,7 @@ Track your story's plotlines (tags) across the narrative. Two view modes are ava
 
 #### Common Features
 - **Rename** or **delete** plotlines across all scenes at once.
-- **Descriptions / notes** *(new in 1.10.51)* — click the **file-text** (📄) icon on a plotline header to add a short note reminding you what the plotline is supposed to do. The description is shown under the plotline header in list view, and is carried over when you rename the plotline. Useful for tracking open threads ("the mage in the tower") without resorting to a full plotline for every small detail.
+- **Descriptions / notes** *(new in 1.10.51)* — click the **file-text** icon on a plotline header to add a short note reminding you what the plotline is supposed to do. The description is shown under the plotline header in list view, and is carried over when you rename the plotline. Useful for tracking open threads ("the mage in the tower") without resorting to a full plotline for every small detail.
 - Visualize plotline density and coverage.
 - Scenes default to **reading order** (chapter). Toggle to chronological order from the toolbar.
 
@@ -250,10 +250,10 @@ A Scrivenings-style continuous document view that presents your entire story as 
 - **Lazy loading** — editors are mounted on demand as you scroll, keeping memory usage low even for large projects.
 - **Navigator integration** — clicking a scene in the Navigator scrolls the manuscript to that scene instead of opening a new file.
 - **Inspector tracking** — the Scene Details sidebar automatically follows whichever scene is currently visible in the manuscript.
-- **Focus Mode** — click the glasses icon (👓) in the filter bar to enter Focus Mode. Surrounding UI (sidebars, ribbon, title bar, tab headers) is dimmed, darkened, and optionally blurred so you can concentrate on your text. The filter bar, scene headers, dividers, and footer are hidden. Adjust the effect in **Settings → Focus Mode Settings**: Dim amount (toolbar opacity), Darken (environment brightness), and Blur (environment blur). Click the glasses icon again to exit.
+- **Focus Mode** — click the glasses icon in the filter bar to enter Focus Mode. Surrounding UI (sidebars, ribbon, title bar, tab headers) is dimmed, darkened, and optionally blurred so you can concentrate on your text. The filter bar, scene headers, dividers, and footer are hidden. Adjust the effect in **Settings → Focus Mode Settings**: Dim amount (toolbar opacity), Darken (environment brightness), and Blur (environment blur). Click the glasses icon again to exit.
 - **Find & replace across the whole book** — right-click inside a scene in the Manuscript view and choose **Find & replace in manuscript** (added to Obsidian's native editor context menu, so all the usual editor menu items remain available) to open a search panel that scans every scene in the current filter/sort scope (not just the scenes currently scrolled into view). Use the chevron buttons or Enter / Shift+Enter to jump between matches; navigating to a match in an unmounted scene auto-mounts its editor and scrolls it into view. Toggle case-sensitive, whole-word, or regular-expression matching with the Aa / whole-word / .* buttons. Enter replacement text and click the replace icon (single match) or check icon (all matches). Replacements in unmounted scenes are written directly to disk. *(Issue #195)*
 
-Access the Manuscript view from the **Manuscript** tab (📖 book-open-text icon) in the view switcher, located between Plotlines and Codex.
+Access the Manuscript view from the **Manuscript** tab (**book-open-text** icon) in the view switcher, located between Plotlines and Codex.
 
 ### Characters View
 
@@ -566,7 +566,7 @@ Set the `subtitle` field in frontmatter, or type it directly in the Inspector. L
 Archive a scene to remove it from all views without deleting it. Archived scenes are moved to the `Archive/` folder inside your project.
 
 - **Archive** — right-click any scene in the Board or Navigator and choose **Archive Scene**. The file moves to `Archive/` and disappears from the index.
-- **Restore** — click the **archive button** (📦) in the Board view toolbar. This opens a modal listing all archived scenes, each with a **Restore** button that moves the file back to `Scenes/` and re-indexes it.
+- **Restore** — click the **archive** icon in the Board view toolbar. This opens a modal listing all archived scenes, each with a **Restore** button that moves the file back to `Scenes/` and re-indexes it.
 - **Forking** — when you fork a project, archived scenes are copied to the new project's `Archive/` folder.
 
 Archived scenes stay as regular `.md` files and can be reviewed or edited at any time through Obsidian's file explorer.
@@ -697,8 +697,8 @@ StoryLine's **Validator** engine automatically scans your story for potential is
 - Monotonous emotion streaks (5+ consecutive scenes with the same emotion) — streaks reset at `dream`/`mythic` boundaries.
 
 Each warning has a **severity level**:
-- 🔴 **Error** — likely a real problem.
-- 🟡 **Warning** — worth investigating.
+- **Error** — likely a real problem.
+- **Warning** — worth investigating.
 - ℹ️ **Info** — minor suggestion.
 
 ---
@@ -877,7 +877,7 @@ Save and restore point-in-time snapshots of your entire project's **view layout*
 - **Scene layout metadata** — act, chapter, status, POV, and sequence numbers.
 
 ### How to use
-1. Click the **clock icon** (🕓) in the Board or Plotgrid toolbar, or run **Manage View Snapshots** from the command palette.
+1. Click the **clock** icon in the Board or Plotgrid toolbar, or run **Manage View Snapshots** from the command palette.
 2. Click **+** to create a new snapshot. It becomes the active snapshot immediately.
 3. Rearrange your corkboard, edit the Plot Grid, or reorder scenes — changes are **auto-saved** back to the active snapshot after a 2-second pause.
 4. To compare different layouts, load a different snapshot from the list.
@@ -984,7 +984,7 @@ Each scheme provides 14 colors that are automatically assigned to tags. Select a
 
 Override individual tag colors without changing the whole scheme:
 
-- **From the Plotlines view** — click the palette (🎨) icon next to any plotline header, or right-click and choose "Change color" / "Reset color".
+- **From the Plotlines view** — click the palette icon next to any plotline header, or right-click and choose "Change color" / "Reset color".
 - **From Settings** — in the Color Coding section, each tag appears as a compact chip with a color swatch. Click the swatch to pick a custom color; click the × to reset.
 
 Overrides persist across sessions and take priority over the active scheme.
@@ -1197,6 +1197,8 @@ Completed sprints are saved in a persistent log. The Stats panel shows your spri
 The **Characters View** includes a visual relationship map:
 
 - Displays characters as nodes connected by relationship lines.
+ - Relations can be **Two-way** (the default) or one-way. Uncheck **Two-way relationship** when only the source character's relation should be stored.
+ - One-way relations are shown with arrows. Two-way relations are shown as undirected connections.
 - **Six relationship types**, each with a distinct color and line style:
 
 | Type | Color | Line Style |
@@ -1217,6 +1219,17 @@ The **Characters View** includes a visual relationship map:
 ### Character Relationship Fields
 
 Relationships are populated from the character profile editor:
+
+The Relationships section in a character profile uses structured relation rows. Choose a relation type, select a target character, and use the **Two-way relationship** checkbox when the reverse relation should also be created. Existing relations without a `twoWay` value remain two-way for compatibility.
+
+The **Relationship history** section records past or temporary relationship periods without changing the current relationship list. Use **+ add period** for each separate period, including on-and-off relationships between the same characters. Each period has its own role, target, two-way setting, and start/end range.
+
+- **Scene range** uses ordered **From scene** and **To scene** dropdowns. Selected scenes are saved as Obsidian wikilinks; **Custom scene...** is available for scenes that do not exist yet.
+- **Date/time range** shows start and end date/time inputs.
+- An empty end means the period is still active or has no known end.
+- History entries are informational and do not modify current relations or trigger reciprocal synchronization.
+
+Custom Character Roles are available from the Role dropdown. Choose **Custom role...** to enter one or more roles not included in the built-in list.
 
 | Field | Description | Stored As |
 |-------|-------------|-----------|
@@ -1420,7 +1433,7 @@ Every character, location, and codex detail editor comes with a set of built-in 
 ### How to Hide a Field
 
 1. Open any character, location, or codex detail editor.
-2. **Hover** over a field label — a small **eye-off icon** (👁‍🗨) appears to the right of the label.
+2. **Hover** over a field label — a small **eye-off icon** appears to the right of the label.
 3. **Click the icon** — the field disappears from the form.
 
 ### How to Show Hidden Fields
@@ -1849,7 +1862,7 @@ Open the **Series Management Modal** from **Settings → Project Management → 
 - Rename individual books.
 - Add standalone books to the series.
 - Remove books from the series (moves the book out of the series folder; the book is kept as a standalone project).
-- **Delete a book permanently** (🗑️ trash icon) — trashes the book's folder and removes it from the series. A type-to-confirm warning modal is shown first.
+- **Delete a book permanently** (**trash** icon) — trashes the book's folder and removes it from the series. A type-to-confirm warning modal is shown first.
 
 ### How It Works
 - When a project has a `seriesId` in its frontmatter, all Codex paths (Characters, Locations, custom categories) resolve to the **series-level** Codex folder instead of the book-local one.

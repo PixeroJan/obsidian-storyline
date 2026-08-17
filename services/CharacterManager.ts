@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { Character, CharacterRelation, CharacterRelationCategory, CHARACTER_FIELD_KEYS, LEGACY_RELATION_FIELDS_TO_CLEAN, normalizeCharacterRelations, normalizeRoleEntries } from '../models/Character';
+import { Character, CharacterRelation, CharacterRelationCategory, CHARACTER_FIELD_KEYS, LEGACY_RELATION_FIELDS_TO_CLEAN, normalizeCharacterRelations, normalizeRelationHistory, normalizeRoleEntries } from '../models/Character';
 import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel } from './FieldTemplateService';
 import { App, TFile, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { coerceString } from '../utils/narrow';
@@ -327,6 +327,7 @@ export class CharacterManager {
         const body = this.extractBody(content);
         const basename = filePath.split('/').pop()?.replace(/\.md$/i, '') ?? filePath;
         const relations = normalizeCharacterRelations(this.parseRelations(safeFm.relations) || this.buildLegacyRelations(safeFm));
+        const relationHistory = normalizeRelationHistory(safeFm.relationHistory);
 
         const character: Character = {
             filePath,
@@ -359,6 +360,7 @@ export class CharacterManager {
             accomplishments: safeFm.accomplishments,
             secrets: safeFm.secrets,
             relations: relations.length ? relations : undefined,
+            relationHistory: relationHistory.length ? relationHistory : undefined,
             startingPoint: safeFm.startingPoint,
             goal: safeFm.goal,
             expectedChange: safeFm.expectedChange,
@@ -433,7 +435,12 @@ export class CharacterManager {
             const type = typeof rec.type === 'string' ? rec.type : '';
             const target = typeof rec.target === 'string' ? rec.target : '';
             if (!category || !type || !target) continue;
-            parsed.push({ category: category as CharacterRelationCategory, type, target });
+            parsed.push({
+                category: category as CharacterRelationCategory,
+                type,
+                target,
+                ...(rec.twoWay === false ? { twoWay: false } : {}),
+            });
         }
         return parsed.length ? parsed : undefined;
     }

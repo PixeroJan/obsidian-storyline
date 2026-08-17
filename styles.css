@@ -4131,6 +4131,26 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     gap: 0 12px;
 }
 
+.relation-builder-options {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.relation-builder-two-way {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    cursor: pointer;
+}
+
+.relation-builder-two-way input {
+    margin: 0;
+}
+
 .relation-builder-inline-row.relation-builder-inline-row .character-field-input {
     min-width: 0;
     box-shadow: none;
@@ -4205,6 +4225,124 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     border-radius: 8px;
 }
 
+.relation-history-editor {
+    margin-top: 12px;
+    padding: 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background: var(--background-secondary);
+}
+
+.relation-history-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.relation-history-title {
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.relation-history-hint,
+.relation-history-empty {
+    color: var(--text-muted);
+    font-size: 0.8em;
+}
+
+.relation-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.relation-history-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.relation-history-primary-row,
+.relation-history-anchor-row {
+    display: grid;
+    gap: 6px;
+    align-items: center;
+}
+
+.relation-history-primary-row {
+    grid-template-columns: minmax(130px, 1fr) minmax(120px, 1fr) minmax(150px, 1.2fr) auto auto;
+}
+
+.relation-history-anchor-row {
+    grid-template-columns: minmax(125px, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.relation-history-scene-field {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+}
+
+.relation-history-scene-field .relation-history-scene,
+.relation-history-scene-custom {
+    flex: 1;
+    min-width: 0;
+}
+
+.relation-history-input {
+    min-width: 0;
+    font-size: 0.85em;
+    padding: 3px 6px;
+}
+
+.relation-history-two-way {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+    font-size: 0.8em;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.relation-history-two-way input {
+    margin: 0;
+}
+
+.relation-history-remove {
+    background: transparent;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 8px;
+}
+
+.relation-history-primary-row .relation-history-remove {
+    justify-self: end;
+}
+
+.relation-history-remove:hover {
+    color: var(--text-error);
+    border-color: var(--text-error);
+}
+
+.relation-history-add {
+    margin-top: 6px;
+    font-size: 0.85em;
+    padding: 4px 10px;
+    background: var(--interactive-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.relation-history-add:hover {
+    background: var(--interactive-hover);
+}
+
 @media (max-width: 700px) {
     .relation-builder-item,
     .relation-builder-add-row {
@@ -4222,6 +4360,17 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 
     .relation-builder-remove {
         justify-self: end;
+    }
+
+    .relation-history-primary-row,
+    .relation-history-anchor-row {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 6px;
+    }
+
+    .relation-history-two-way,
+    .relation-history-primary-row .relation-history-remove {
+        justify-self: start;
     }
 }
 
@@ -7834,6 +7983,23 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+}
+
+.storyline-help-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px 0;
+}
+
+.storyline-help-pdf-status {
+    color: var(--text-muted);
+    font-size: 0.85em;
+}
+
+.storyline-help-pdf-button {
+    min-width: 52px;
 }
 
 .storyline-help-content {

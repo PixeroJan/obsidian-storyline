@@ -24,7 +24,7 @@ import type SceneCardsPlugin from '../main';
 import { attachTooltip } from '../components/Tooltip';
 import { renderCodexCategoryTabs } from '../components/CodexCategoryTabs';
 import { ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf } from 'obsidian';
-import { CHARACTER_CATEGORIES, CHARACTER_ROLES, Character, CharacterFieldDef, CharacterRelation, CharacterRelationCategory, RELATION_CATEGORIES, RELATION_TYPES_BY_CATEGORY, RoleEntry, TagType, computeReciprocalUpdates, extractCharacterLocationTags, extractCharacterProps, getPrimaryRole, getRoleDisplay, getRoleList, normalizeCharacterRelations } from '../models/Character';
+import { CHARACTER_CATEGORIES, CHARACTER_ROLES, Character, CharacterFieldDef, CharacterRelation, CharacterRelationCategory, RELATION_CATEGORIES, RELATION_TYPES_BY_CATEGORY, RelationHistoryEntry, RoleEntry, TagType, computeReciprocalUpdates, extractCharacterLocationTags, extractCharacterProps, getPrimaryRole, getRoleDisplay, getRoleList, normalizeCharacterRelations, normalizeRelationHistory } from '../models/Character';
 import { CHARACTER_VIEW_TYPE } from '../constants';
 import { Scene, isWrittenLikeStatus, resolveStatusCfg } from '../models/Scene';
 import { coerceString } from '../utils/narrow';
@@ -1348,33 +1348,53 @@ export class CharacterView extends ItemView {
         }
 
         if (field.key === 'role') {
-            // Role accepts a single value or a comma-separated list of values
-            // (issue #72 Tier 1). Rendered as a text input with a datalist of
-            // suggestions so the user can pick or type freely (e.g.
-            // "Mentor, Love Interest, Antagonist").
-            const listId = `character-role-list-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-            const input = row.createEl('input', {
+            const customRoleValue = '__custom_role__';
+            const selectedRoles = value.split(',').map(role => role.trim()).filter(Boolean);
+            const builtInRole = selectedRoles.length === 1
+                ? CHARACTER_ROLES.find(role => role.toLowerCase() === selectedRoles[0].toLowerCase())
+                : undefined;
+
+            const select = row.createEl('select', {
+                cls: 'character-field-input dropdown',
+                attr: { 'aria-label': 'Role' },
+            });
+            select.createEl('option', { text: 'Select role', value: '' });
+            for (const role of CHARACTER_ROLES) {
+                select.createEl('option', { text: role, value: role });
+            }
+            select.createEl('option', { text: 'Custom role...', value: customRoleValue });
+            select.value = builtInRole || customRoleValue;
+
+            const customInput = row.createEl('input', {
                 cls: 'character-field-input',
                 type: 'text',
-                attr: { placeholder: field.placeholder, list: listId },
+                attr: { placeholder: 'Enter custom role(s)' },
             });
-            input.value = value;
-            const datalist = row.createEl('datalist', { attr: { id: listId } });
-            for (const r of CHARACTER_ROLES) {
-                datalist.createEl('option', { attr: { value: r } });
-            }
-            input.addEventListener('input', () => {
-                const raw = input.value;
-                // Persist as array when comma-separated, else single string
-                if (raw.includes(',')) {
-                    (draft as unknown as Record<string, unknown>)[field.key] = raw
-                        .split(',')
-                        .map(s => s.trim())
-                        .filter(Boolean);
-                } else {
-                    (draft as unknown as Record<string, unknown>)[field.key] = raw;
-                }
+            customInput.value = builtInRole ? '' : value;
+            customInput.hidden = Boolean(builtInRole);
+
+            const persistRole = (raw: string) => {
+                const trimmed = raw.trim();
+                (draft as unknown as Record<string, unknown>)[field.key] = trimmed.includes(',')
+                    ? trimmed.split(',').map(role => role.trim()).filter(Boolean)
+                    : trimmed;
                 this.scheduleSave(draft);
+            };
+
+            select.addEventListener('change', () => {
+                if (select.value === customRoleValue) {
+                    customInput.hidden = false;
+                    if (builtInRole && !customInput.value) customInput.value = '';
+                    customInput.focus();
+                    persistRole(customInput.value);
+                } else {
+                    customInput.hidden = true;
+                    persistRole(select.value);
+                }
+            });
+
+            customInput.addEventListener('input', () => {
+                persistRole(customInput.value);
             });
 
             // Issue #72 Tier 2 — role history editor (repeating rows).
@@ -1938,6 +1958,15 @@ export class CharacterView extends ItemView {
 
                 const removeBtn = inlineRow.createEl('button', { cls: 'character-custom-remove relation-builder-remove', text: '×', attr: { title: 'Remove relation' } });
 
+                const relationOptions = relRow.createDiv('relation-builder-options');
+                const twoWayLabel = relationOptions.createEl('label', {
+                    cls: 'relation-builder-two-way',
+                    attr: { title: 'Also create the reverse relationship' },
+                });
+                const twoWayCheckbox = twoWayLabel.createEl('input', { type: 'checkbox' });
+                twoWayCheckbox.checked = relation.twoWay !== false;
+                twoWayLabel.createSpan({ text: 'Two-way relationship' });
+
                 const setCustomMode = (enabled: boolean, focus = false) => {
                     typeSelect.setCssStyles({ display: enabled ? 'none' : '' });
                     customTypeInput.setCssStyles({ display: enabled ? '' : 'none' });
@@ -1989,6 +2018,16 @@ export class CharacterView extends ItemView {
                     // Issue #233 discussion — keep the user-chosen category
                     // (from customCategorySelect) instead of forcing 'custom'.
                     relation.category = (customCategorySelect.value as CharacterRelationCategory) || 'custom';
+                    draft.relations = normalizeCharacterRelations(relations);
+                    this.scheduleSave(draft);
+                });
+
+                twoWayCheckbox.addEventListener('change', () => {
+                    if (twoWayCheckbox.checked) {
+                        delete relation.twoWay;
+                    } else {
+                        relation.twoWay = false;
+                    }
                     draft.relations = normalizeCharacterRelations(relations);
                     this.scheduleSave(draft);
                 });
@@ -2095,6 +2134,224 @@ export class CharacterView extends ItemView {
                 tempSelect.focus();
                 tempSelect.click();
             }
+        });
+
+        renderRows();
+        this.renderRelationHistoryEditor(container, draft, mergedNames, resolveAlias);
+    }
+
+    private renderRelationHistoryEditor(
+        parent: HTMLElement,
+        draft: Character,
+        mergedNames: string[],
+        resolveAlias: (name: string) => string,
+    ): void {
+        const container = parent.createDiv('relation-history-editor');
+        const header = container.createDiv('relation-history-header');
+        header.createSpan({ cls: 'relation-history-title', text: 'Relationship history (optional)' });
+        header.createSpan({
+            cls: 'relation-history-hint',
+            text: 'Record each relationship period without changing current relations.',
+        });
+
+        const list = container.createDiv('relation-history-list');
+        const entries: RelationHistoryEntry[] = [...(draft.relationHistory || [])];
+        const sceneOptions = this.sceneManager.getAllScenes()
+            .filter(scene => !scene.inactive)
+            .sort((a, b) => {
+                const sequenceA = a.sequence ?? Number.MAX_SAFE_INTEGER;
+                const sequenceB = b.sequence ?? Number.MAX_SAFE_INTEGER;
+                return sequenceA - sequenceB || a.title.localeCompare(b.title);
+            });
+
+        const persist = () => {
+            draft.relationHistory = normalizeRelationHistory(entries);
+            this.scheduleSave(draft);
+        };
+
+        const renderRows = () => {
+            list.empty();
+            entries.forEach((entry, index) => {
+                const row = list.createDiv('relation-history-entry');
+                const primaryRow = row.createDiv('relation-history-primary-row');
+                const typeSelect = primaryRow.createEl('select', {
+                    cls: 'relation-history-input relation-history-type',
+                    attr: { 'aria-label': 'Role' },
+                });
+                typeSelect.createEl('option', { text: 'Select role', value: '' });
+                for (const category of RELATION_CATEGORIES) {
+                    for (const type of RELATION_TYPES_BY_CATEGORY[category.value]) {
+                        const option = typeSelect.createEl('option', { text: type, value: type });
+                        if (entry.type === type) option.selected = true;
+                    }
+                }
+                if (entry.type && !Object.values(RELATION_TYPES_BY_CATEGORY).some(types => types.includes(entry.type))) {
+                    typeSelect.createEl('option', { text: entry.type, value: entry.type, attr: { selected: 'true' } });
+                }
+
+                const categorySelect = primaryRow.createEl('select', { cls: 'relation-history-input relation-history-category' });
+                for (const category of RELATION_CATEGORIES) {
+                    const option = categorySelect.createEl('option', { text: category.label, value: category.value });
+                    if (entry.category === category.value) option.selected = true;
+                }
+
+                const targetSelect = primaryRow.createEl('select', { cls: 'relation-history-input relation-history-target' });
+                targetSelect.createEl('option', { value: '', text: 'Select character' });
+                for (const name of mergedNames) {
+                    const option = targetSelect.createEl('option', { value: name, text: name });
+                    if (name === entry.target) option.selected = true;
+                }
+                if (entry.target && !mergedNames.includes(entry.target)) {
+                    targetSelect.createEl('option', { value: entry.target, text: entry.target, attr: { selected: 'true' } });
+                }
+
+                const twoWayLabel = primaryRow.createEl('label', { cls: 'relation-history-two-way', attr: { title: 'Also create the reverse relationship if this history entry is applied later' } });
+                const twoWayCheckbox = twoWayLabel.createEl('input', { type: 'checkbox' });
+                twoWayCheckbox.checked = entry.twoWay !== false;
+                twoWayLabel.createSpan({ text: 'Two-way' });
+
+                const removeBtn = primaryRow.createEl('button', {
+                    cls: 'relation-history-remove relation-builder-remove',
+                    text: '×',
+                    attr: { title: 'Remove history entry', type: 'button' },
+                });
+
+                const anchorRow = row.createDiv('relation-history-anchor-row');
+                const anchorMode = anchorRow.createEl('select', { cls: 'relation-history-input relation-history-anchor-mode' });
+                anchorMode.createEl('option', { text: 'Scene range', value: 'scene' });
+                anchorMode.createEl('option', { text: 'Date/time range', value: 'date' });
+                anchorMode.value = entry.anchorMode || 'scene';
+
+                const createSceneField = (currentValue: string | undefined, label: string) => {
+                    const wrap = anchorRow.createDiv('relation-history-scene-field');
+                    const select = wrap.createEl('select', {
+                        cls: 'relation-history-input relation-history-scene',
+                        attr: { 'aria-label': label },
+                    });
+                    select.createEl('option', { text: label, value: '' });
+                    const current = currentValue || '';
+                    let matched = !current;
+                    for (const scene of sceneOptions) {
+                        const link = `[[${scene.title}]]`;
+                        const option = select.createEl('option', {
+                            text: scene.sequence == null ? scene.title : `${scene.sequence}. ${scene.title}`,
+                            value: link,
+                        });
+                        if (current === link || current === scene.title) {
+                            option.selected = true;
+                            matched = true;
+                        }
+                    }
+                    const customValue = '__custom_scene__';
+                    select.createEl('option', { text: 'Custom scene...', value: customValue });
+                    const customInput = wrap.createEl('input', {
+                        cls: 'relation-history-input relation-history-scene-custom',
+                        type: 'text',
+                        attr: { placeholder: 'Enter scene or [[wikilink]]', 'aria-label': `${label} custom value` },
+                    });
+                    customInput.value = matched ? '' : current;
+                    if (!matched && current) select.value = customValue;
+                    customInput.hidden = matched || !current;
+                    return { wrap, select, customInput, customValue };
+                };
+
+                const fromSceneField = createSceneField(entry.fromScene, 'From scene');
+                const toSceneField = createSceneField(entry.toScene, 'To scene');
+
+                const fromDate = anchorRow.createEl('input', {
+                    cls: 'relation-history-input relation-history-date',
+                    type: 'datetime-local',
+                    attr: { title: 'From date and time', 'aria-label': 'From date and time' },
+                });
+                fromDate.value = entry.fromDate || '';
+                const toDate = anchorRow.createEl('input', {
+                    cls: 'relation-history-input relation-history-date',
+                    type: 'datetime-local',
+                    attr: { title: 'To date and time', 'aria-label': 'To date and time' },
+                });
+                toDate.value = entry.toDate || '';
+
+                const updateSceneFields = () => {
+                    const sceneMode = anchorMode.value === 'scene';
+                    fromSceneField.wrap.hidden = !sceneMode;
+                    toSceneField.wrap.hidden = !sceneMode;
+                    fromDate.hidden = sceneMode;
+                    toDate.hidden = sceneMode;
+                };
+                updateSceneFields();
+
+                typeSelect.addEventListener('change', () => {
+                    entry.type = typeSelect.value;
+                    persist();
+                });
+                categorySelect.addEventListener('change', () => {
+                    entry.category = categorySelect.value as CharacterRelationCategory;
+                    persist();
+                });
+                targetSelect.addEventListener('change', () => {
+                    entry.target = resolveAlias(targetSelect.value);
+                    persist();
+                });
+                twoWayCheckbox.addEventListener('change', () => {
+                    if (twoWayCheckbox.checked) delete entry.twoWay;
+                    else entry.twoWay = false;
+                    persist();
+                });
+                anchorMode.addEventListener('change', () => {
+                    entry.anchorMode = anchorMode.value === 'date' ? 'date' : 'scene';
+                    updateSceneFields();
+                    persist();
+                });
+                const bindSceneField = (field: ReturnType<typeof createSceneField>, key: 'fromScene' | 'toScene') => {
+                    field.select.addEventListener('change', () => {
+                        const isCustom = field.select.value === field.customValue;
+                        field.customInput.hidden = !isCustom;
+                        if (isCustom) {
+                            field.customInput.focus();
+                            draft.relationHistory = entries;
+                            entry[key] = field.customInput.value;
+                        } else {
+                            entry[key] = field.select.value;
+                        }
+                        persist();
+                    });
+                    field.customInput.addEventListener('input', () => {
+                        entry[key] = field.customInput.value;
+                        persist();
+                    });
+                };
+                bindSceneField(fromSceneField, 'fromScene');
+                bindSceneField(toSceneField, 'toScene');
+                fromDate.addEventListener('change', () => { entry.fromDate = fromDate.value; persist(); });
+                toDate.addEventListener('change', () => { entry.toDate = toDate.value; persist(); });
+                removeBtn.addEventListener('click', () => {
+                    entries.splice(index, 1);
+                    persist();
+                    renderRows();
+                });
+            });
+
+            if (!entries.length) {
+                list.createDiv({ cls: 'relation-history-empty', text: 'No relationship history entries yet.' });
+            }
+        };
+
+        const addBtn = container.createEl('button', {
+            cls: 'relation-history-add',
+            text: '+ add period',
+            attr: { type: 'button' },
+        });
+        addBtn.addEventListener('click', () => {
+            entries.push({
+                id: `relation-history-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                category: 'custom',
+                type: '',
+                target: '',
+                anchorMode: 'scene',
+            });
+            renderRows();
+            const inputs = list.querySelectorAll('.relation-history-type');
+            (inputs[inputs.length - 1] as HTMLSelectElement | undefined)?.focus();
         });
 
         renderRows();
@@ -2718,8 +2975,10 @@ export class CharacterView extends ItemView {
                     relations.push(u.relation);
                     changed = true;
                 } else if (u.action === 'remove' && existingIdx !== -1) {
-                    relations.splice(existingIdx, 1);
-                    changed = true;
+                    if (relations[existingIdx].twoWay !== false) {
+                        relations.splice(existingIdx, 1);
+                        changed = true;
+                    }
                 }
             }
 

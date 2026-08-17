@@ -44,6 +44,7 @@ interface StoryGraphEdge {
     source: string;   // node id
     target: string;   // node id
     kind: EdgeKind;   // drives colour & dash pattern
+    directed?: boolean;
 }
 
 // ── Colours ───────────────────────────────────────────
@@ -342,7 +343,7 @@ export class StoryGraph {
                 const fromId = `character::${char.name.toLowerCase()}`;
                 // Only add relationship edges for characters that are already in the graph
                 // OR create their nodes so the relationship network is visible
-                const addRelEdges = (names: string[] | string | undefined, kind: EdgeKind) => {
+            const addRelEdges = (names: string[] | string | undefined, kind: EdgeKind, directed = false) => {
                     if (!names) return;
                     const arr = Array.isArray(names) ? names
                         : typeof names === 'string' ? names.split(/[,;]/).map(s => s.replace(/\[\[|\]\]/g, '').trim()).filter(Boolean)
@@ -358,11 +359,11 @@ export class StoryGraph {
                         const rev = `${toId}|${fromId}|${kind}`;
                         if (!edgeList.some(e => {
                             const k = `${e.source}|${e.target}|${e.kind}`;
-                            return k === fwd || k === rev;
+                            return k === fwd || (!directed && !e.directed && k === rev);
                         })) {
                             nodeMap.get(fromId)!.weight++;
                             nodeMap.get(toId)!.weight++;
-                            edgeList.push({ source: fromId, target: toId, kind });
+                            edgeList.push({ source: fromId, target: toId, kind, directed });
                         }
                     }
                 };
@@ -371,7 +372,7 @@ export class StoryGraph {
                     for (const relation of char.relations) {
                         const baseType = RELATION_BASE_TYPE_BY_CATEGORY[relation.category] || 'other';
                         const kind: EdgeKind = baseType === 'other' ? 'other-rel' : baseType;
-                        addRelEdges([relation.target], kind);
+                        addRelEdges([relation.target], kind, relation.twoWay === false);
                     }
                 }
 
@@ -588,13 +589,15 @@ export class StoryGraph {
         while (this.svg.firstChild) this.svg.removeChild(this.svg.firstChild);
 
         const colors = getEntityColors();
+        const defs = activeDocument.createElementNS(svgNS, 'defs');
+        this.svg.appendChild(defs);
 
         const g = activeDocument.createElementNS(svgNS, 'g');
         g.setAttribute('transform', `translate(${this.panX},${this.panY}) scale(${this.zoom})`);
         this.svg.appendChild(g);
 
         // Draw edges
-        for (const edge of this.edges) {
+        for (const [index, edge] of this.edges.entries()) {
             const a = this.nodes.find(n => n.id === edge.source);
             const b = this.nodes.find(n => n.id === edge.target);
             if (!a || !b) continue;
@@ -610,6 +613,23 @@ export class StoryGraph {
             line.setAttribute('stroke-opacity', isRelEdge ? '0.65' : '0.45');
             if (EDGE_DASH[edge.kind]) {
                 line.setAttribute('stroke-dasharray', EDGE_DASH[edge.kind]);
+            }
+            if (edge.directed) {
+                const markerId = `story-graph-arrow-${index}`;
+                const marker = activeDocument.createElementNS(svgNS, 'marker');
+                marker.setAttribute('id', markerId);
+                marker.setAttribute('markerWidth', '8');
+                marker.setAttribute('markerHeight', '8');
+                marker.setAttribute('refX', '8');
+                marker.setAttribute('refY', '4');
+                marker.setAttribute('orient', 'auto');
+                marker.setAttribute('markerUnits', 'userSpaceOnUse');
+                const path = activeDocument.createElementNS(svgNS, 'path');
+                path.setAttribute('d', 'M 0 0 L 8 4 L 0 8 z');
+                path.setAttribute('fill', getEdgeColor(edge.kind));
+                marker.appendChild(path);
+                defs.appendChild(marker);
+                line.setAttribute('marker-end', `url(#${markerId})`);
             }
             g.appendChild(line);
         }

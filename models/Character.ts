@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 /**
  * Character data model - represents a character profile stored as a markdown file
  * in the project's Characters/ folder.
@@ -47,6 +46,8 @@ export interface Character {
 
     /** Structured relationship rows (category -> type -> target) */
     relations?: CharacterRelation[];
+    /** Optional historical relationship states, separate from current relations. */
+    relationHistory?: RelationHistoryEntry[];
 
     // ── Physical Characteristics ───────────────────────
     /** Appearance description */
@@ -297,6 +298,7 @@ export function normalizeRoleEntries(raw: unknown): RoleEntry[] {
  */
 export function getRoleList(role: string | string[] | undefined): string[];
 export function getRoleList(character: Pick<Character, 'role' | 'roles'>): string[];
+export function getRoleList(input: unknown): string[];
 export function getRoleList(input: unknown): string[] {
     // Character object overload — prefer Tier 2 roles[] if present.
     if (input && typeof input === 'object' && !Array.isArray(input) && ('role' in input || 'roles' in input)) {
@@ -316,15 +318,16 @@ export function getRoleList(input: unknown): string[] {
         }
         return getRoleListFromRaw(c.role);
     }
-    return getRoleListFromRaw(input as string | string[] | undefined);
+    return getRoleListFromRaw(input);
 }
 
-function getRoleListFromRaw(role: string | string[] | undefined): string[] {
+function getRoleListFromRaw(role: unknown): string[] {
     if (!role) return [];
     if (Array.isArray(role)) {
         return role.map(r => String(r).trim()).filter(Boolean);
     }
-    return String(role)
+    if (typeof role !== 'string') return [];
+    return role
         .split(',')
         .map(r => r.trim())
         .filter(Boolean);
@@ -334,14 +337,14 @@ function getRoleListFromRaw(role: string | string[] | undefined): string[] {
 export function getRoleDisplay(role: string | string[] | undefined): string;
 export function getRoleDisplay(character: Pick<Character, 'role' | 'roles'>): string;
 export function getRoleDisplay(input: unknown): string {
-    return (getRoleList as (v: unknown) => string[])(input).join(', ');
+    return getRoleList(input).join(', ');
 }
 
 /** First role (used for sort / category ordering). */
 export function getPrimaryRole(role: string | string[] | undefined): string;
 export function getPrimaryRole(character: Pick<Character, 'role' | 'roles'>): string;
 export function getPrimaryRole(input: unknown): string {
-    return (getRoleList as (v: unknown) => string[])(input)[0] ?? '';
+    return getRoleList(input)[0] ?? '';
 }
 
 /**
@@ -385,6 +388,23 @@ export interface CharacterRelation {
     category: CharacterRelationCategory;
     type: string;
     target: string;
+    /** Whether saving this relation should maintain its inverse relation. Defaults to true. */
+    twoWay?: boolean;
+}
+
+export type RelationHistoryAnchorMode = 'scene' | 'date';
+
+export interface RelationHistoryEntry {
+    id: string;
+    category: CharacterRelationCategory;
+    type: string;
+    target: string;
+    twoWay?: boolean;
+    anchorMode?: RelationHistoryAnchorMode;
+    fromScene?: string;
+    toScene?: string;
+    fromDate?: string;
+    toDate?: string;
 }
 
 export const RELATION_CATEGORIES: { value: CharacterRelationCategory; label: string }[] = [
@@ -399,13 +419,13 @@ export const RELATION_CATEGORIES: { value: CharacterRelationCategory; label: str
 ];
 
 export const RELATION_TYPES_BY_CATEGORY: Record<CharacterRelationCategory, string[]> = {
-    family: ['sibling', 'half-sibling', 'step-sibling', 'twin', 'parent', 'child', 'step-parent', 'step-child', 'adoptive-parent', 'adopted-child', 'guardian', 'ward', 'grandparent', 'grandchild', 'aunt/uncle', 'niece/nephew', 'cousin', 'in-law'],
-    romantic: ['partner', 'spouse', 'ex-partner'],
+    family: ['sibling', 'half-sibling', 'step-sibling', 'twin', 'parent', 'child', 'step-parent', 'step-child', 'adoptive-parent', 'adopted-child', 'foster-parent', 'foster-child', 'guardian', 'ward', 'grandparent', 'grandchild', 'aunt/uncle', 'niece/nephew', 'cousin', 'in-law', 'ex-spouse'],
+    romantic: ['partner', 'love-interest', 'crush', 'admirer', 'spouse', 'fiance', 'ex-partner', 'affair'],
     social: ['ally', 'friend', 'best-friend', 'confidant', 'acquaintance'],
-    conflict: ['enemy', 'rival', 'betrayer', 'avenger'],
+    conflict: ['enemy', 'rival', 'betrayer', 'avenger', 'blackmailer', 'victim'],
     guidance: ['mentor', 'mentee', 'leader', 'follower', 'boss', 'subordinate', 'commander', 'second-in-command', 'master', 'apprentice'],
-    professional: ['colleague', 'teammate', 'business-partner', 'client', 'handler', 'asset'],
-    story: ['protector', 'dependent', 'owes-debt-to', 'sworn-to', 'bound-by-oath', 'idolizes', 'fears', 'obsessed-with'],
+    professional: ['colleague', 'teammate', 'business-partner', 'employer', 'employee', 'client', 'handler', 'asset', 'representative'],
+    story: ['protector', 'dependent', 'suspect', 'target', 'informant', 'accomplice', 'owes-debt-to', 'sworn-to', 'bound-by-oath', 'idolizes', 'fears', 'obsessed-with'],
     custom: [],
 };
 
@@ -434,6 +454,8 @@ const INVERSE_RELATIONS: Record<string, string> = {
     'step-child': 'step-parent',
     'adoptive-parent': 'adopted-child',
     'adopted-child': 'adoptive-parent',
+    'foster-parent': 'foster-child',
+    'foster-child': 'foster-parent',
     'guardian': 'ward',
     'ward': 'guardian',
     'grandparent': 'grandchild',
@@ -451,6 +473,8 @@ const INVERSE_RELATIONS: Record<string, string> = {
     'partner': 'partner',
     'spouse': 'spouse',
     'ex-partner': 'ex-partner',
+    'ex-spouse': 'ex-spouse',
+    'fiance': 'fiance',
     // Social (symmetric)
     'ally': 'ally',
     'friend': 'friend',
@@ -477,6 +501,8 @@ const INVERSE_RELATIONS: Record<string, string> = {
     'colleague': 'colleague',
     'teammate': 'teammate',
     'business-partner': 'business-partner',
+    'employer': 'employee',
+    'employee': 'employer',
     'client': 'client',
     'handler': 'asset',
     'asset': 'handler',
@@ -530,9 +556,11 @@ export function computeReciprocalUpdates(
     const newSet = new Map(newRelations.map(r => [key(r), r]));
     const updates: ReciprocalUpdate[] = [];
 
-    // Added relations (in new but not in old)
+    // Added relations (in new but not in old), or relations switched to two-way.
     for (const [k, rel] of newSet) {
-        if (!oldSet.has(k) && rel.target.trim()) {
+        const oldRel = oldSet.get(k);
+        const becameTwoWay = oldRel?.twoWay === false && rel.twoWay !== false;
+        if ((!oldRel || becameTwoWay) && rel.twoWay !== false && rel.target.trim()) {
             const invType = getInverseRelationType(rel.type);
             updates.push({
                 action: 'add',
@@ -544,11 +572,24 @@ export function computeReciprocalUpdates(
                 },
             });
         }
+
+        if (oldRel && oldRel.twoWay !== false && rel.twoWay === false && rel.target.trim()) {
+            const invType = getInverseRelationType(rel.type);
+            updates.push({
+                action: 'remove',
+                targetName: rel.target,
+                relation: {
+                    category: inferCategoryForType(invType),
+                    type: invType,
+                    target: sourceName,
+                },
+            });
+        }
     }
 
-    // Removed relations (in old but not in new)
+    // Removed relations (in old but not in new), unless they were one-way.
     for (const [k, rel] of oldSet) {
-        if (!newSet.has(k) && rel.target.trim()) {
+        if (!newSet.has(k) && rel.twoWay !== false && rel.target.trim()) {
             const invType = getInverseRelationType(rel.type);
             updates.push({
                 action: 'remove',
@@ -663,6 +704,7 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
  */
 export const CHARACTER_FIELD_KEYS: (keyof Character)[] = [
     'name', 'tagline', 'image', 'gallery', 'nickname', 'age', 'role', 'roles', 'occupation', 'residency', 'locations', 'family', 'relations',
+    'relationHistory',
     'appearance', 'distinguishingFeatures', 'style', 'quirks',
     'personality', 'internalMotivation', 'externalMotivation', 'strengths', 'flaws', 'fears', 'belief', 'misbelief',
     'formativeMemories', 'accomplishments', 'secrets',
@@ -852,7 +894,35 @@ export function normalizeCharacterRelations(relations: CharacterRelation[] | und
         const key = `${category}|${type}|${target.toLowerCase()}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push({ category, type, target });
+        out.push(rel.twoWay === false
+            ? { category, type, target, twoWay: false }
+            : { category, type, target });
+    }
+    return out;
+}
+
+export function normalizeRelationHistory(raw: unknown): RelationHistoryEntry[] {
+    if (!Array.isArray(raw)) return [];
+    const out: RelationHistoryEntry[] = [];
+    const seen = new Set<string>();
+    for (const item of raw) {
+        if (!item || typeof item !== 'object') continue;
+        const rec = item as Record<string, unknown>;
+        const id = typeof rec.id === 'string' && rec.id.trim()
+            ? rec.id.trim()
+            : `relation-history-${out.length + 1}`;
+        const category = normalizeRelationCategory(typeof rec.category === 'string' ? rec.category : 'custom');
+        const type = normalizedType(typeof rec.type === 'string' ? rec.type : '');
+        const target = typeof rec.target === 'string' ? rec.target.trim() : '';
+        if (!type || !target || seen.has(id)) continue;
+        seen.add(id);
+        const entry: RelationHistoryEntry = { id, category, type, target, anchorMode: rec.anchorMode === 'date' ? 'date' : 'scene' };
+        if (rec.twoWay === false) entry.twoWay = false;
+        if (typeof rec.fromScene === 'string' && rec.fromScene.trim()) entry.fromScene = rec.fromScene.trim();
+        if (typeof rec.toScene === 'string' && rec.toScene.trim()) entry.toScene = rec.toScene.trim();
+        if (typeof rec.fromDate === 'string' && rec.fromDate.trim()) entry.fromDate = rec.fromDate.trim();
+        if (typeof rec.toDate === 'string' && rec.toDate.trim()) entry.toDate = rec.toDate.trim();
+        out.push(entry);
     }
     return out;
 }
@@ -1002,4 +1072,3 @@ export const CHARACTER_ROLES = [
     'Supporting',
     'Minor',
 ];
-/* eslint-enable @typescript-eslint/no-unnecessary-type-assertion -- end of file-wide suppression block opened at line 1 */

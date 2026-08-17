@@ -35,6 +35,7 @@ interface GraphEdge {
     target: string;
     type: RelationshipType;
     label?: string;
+    twoWay?: boolean;
 }
 
 /** Read a CSS custom property from the body, falling back to the provided default */
@@ -240,7 +241,12 @@ export class RelationshipMap {
                     const name = relation.target?.trim();
                     if (!name) continue;
                     this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: baseType });
+                    edgeList.push({
+                        source: fromKey,
+                        target: name.toLowerCase(),
+                        type: baseType,
+                        twoWay: relation.twoWay !== false,
+                    });
                 }
             }
 
@@ -253,13 +259,13 @@ export class RelationshipMap {
             }
         }
 
-        // Deduplicate edges (if A→B and B→A exist, keep one)
+        // Deduplicate two-way edges while keeping opposite one-way edges.
         const edgeSet = new Set<string>();
         const deduped: GraphEdge[] = [];
         for (const e of edgeList) {
             const fwd = `${e.source}|${e.target}|${e.type}`;
             const rev = `${e.target}|${e.source}|${e.type}`;
-            if (!edgeSet.has(fwd) && !edgeSet.has(rev)) {
+            if (!edgeSet.has(fwd) && (e.twoWay === false || !edgeSet.has(rev))) {
                 edgeSet.add(fwd);
                 deduped.push(e);
             }
@@ -390,6 +396,8 @@ export class RelationshipMap {
         while (this.svg.firstChild) this.svg.removeChild(this.svg.firstChild);
 
         const edgeColors = getEdgeColors();
+        const defs = activeDocument.createElementNS(svgNS, 'defs');
+        this.svg.appendChild(defs);
 
         // Transform group for panning + zoom
         const g = activeDocument.createElementNS(svgNS, 'g');
@@ -397,7 +405,7 @@ export class RelationshipMap {
         this.svg.appendChild(g);
 
         // Draw edges
-        for (const edge of this.edges) {
+        for (const [index, edge] of this.edges.entries()) {
             // Issue #222 — skip edges whose type the user has toggled off.
             if (this.hiddenTypes.has(edge.type)) continue;
             const a = this.nodes.find(n => n.id === edge.source);
@@ -413,6 +421,23 @@ export class RelationshipMap {
             line.setAttribute('stroke-width', '2');
             if (EDGE_DASHES[edge.type]) {
                 line.setAttribute('stroke-dasharray', EDGE_DASHES[edge.type]);
+            }
+            if (edge.twoWay === false) {
+                const markerId = `relationship-map-arrow-${index}`;
+                const marker = activeDocument.createElementNS(svgNS, 'marker');
+                marker.setAttribute('id', markerId);
+                marker.setAttribute('markerWidth', '8');
+                marker.setAttribute('markerHeight', '8');
+                marker.setAttribute('refX', '8');
+                marker.setAttribute('refY', '4');
+                marker.setAttribute('orient', 'auto');
+                marker.setAttribute('markerUnits', 'userSpaceOnUse');
+                const path = activeDocument.createElementNS(svgNS, 'path');
+                path.setAttribute('d', 'M 0 0 L 8 4 L 0 8 z');
+                path.setAttribute('fill', edgeColors[edge.type]);
+                marker.appendChild(path);
+                defs.appendChild(marker);
+                line.setAttribute('marker-end', `url(#${markerId})`);
             }
             g.appendChild(line);
 

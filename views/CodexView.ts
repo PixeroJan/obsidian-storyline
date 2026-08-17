@@ -47,6 +47,19 @@ export class CodexView extends ItemView {
     /** Search filter text */
     private searchText: string = '';
 
+    private formatFieldValue(value: unknown): string {
+        if (value == null) return '';
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint' || typeof value === 'symbol') {
+            return String(value);
+        }
+        if (Array.isArray(value)) return value.map(item => this.formatFieldValue(item)).join(',');
+        try {
+            return JSON.stringify(value) ?? '';
+        } catch {
+            return '';
+        }
+    }
+
     // ── Auto-save state ────────────────────────────────
     private _saveTimer: number | null = null;
     private _lastSaveTime = 0;
@@ -855,7 +868,7 @@ export class CodexView extends ItemView {
             });
         }
 
-        const currentValue = draft[key] != null ? String(draft[key]) : '';
+        const currentValue = this.formatFieldValue(draft[key]);
 
         if (toggle) {
             // Issue #223 — render an on/off toggle for boolean fields
@@ -935,7 +948,7 @@ export class CodexView extends ItemView {
                             this.selectedEntry = renamed.filePath;
                             if (this.rootContainer) this.renderView(this.rootContainer);
                         } catch (err) {
-                            new Notice(`Rename failed: ${err}`);
+                            new Notice(`Rename failed: ${err instanceof Error ? err.message : String(err)}`);
                         }
                     }
                 });
@@ -1679,7 +1692,7 @@ export class CodexView extends ItemView {
             new Notice(`Created ${name}`);
             if (this.rootContainer) this.renderView(this.rootContainer);
         } catch (err) {
-            new Notice(`Failed to create entry: ${err}`);
+            new Notice(`Failed to create entry: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -1700,7 +1713,7 @@ export class CodexView extends ItemView {
                         this.selectedEntry = null;
                         if (this.rootContainer) this.renderView(this.rootContainer);
                     } catch (err) {
-                        new Notice(`Delete failed: ${err}`);
+                        new Notice(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
                     }
                 }))
             .addButton(btn => btn.setButtonText('Cancel').onClick(() => modal.close()));
@@ -1997,7 +2010,7 @@ export class CodexView extends ItemView {
         }
         // Look for fields ending in 'Type' (itemType, creatureType, etc.)
         for (const key of catDef.fieldKeys) {
-            if (key.endsWith('Type') && entry[key]) return String(entry[key]);
+            if (key.endsWith('Type') && entry[key]) return this.formatFieldValue(entry[key]);
         }
         return '';
     }

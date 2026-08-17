@@ -6,6 +6,19 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.60
+
+### New Features
+
+- **Custom Character Roles** — The Character Role field now provides a built-in role dropdown with a final **Custom role...** option for entering one or more custom roles.
+- **Directional relationships** — Character relation rows now include a checked-by-default **Two-way relationship** checkbox. One-way relations do not create reciprocal entries and are shown with arrows in the Relationship Map and Story Graph.
+- **Relationship history** — Character profiles can record repeated relationship periods in a separate history section. Each period supports a role, target, two-way setting, scene range, or date/time range. Scene endpoints use ordered scene dropdowns with a **Custom scene...** fallback.
+
+### Documentation
+
+- **Character relationships and history** — Help now documents two-way and one-way relations, directional graph arrows, repeated relationship periods, scene/date anchors, custom scenes, and custom Character Roles.
+- **Help PDF export** — The Help view now has a `PDF` button that creates an A4-formatted PDF in the vault root. The PDF includes the current StoryLine version and generation date so users can identify outdated copies.
+
 ## Version 1.10.59
 
 ### Bug Fixes
