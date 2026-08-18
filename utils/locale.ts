@@ -500,6 +500,8 @@ export function countDialogueCharacters(
     locale: StoryLineLocale = DEFAULT_STORYLINE_LOCALE,
     selectedPair?: readonly [string, string],
 ): number {
+    const isWordChar = (char: string | undefined): boolean =>
+        char !== undefined && /[\p{L}\p{N}]/u.test(char);
     let total = 0;
     const pairs: ReadonlyArray<readonly [string, string]> = selectedPair
         ? [selectedPair]
@@ -512,7 +514,13 @@ export function countDialogueCharacters(
         if (open === close) {
             const positions: number[] = [];
             let i = text.indexOf(open);
-            while (i >= 0) { positions.push(i); i = text.indexOf(open, i + open.length); }
+            while (i >= 0) {
+                const isApostrophe = open === "'" || open === '\u2019';
+                const isInsideWord = isApostrophe &&
+                    isWordChar(text[i - 1]) && isWordChar(text[i + open.length]);
+                if (!isInsideWord) positions.push(i);
+                i = text.indexOf(open, i + open.length);
+            }
             for (let k = 0; k + 1 < positions.length; k += 2) {
                 total += Math.max(0, positions[k + 1] - (positions[k] + open.length));
             }
