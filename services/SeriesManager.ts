@@ -190,6 +190,8 @@ export class SeriesManager {
                     );
                 }
             }
+
+            await this.removeFolderIfEmpty(bookFolders.baseFolder);
         }
 
         // Create shared Codex folder structure at series level
@@ -473,13 +475,7 @@ export class SeriesManager {
             await this.migrateCodexFolder(subFolder, destSub);
         }
 
-        // Remove source folder if empty
-        try {
-            const remaining = await adapter.list(sourceCodex);
-            if (remaining.files.length === 0 && remaining.folders.length === 0) {
-                await adapter.rmdir(sourceCodex, false);
-            }
-        } catch { /* non-fatal */ }
+        await this.removeFolderIfEmpty(sourceCodex);
     }
 
     /**
@@ -522,11 +518,16 @@ export class SeriesManager {
             await this.moveFolderRecursive(subFolder, destSub);
         }
 
-        // Remove source folder if empty
+        await this.removeFolderIfEmpty(source);
+    }
+
+    private async removeFolderIfEmpty(folder: string): Promise<void> {
+        const adapter = this.app.vault.adapter;
         try {
-            const remaining = await adapter.list(source);
+            if (!await adapter.exists(folder)) return;
+            const remaining = await adapter.list(folder);
             if (remaining.files.length === 0 && remaining.folders.length === 0) {
-                await adapter.rmdir(source, false);
+                await adapter.rmdir(folder, false);
             }
         } catch { /* non-fatal */ }
     }

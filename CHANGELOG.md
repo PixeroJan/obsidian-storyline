@@ -13,6 +13,10 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 - **Automatic quotation marks** — Added an option to automatically replace typed double quotes with the selected quote style.
 - **Reorganized settings** — Related settings are now grouped and ordered to make them easier to find.
 
+### Bug Fixes
+
+- **Empty book folders are removed after creating a series** — The original book folder is now checked and removed after its contents have been moved into the new series folder, while non-empty folders are preserved.
+
 ## Version 1.10.61
 
 ### Bug Fixes
