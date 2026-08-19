@@ -71,6 +71,8 @@ import { getQuotePair } from './utils/locale';
  */
 export default class SceneCardsPlugin extends Plugin {
     settings: SceneCardsSettings = DEFAULT_SETTINGS;
+    private static readonly AUTOMATIC_QUOTE_REPLACEMENT_KEY = 'sl-automatic-quotation-marks';
+    private automaticQuoteReplacement = true;
     sceneManager!: SceneManager;
     /** Set to true once System/ migration is confirmed — guards saveSettings stripping */
     private _systemMigrationDone = false;
@@ -98,8 +100,34 @@ export default class SceneCardsPlugin extends Plugin {
     /** Issue #238 — periodic autosave interval id (5 min) */
     private writingStatsIntervalId: number | null = null;
 
+    isAutomaticQuoteReplacementEnabled(): boolean {
+        return this.automaticQuoteReplacement;
+    }
+
+    setAutomaticQuoteReplacementEnabled(enabled: boolean): void {
+        this.automaticQuoteReplacement = enabled;
+        try {
+            window.localStorage.setItem(
+                SceneCardsPlugin.AUTOMATIC_QUOTE_REPLACEMENT_KEY,
+                enabled ? '1' : '0',
+            );
+        } catch {
+            // localStorage may be unavailable in some contexts.
+        }
+    }
+
+    private loadAutomaticQuoteReplacementPreference(): boolean {
+        try {
+            const value = window.localStorage.getItem(SceneCardsPlugin.AUTOMATIC_QUOTE_REPLACEMENT_KEY);
+            return value === null ? true : value !== '0' && value !== 'false';
+        } catch {
+            return true;
+        }
+    }
+
     async onload(): Promise<void> {
         await this.loadSettings();
+        this.automaticQuoteReplacement = this.loadAutomaticQuoteReplacementPreference();
         registerCustomStatuses(this.settings.customStatuses || []);
         this.applyImageSizingVariables();
 
@@ -107,7 +135,7 @@ export default class SceneCardsPlugin extends Plugin {
         // Paste and existing text use their original characters.
         this.registerEditorExtension(EditorView.domEventHandlers({
             beforeinput: (event, view) => {
-                if (event.inputType !== 'insertText' || event.data !== '"') return false;
+                if (!this.automaticQuoteReplacement || event.inputType !== 'insertText' || event.data !== '"') return false;
                 const position = view.state.selection.main.head;
                 const line = view.state.doc.lineAt(position);
                 const previous = position > line.from ? view.state.sliceDoc(position - 1, position) : '';
@@ -118,7 +146,6 @@ export default class SceneCardsPlugin extends Plugin {
                 return true;
             },
         }));
-
         // Issue #189 — disable native spell-check in all StoryLine UI inputs,
         // textareas and contenteditables. Obsidian's "Disable spell check" only
         // applies to its own editor; plugin-rendered form fields inherit the

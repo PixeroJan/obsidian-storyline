@@ -7686,6 +7686,38 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 /* ============================================
    Settings — Collapsible Color Section
    ============================================ */
+.story-line-settings-section {
+    margin: 12px 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 0;
+}
+.story-line-settings-section > summary {
+    cursor: pointer;
+    padding: 12px 14px;
+    font-weight: 600;
+    font-size: 15px;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+.story-line-settings-section > summary::-webkit-details-marker {
+    display: none;
+}
+.story-line-settings-section > summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform 0.15s ease;
+}
+.story-line-settings-section[open] > summary::before {
+    transform: rotate(90deg);
+}
+.story-line-settings-section-body {
+    padding: 4px 14px 14px;
+}
+
 .story-line-color-section {
     margin: 12px 0;
     border: 1px solid var(--background-modifier-border);
@@ -12144,6 +12176,9 @@ body.sl-focus-active-global .titlebar {
 }
 .sl-info-value {
     color: var(--text-normal);
+}
+.sl-quote-settings {
+    margin-bottom: 8px;
 }
 .sl-info-section {
     display: flex;

@@ -6,6 +6,13 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.62
+
+### Improvements
+
+- **Automatic quotation marks** — Added an option to automatically replace typed double quotes with the selected quote style.
+- **Reorganized settings** — Related settings are now grouped and ordered to make them easier to find.
+
 ## Version 1.10.61
 
 ### Bug Fixes
