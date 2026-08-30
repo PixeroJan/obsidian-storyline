@@ -624,6 +624,8 @@ export interface SceneCardsSettings {
     researchActiveTag: string | null;
     /** Remembered Research view active type filter */
     researchActiveType: string | null;
+    /** Remembered Character overview sort mode */
+    characterSortBy: 'name' | 'modified' | 'created' | 'role' | 'manual';
     autoOpenNavigator: boolean;
     showNotesInKanban: boolean;
     showScenesInCorkboard: boolean;
@@ -929,6 +931,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     timelineSwimlaneGroupBy: 'pov',
     researchActiveTag: null,
     researchActiveType: null,
+    characterSortBy: 'name',
     autoOpenNavigator: true,
     showNotesInKanban: false,
     showScenesInCorkboard: true,

@@ -85,6 +85,7 @@ export class CharacterView extends ItemView {
         super(leaf);
         this.plugin = plugin;
         this.sceneManager = sceneManager;
+        this.sortBy = plugin.settings.characterSortBy ?? 'name';
         // Use the plugin's shared CharacterManager so entries scanned from
         // Additional Source Folders (which are added to the plugin-level
         // manager) are visible here too. Previously each view created its
@@ -275,6 +276,8 @@ export class CharacterView extends ItemView {
         }
         sortSelect.addEventListener('change', () => {
             this.sortBy = sortSelect.value as 'name' | 'role' | 'created' | 'modified' | 'manual';
+            this.plugin.settings.characterSortBy = this.sortBy;
+            void this.plugin.saveSettings();
             this.renderCharacterOverview(container);
         });
 
@@ -339,7 +342,7 @@ export class CharacterView extends ItemView {
 
         // Apply sort
         if (this.sortBy === 'role') {
-            const roleOrder: Record<string, number> = { protagonist: 0, antagonist: 1, supporting: 2, minor: 3 };
+            const roleOrder: Record<string, number> = { protagonist: 0, deuteragonist: 1, antagonist: 2, supporting: 3, minor: 4 };
             fileCharacters.sort((a, b) => {
                 const ra = roleOrder[getPrimaryRole(a).toLowerCase()] ?? 99;
                 const rb = roleOrder[getPrimaryRole(b).toLowerCase()] ?? 99;
@@ -646,6 +649,8 @@ export class CharacterView extends ItemView {
                 : this.characterManager.saveCharacter({ ...character, sortOrder: index }),
         ));
         this.sortBy = 'manual';
+        this.plugin.settings.characterSortBy = 'manual';
+        await this.plugin.saveSettings();
         this.renderView(this.rootContainer!);
     }
 
@@ -1979,7 +1984,8 @@ export class CharacterView extends ItemView {
                     }
                 };
 
-                const shouldStartCustomMode = relation.category === 'custom' || relation.type === NEW_CUSTOM_TYPE_VALUE || !RELATION_CATEGORIES.some(c => c.value === relation.category);
+                const isBuiltInRelationType = RELATION_CATEGORIES.some(c => RELATION_TYPES_BY_CATEGORY[c.value].includes(relation.type));
+                const shouldStartCustomMode = !isBuiltInRelationType || relation.category === 'custom' || relation.type === NEW_CUSTOM_TYPE_VALUE || !RELATION_CATEGORIES.some(c => c.value === relation.category);
                 setCustomMode(shouldStartCustomMode);
 
                 typeSelect.addEventListener('change', () => {
