@@ -273,6 +273,7 @@ export class SceneQueryService {
         const totalScenes = activeScenes.length;
         const statusCounts: Record<string, number> = {};
         let totalWords = 0;
+        let totalChars = 0;
         let totalTargetWords = 0;
         const actCounts: Record<string, number> = {};
         const povCounts: Record<string, number> = {};
@@ -290,6 +291,7 @@ export class SceneQueryService {
             // Words
             if (!skipWords) {
                 totalWords += scene.wordcount || 0;
+                totalChars += scene.charcount || 0;
                 totalTargetWords += scene.target_wordcount || 0;
             }
 
@@ -317,6 +319,7 @@ export class SceneQueryService {
             totalScenes,
             statusCounts,
             totalWords,
+            totalChars,
             totalTargetWords,
             actCounts,
             povCounts,

@@ -6,6 +6,12 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.64
+
+### Bug Fixes
+
+- **Count unit now applies to Navigator and Stats** *([#259](https://github.com/PixeroJan/obsidian-storyline/issues/259))* — Navigator scene lengths and sorting, plus Stats scene-length totals and analyses, now use `charcount` and character labels when **Characters** is selected. Word-based writing-session metrics and goals remain word-based. Affects `services/SceneQueryService.ts`, `views/NavigatorView.ts`, and `views/StatsView.ts`.
+
 ## Version 1.10.63
 
 ### Bug Fixes

@@ -165,7 +165,7 @@ export class StatsView extends ItemView {
 
         const row = section.createDiv('stats-sprint-row');
         this.createStatCard(row, 'file-text', 'Scenes', String(stats.totalScenes));
-        this.createStatCard(row, 'pen-tool', 'Words', stats.totalWords.toLocaleString());
+        this.createStatCard(row, 'pen-tool', this.getSceneCountLabel(), this.getTotalSceneCount(stats).toLocaleString());
 
         // Estimated reading time — multi-language aware. Latin/Cyrillic
         // scripts use words/min; CJK/Thai use characters/min for sanity.
@@ -572,14 +572,14 @@ export class StatsView extends ItemView {
             });
         }
 
-        // ── Chapter word counts ──
-        const chapterMap: Record<string, { words: number; scenes: number }> = {};
+        // ── Chapter scene lengths ──
+        const chapterMap: Record<string, { count: number; scenes: number }> = {};
         for (const s of allScenes) {
             const aKey = s.act !== undefined ? String(s.act) : '?';
             const cKey = s.chapter !== undefined ? String(s.chapter) : '?';
             const key = `Act ${aKey}, Ch ${cKey}`;
-            if (!chapterMap[key]) chapterMap[key] = { words: 0, scenes: 0 };
-            chapterMap[key].words += s.wordcount || 0;
+            if (!chapterMap[key]) chapterMap[key] = { count: 0, scenes: 0 };
+            chapterMap[key].count += this.getSceneCount(s);
             chapterMap[key].scenes += 1;
         }
 
@@ -588,20 +588,20 @@ export class StatsView extends ItemView {
 
         if (chapEntries.length > 1) {
             const chapSec = parent.createDiv('stats-subsection');
-            chapSec.createEl('h5', { cls: 'stats-subsection-title', text: 'Chapter word counts' });
-            const maxCw = Math.max(...chapEntries.map(([, v]) => v.words), 1);
-            const medianCw = this.median(chapEntries.map(([, v]) => v.words));
+            chapSec.createEl('h5', { cls: 'stats-subsection-title', text: `Chapter ${this.getSceneCountNoun()} counts` });
+            const maxCw = Math.max(...chapEntries.map(([, v]) => v.count), 1);
+            const medianCw = this.median(chapEntries.map(([, v]) => v.count));
             const outlierThresh = medianCw * 1.5;
 
             const tbl = chapSec.createDiv('pacing-avg-table');
             for (const [label, data] of chapEntries) {
-                const pct = (data.words / maxCw) * 100;
-                const outlier = data.words > outlierThresh && medianCw > 0;
+                const pct = (data.count / maxCw) * 100;
+                const outlier = data.count > outlierThresh && medianCw > 0;
                 const row = tbl.createDiv(`pacing-avg-row${outlier ? ' stats-outlier' : ''}`);
                 row.createSpan({ cls: 'pacing-avg-label', text: label });
                 row.createSpan({
                     cls: 'pacing-avg-value',
-                    text: `${data.words.toLocaleString()} words (${data.scenes} scene${data.scenes !== 1 ? 's' : ''})`,
+                    text: `${data.count.toLocaleString()} ${this.getSceneCountLabel().toLowerCase()} (${data.scenes} scene${data.scenes !== 1 ? 's' : ''})`,
                 });
                 const bar = row.createDiv('stats-bar');
                 const fill = bar.createDiv('stats-bar-fill');
@@ -977,7 +977,7 @@ export class StatsView extends ItemView {
         for (const s of allScenes) {
             const k = s.act !== undefined ? getActDisplayLabel(s.act) : 'No Act';
             if (!actWordMap[k]) actWordMap[k] = { total: 0, count: 0 };
-            actWordMap[k].total += s.wordcount || 0;
+            actWordMap[k].total += this.getSceneCount(s);
             actWordMap[k].count += 1;
         }
         const actEntries = Object.entries(actWordMap).sort(([a], [b]) =>
@@ -991,16 +991,16 @@ export class StatsView extends ItemView {
             const pct = (avg / maxAvg) * 100;
             const row = avgTbl.createDiv('pacing-avg-row');
             row.createSpan({ cls: 'pacing-avg-label', text: act });
-            row.createSpan({ cls: 'pacing-avg-value', text: `${avg.toLocaleString()} avg words (${data.count} scene${data.count !== 1 ? 's' : ''})` });
+            row.createSpan({ cls: 'pacing-avg-value', text: `${avg.toLocaleString()} avg ${this.getSceneCountLabel().toLowerCase()} (${data.count} scene${data.count !== 1 ? 's' : ''})` });
             const bar = row.createDiv('stats-bar');
             bar.createDiv('stats-bar-fill').setCssStyles({ width: `${pct}%`, background: 'var(--sl-info,#2196F3)' });
         }
 
-        // ── Word-count distribution histogram ──
+        // ── Scene-length distribution histogram ──
         const distSec = parent.createDiv('stats-subsection');
-        distSec.createEl('h5', { cls: 'stats-subsection-title', text: 'Word count distribution' });
+        distSec.createEl('h5', { cls: 'stats-subsection-title', text: `${this.getSceneCountNoun()} count distribution` });
 
-        const wcs = allScenes.map(s => s.wordcount || 0);
+        const wcs = allScenes.map(s => this.getSceneCount(s));
         const maxWc = Math.max(...wcs, 1);
         let bucketSize: number;
         if (maxWc <= 500) bucketSize = 100;
@@ -1021,7 +1021,7 @@ export class StatsView extends ItemView {
             const col = chart.createDiv('pacing-dist-col');
             const bar = col.createDiv('pacing-dist-bar');
             bar.setCssStyles({ height: `${Math.max(2, (bkt.count / maxBkt) * 100)}%` });
-            bar.setAttribute('title', `${bkt.label} words: ${bkt.count} scene${bkt.count !== 1 ? 's' : ''}`);
+            bar.setAttribute('title', `${bkt.label} ${this.getSceneCountLabel().toLowerCase()}: ${bkt.count} scene${bkt.count !== 1 ? 's' : ''}`);
             col.createDiv({ cls: 'pacing-dist-count', text: String(bkt.count) });
             col.createDiv({ cls: 'pacing-dist-label', text: bkt.label });
         }
@@ -1033,7 +1033,7 @@ export class StatsView extends ItemView {
         const loThresh = Math.max(0, medianWc - 2 * stdDev);
         const hiThresh = medianWc + 2 * stdDev;
         const outliers = allScenes.filter(s => {
-            const w = s.wordcount || 0;
+            const w = this.getSceneCount(s);
             return w < loThresh || w > hiThresh;
         });
         if (outliers.length > 0) {
@@ -1041,16 +1041,16 @@ export class StatsView extends ItemView {
             oSec.createEl('h5', { cls: 'stats-subsection-title', text: `Scene Length Outliers (${outliers.length})` });
             oSec.createEl('p', {
                 cls: 'stats-hint',
-                text: `Median: ${medianWc.toLocaleString()} words · Flagged outside ${Math.round(loThresh)}–${Math.round(hiThresh)} range`,
+                text: `Median: ${medianWc.toLocaleString()} ${this.getSceneCountLabel().toLowerCase()} · Flagged outside ${Math.round(loThresh)}–${Math.round(hiThresh)} range`,
             });
             const list = oSec.createEl('ul', { cls: 'stats-list' });
-            for (const scene of outliers.sort((a, b) => (b.wordcount || 0) - (a.wordcount || 0))) {
+            for (const scene of outliers.sort((a, b) => this.getSceneCount(b) - this.getSceneCount(a))) {
                 const li = list.createEl('li', { cls: 'stats-outlier-item' });
                 const link = li.createEl('a', { text: scene.title || 'Untitled', cls: 'stats-scene-link' });
                 link.addEventListener('click', () => {
                     this.app.workspace.openLinkText(scene.filePath, '', true);
                 });
-                li.createSpan({ text: ` — ${(scene.wordcount || 0).toLocaleString()} words` });
+                li.createSpan({ text: ` — ${this.getSceneCount(scene).toLocaleString()} ${this.getSceneCountLabel().toLowerCase()}` });
             }
         }
 
@@ -1546,11 +1546,11 @@ export class StatsView extends ItemView {
         sec.createEl('h5', { cls: 'stats-subsection-title', text: 'Pacing coach' });
         sec.createEl('p', { cls: 'stats-hint', text: 'Scene length (bars) with conflict presence (dots). Long scenes without conflict may slow pacing.' });
 
-        const maxWc = Math.max(...ordered.map(s => s.wordcount || 0), 1);
+        const maxWc = Math.max(...ordered.map(s => this.getSceneCount(s)), 1);
         const chart = sec.createDiv('pacing-coach-chart');
 
         for (const scene of ordered) {
-            const wc = scene.wordcount || 0;
+            const wc = this.getSceneCount(scene);
             const hasConflict = !!(scene.conflict && scene.conflict.trim().length > 0);
             const hPct = (wc / maxWc) * 100;
 
@@ -1569,7 +1569,7 @@ export class StatsView extends ItemView {
             }
 
             const actLabel = scene.act !== undefined ? ` (${getActDisplayLabel(scene.act)})` : '';
-            bar.setAttribute('title', `${scene.title || 'Untitled'}${actLabel}\n${wc.toLocaleString()} words${hasConflict ? '\n✓ Has conflict' : '\n✗ No conflict'}`);
+            bar.setAttribute('title', `${scene.title || 'Untitled'}${actLabel}\n${wc.toLocaleString()} ${this.getSceneCountLabel().toLowerCase()}${hasConflict ? '\n✓ Has conflict' : '\n✗ No conflict'}`);
         }
 
         // Legend
@@ -1584,11 +1584,11 @@ export class StatsView extends ItemView {
         // Summary stats
         const withConflict = ordered.filter(s => s.conflict && s.conflict.trim().length > 0);
         const avgWithConflict = withConflict.length > 0
-            ? Math.round(withConflict.reduce((s, sc) => s + (sc.wordcount || 0), 0) / withConflict.length)
+            ? Math.round(withConflict.reduce((s, sc) => s + this.getSceneCount(sc), 0) / withConflict.length)
             : 0;
         const withoutConflict = ordered.filter(s => !s.conflict || s.conflict.trim().length === 0);
         const avgWithout = withoutConflict.length > 0
-            ? Math.round(withoutConflict.reduce((s, sc) => s + (sc.wordcount || 0), 0) / withoutConflict.length)
+            ? Math.round(withoutConflict.reduce((s, sc) => s + this.getSceneCount(sc), 0) / withoutConflict.length)
             : 0;
 
         const summaryRow = sec.createDiv('stats-sprint-row');
@@ -1597,8 +1597,8 @@ export class StatsView extends ItemView {
 
         // Flag long scenes without conflict
         const longNoConflict = withoutConflict
-            .filter(s => (s.wordcount || 0) > avgWithConflict * 1.5 && (s.wordcount || 0) > 500)
-            .sort((a, b) => (b.wordcount || 0) - (a.wordcount || 0));
+            .filter(s => this.getSceneCount(s) > avgWithConflict * 1.5 && this.getSceneCount(s) > 500)
+            .sort((a, b) => this.getSceneCount(b) - this.getSceneCount(a));
 
         if (longNoConflict.length > 0) {
             const flagSec = sec.createDiv('stats-subsection');
@@ -1613,7 +1613,7 @@ export class StatsView extends ItemView {
                 link.addEventListener('click', () => {
                     this.app.workspace.openLinkText(scene.filePath, '', true);
                 });
-                li.createSpan({ text: ` — ${(scene.wordcount || 0).toLocaleString()} words, no conflict` });
+                li.createSpan({ text: ` — ${this.getSceneCount(scene).toLocaleString()} ${this.getSceneCountLabel().toLowerCase()}, no conflict` });
             }
         }
     }
@@ -1675,6 +1675,26 @@ export class StatsView extends ItemView {
     // ════════════════════════════════════════════════════
     //  Shared helpers
     // ════════════════════════════════════════════════════
+
+    private getSceneCountLabel(): 'Words' | 'Characters' {
+        return this.plugin.settings.countUnit === 'chars' ? 'Characters' : 'Words';
+    }
+
+    private getSceneCountNoun(): 'word' | 'character' {
+        return this.plugin.settings.countUnit === 'chars' ? 'character' : 'word';
+    }
+
+    private getSceneCount(scene: Scene): number {
+        return this.plugin.settings.countUnit === 'chars'
+            ? (scene.charcount || 0)
+            : (scene.wordcount || 0);
+    }
+
+    private getTotalSceneCount(stats: ReturnType<SceneManager['getStatistics']>): number {
+        return this.plugin.settings.countUnit === 'chars'
+            ? stats.totalChars
+            : stats.totalWords;
+    }
 
     private createStatCard(parent: HTMLElement, icon: string, label: string, value: string): void {
         const card = parent.createDiv('stats-sprint-card');

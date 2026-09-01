@@ -120,7 +120,9 @@ export class NavigatorView extends ItemView {
             const menu = new Menu();
             for (const mode of Object.keys(SORT_LABELS) as NavSortMode[]) {
                 menu.addItem((item) => {
-                    item.setTitle(SORT_LABELS[mode]);
+                    item.setTitle(mode === 'words' && this.plugin.settings.countUnit === 'chars'
+                        ? 'Character count'
+                        : SORT_LABELS[mode]);
                     item.setIcon(SORT_ICONS[mode]);
                     if (mode === this.sortMode) item.setChecked(true);
                     item.onClick(() => {
@@ -415,12 +417,13 @@ export class NavigatorView extends ItemView {
         const title = row.createSpan('sl-nav-title');
         title.textContent = scene.title;
 
-        // Word count
-        if (scene.wordcount && scene.wordcount > 0) {
+        // Scene length
+        const sceneCount = this.getSceneCount(scene);
+        if (sceneCount > 0) {
             const wc = row.createSpan('sl-nav-wc');
-            wc.textContent = scene.wordcount >= 1000
-                ? `${(scene.wordcount / 1000).toFixed(1)}k`
-                : `${scene.wordcount}`;
+            wc.textContent = sceneCount >= 1000
+                ? `${(sceneCount / 1000).toFixed(1)}k`
+                : `${sceneCount}`;
         }
 
         // Click to open the scene file (or scroll in Manuscript view)
@@ -564,7 +567,7 @@ export class NavigatorView extends ItemView {
                     return bTime - aTime; // newest first
                 }
                 case 'words':
-                    return (b.wordcount || 0) - (a.wordcount || 0);
+                    return this.getSceneCount(b) - this.getSceneCount(a);
                 case 'title':
                     return a.title.localeCompare(b.title);
                 default:
@@ -604,6 +607,12 @@ export class NavigatorView extends ItemView {
     private formatWords(n: number): string {
         if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
         return String(n);
+    }
+
+    private getSceneCount(scene: Scene): number {
+        return this.plugin.settings.countUnit === 'chars'
+            ? (scene.charcount || 0)
+            : (scene.wordcount || 0);
     }
 }
 /* eslint-enable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion -- end of file-wide suppression block opened at line 1 */
