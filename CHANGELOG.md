@@ -6,6 +6,12 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.66
+
+### Bug Fixes
+
+- **fflate security update** — Upgraded `fflate` to `0.8.3`, outside the vulnerable range identified in [GHSA-px8p-9vwx-vf98](https://github.com/advisories/GHSA-px8p-9vwx-vf98).
+
 ## Version 1.10.65
 
 ### New Features

@@ -1,7 +1,7 @@
 {
   "id": "storyline",
   "name": "StoryLine",
-  "version": "1.10.65",
+  "version": "1.10.66",
   "minAppVersion": "1.12.7",
   "description": "Transform your vault into a powerful book planning and writing tool. Corkboard,KanbanBoard view, timeline, plotlines,character tracking, and more.",
   "author": "Jan Sandström",
