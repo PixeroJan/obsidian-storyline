@@ -1191,6 +1191,7 @@ export default class SceneCardsPlugin extends Plugin {
         'characterCustomSections',
         'locationCustomSections',
         'codexCategoryCustomSections',
+        'codexVisualGroups',
         'customLocationTypes',
         'codexCustomCategories',
         'codexEnabledCategories',
@@ -1687,6 +1688,9 @@ export default class SceneCardsPlugin extends Plugin {
             this.settings.codexCategoryCustomSections = isRecord(customSections.codexCategoryCustomSections)
                 ? (customSections.codexCategoryCustomSections as typeof this.settings.codexCategoryCustomSections)
                 : {};
+            this.settings.codexVisualGroups = isRecord(customSections.codexVisualGroups)
+                ? (customSections.codexVisualGroups as typeof this.settings.codexVisualGroups)
+                : {};
             this.settings.customLocationTypes = Array.isArray(customSections.customLocationTypes)
                 ? (customSections.customLocationTypes as string[])
                 : [];
@@ -1704,6 +1708,7 @@ export default class SceneCardsPlugin extends Plugin {
             this.settings.characterCustomSections = [];
             this.settings.locationCustomSections = [];
             this.settings.codexCategoryCustomSections = {};
+            this.settings.codexVisualGroups = {};
             this.settings.customLocationTypes = [];
             this.settings.codexCustomCategories = [];
             this.settings.codexEnabledCategories = [];
@@ -1791,6 +1796,7 @@ export default class SceneCardsPlugin extends Plugin {
             characterCustomSections: this.settings.characterCustomSections || [],
             locationCustomSections: this.settings.locationCustomSections || [],
             codexCategoryCustomSections: this.settings.codexCategoryCustomSections || {},
+            codexVisualGroups: this.settings.codexVisualGroups || {},
             customLocationTypes: this.settings.customLocationTypes || [],
             codexCustomCategories: this.settings.codexCustomCategories || [],
             codexEnabledCategories: this.settings.codexEnabledCategories || [],
@@ -2424,12 +2430,53 @@ export default class SceneCardsPlugin extends Plugin {
         for (const viewType of viewTypes) {
             const leaves = this.app.workspace.getLeavesOfType(viewType);
             for (const leaf of leaves) {
-                const view = leaf.view as unknown as { refresh?: () => void };
+                const viewRoot = (leaf.view as unknown as { containerEl?: HTMLElement }).containerEl;
+                const scrollState = viewRoot ? this.captureViewScrollState(viewRoot) : [];
+                const view = leaf.view as unknown as { refresh?: () => void | Promise<void> };
                 if (view && typeof view.refresh === 'function') {
-                    view.refresh();
+                    await view.refresh();
+                    this.restoreViewScrollState(viewRoot, scrollState);
+                    window.requestAnimationFrame(() => {
+                        this.restoreViewScrollState(viewRoot, scrollState);
+                        window.setTimeout(() => this.restoreViewScrollState(viewRoot, scrollState), 120);
+                    });
                 }
                 // Update the tab title so it reflects the new project name immediately
                 (leaf as unknown as { updateHeader?: () => void }).updateHeader?.();
+            }
+        }
+    }
+
+    private captureViewScrollState(root: HTMLElement): Array<{ path: number[]; top: number; left: number }> {
+        const state: Array<{ path: number[]; top: number; left: number }> = [];
+        const visit = (element: HTMLElement, path: number[]): void => {
+            if (element.scrollTop !== 0 || element.scrollLeft !== 0) {
+                state.push({ path, top: element.scrollTop, left: element.scrollLeft });
+            }
+            Array.from(element.children).forEach((child, index) => {
+                if (child.instanceOf(HTMLElement)) visit(child, [...path, index]);
+            });
+        };
+        visit(root, []);
+        return state;
+    }
+
+    private restoreViewScrollState(root: HTMLElement | undefined, state: Array<{ path: number[]; top: number; left: number }>): void {
+        if (!root || state.length === 0) return;
+        for (const saved of state) {
+            let element: HTMLElement = root;
+            let valid = true;
+            for (const index of saved.path) {
+                const child = element.children[index];
+                if (!child || !child.instanceOf(HTMLElement)) {
+                    valid = false;
+                    break;
+                }
+                element = child;
+            }
+            if (valid) {
+                element.scrollTop = saved.top;
+                element.scrollLeft = saved.left;
             }
         }
     }
@@ -2693,6 +2740,21 @@ export default class SceneCardsPlugin extends Plugin {
         const adapter = this.app.vault.adapter;
         const jsonFiles = ['plotgrid.json', 'timeline.json', 'board.json', 'plotlines.json', 'stats.json'];
 
+        const hasUsableData = (filename: string, content: string): boolean => {
+            try {
+                const parsed: unknown = JSON.parse(content);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+                const record = parsed as Record<string, unknown>;
+                if (filename === 'board.json') {
+                    const positions = record.corkboardPositions;
+                    return !!positions && typeof positions === 'object' && Object.keys(positions as object).length > 0;
+                }
+                return Object.keys(record).length > 0;
+            } catch {
+                return false;
+            }
+        };
+
         for (const project of this.sceneManager.getProjects()) {
             const baseFolder = project.sceneFolder
                 .replace(/\\/g, '/').replace(/\/Scenes\/?$/, '');
@@ -2704,9 +2766,15 @@ export default class SceneCardsPlugin extends Plugin {
 
                 try {
                     if (!await adapter.exists(oldPath)) continue;
-                    // If System/ file already exists, skip (already migrated)
                     if (await adapter.exists(newPath)) {
-                        // Delete the old file since System/ version exists
+                        // An empty System file can have been created before the
+                        // legacy file was migrated. Preserve usable legacy data
+                        // before removing the old file.
+                        const oldContent = await adapter.read(oldPath);
+                        const newContent = await adapter.read(newPath);
+                        if (!hasUsableData(filename, newContent) && hasUsableData(filename, oldContent)) {
+                            await adapter.write(newPath, oldContent);
+                        }
                         const oldFile = this.app.vault.getAbstractFileByPath(oldPath);
                         if (oldFile) await this.app.fileManager.trashFile(oldFile);
                         continue;

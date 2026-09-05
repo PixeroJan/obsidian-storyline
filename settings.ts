@@ -9,6 +9,12 @@ import { App, Modal, Notice, PluginSettingTab, Setting, SettingGroup, TFolder, T
 import * as obsidian from 'obsidian';
 import { QUOTE_STYLE_OPTIONS, SUPPORTED_STORYLINE_LOCALES, normalizeStoryLineLocale, type QuoteStyle } from './utils/locale';
 
+export interface CodexVisualGroup {
+    id: string;
+    name: string;
+    entryPaths: string[];
+}
+
 // ═══════════════════════════════════════════════════════
 //  COLOR PALETTES — Catppuccin + Mood-based
 // ═══════════════════════════════════════════════════════
@@ -747,6 +753,8 @@ export interface SceneCardsSettings {
     codexEnabledCategories: string[];
     /** User-created custom codex category definitions */
     codexCustomCategories: Array<{ id: string; label: string; icon: string; showInSidebar?: boolean }>;
+    /** Per-project, display-only groups for entries in each Codex category. */
+    codexVisualGroups: Record<string, CodexVisualGroup[]>;
 
     // Per-category default custom field templates (#115). When a new entry is created
     // in this category, the listed field names are pre-populated with empty values.
@@ -997,6 +1005,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
 
     codexEnabledCategories: ['items'],
     codexCustomCategories: [],
+    codexVisualGroups: {},
     codexCategoryFieldTemplates: {},
     codexCategoryCustomSections: {},
     characterCustomSections: [],

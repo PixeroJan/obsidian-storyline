@@ -2,6 +2,7 @@
 import { App, ItemView, WorkspaceLeaf, Modal, Setting, Notice, TFile } from 'obsidian';
 import * as obsidian from 'obsidian';
 import type SceneCardsPlugin from '../main';
+import type { CodexVisualGroup } from '../settings';
 import { SceneManager } from '../services/SceneManager';
 import { CodexManager } from '../services/CodexManager';
 import { CodexEntry, CodexCategoryDef, CodexFieldCategory, CodexFieldDef, BUILTIN_CODEX_CATEGORIES, makeCustomCodexCategory, CODEX_ICON_OPTIONS } from '../models/Codex';
@@ -11,6 +12,7 @@ import { applyMobileClass } from '../components/MobileAdapter';
 import { pickImage as pickImageModal, resolveImagePath } from '../components/ImagePicker';
 import { AddFieldModal } from '../components/AddFieldModal';
 import { attachTooltip } from '../components/Tooltip';
+import { attachCodexVisualGroupReorder } from '../components/CodexVisualGroupManager';
 import { openConfirmModal } from '../components/ConfirmModal';
 import {
     CUSTOM_SECTION_KEY_SEP,
@@ -41,7 +43,10 @@ export class CodexView extends ItemView {
     private selectedEntry: string | null = null;
     /** Active category tab id */
     private activeCategory: string = '';
-    private sortBy: 'name' | 'modified' | 'created' | 'type' = 'name';
+    private sortBy: 'name' | 'modified' | 'created' | 'type' | 'manual' = 'name';
+    /** View-only grouping; entry files and frontmatter remain unchanged. */
+    private groupingMode: 'none' | 'type' | 'named' = 'none';
+    private activeVisualGroupId = '';
     /** Sections collapsed in detail view */
     private collapsedSections: Set<string> = new Set();
     /** Search filter text */
@@ -107,9 +112,14 @@ export class CodexView extends ItemView {
         );
         await this.plugin.reloadEntities();
 
-        // Reset to hub state — no category pre-selected
-        this.activeCategory = '';
+        // Reopen a category with saved visual groups so the grouped view is
+        // visible immediately after a plugin reload; otherwise use the hub.
+        const groupedCategory = this.codexManager.getCategories().find(category =>
+            (this.plugin.settings.codexVisualGroups?.[category.id]?.length ?? 0) > 0,
+        );
+        this.activeCategory = groupedCategory?.id ?? '';
         this.selectedEntry = null;
+        this.restoreSavedVisualGrouping();
 
         this.renderView(container);
     }
@@ -127,6 +137,7 @@ export class CodexView extends ItemView {
     setActiveCategory(categoryId: string): void {
         this.activeCategory = categoryId;
         this.selectedEntry = null;
+        this.restoreSavedVisualGrouping();
         if (this.rootContainer) this.renderView(this.rootContainer);
     }
 
@@ -146,6 +157,7 @@ export class CodexView extends ItemView {
         }
         this.activeCategory = entry.type;
         this.selectedEntry = filePath;
+        this.restoreSavedVisualGrouping();
         if (this.rootContainer) {
             this.renderView(this.rootContainer);
         }
@@ -194,6 +206,13 @@ export class CodexView extends ItemView {
         obsidian.setIcon(addCatBtn, 'settings');
         attachTooltip(addCatBtn, 'Manage categories');
         addCatBtn.addEventListener('click', () => this.openManageCategoriesModal());
+
+        const groupBtn = controls.createEl('button', {
+            cls: 'codex-toolbar-icon-btn',
+        });
+        obsidian.setIcon(groupBtn, 'folder-tree');
+        attachTooltip(groupBtn, 'Manage visual groups');
+        groupBtn.addEventListener('click', () => this.openManageVisualGroupsModal());
 
         // Add entry button (icon-only)
         const addBtn = controls.createEl('button', {
@@ -246,6 +265,7 @@ export class CodexView extends ItemView {
 
             tab.addEventListener('click', () => {
                 this.activeCategory = cat.id;
+                this.restoreSavedVisualGrouping();
                 if (this.rootContainer) this.renderView(this.rootContainer);
             });
         }
@@ -277,15 +297,46 @@ export class CodexView extends ItemView {
             { value: 'modified', label: 'Last edited' },
             { value: 'created', label: 'Date created' },
             { value: 'type', label: 'Type' },
+            { value: 'manual', label: 'Manual' },
         ];
         for (const opt of sortOptions) {
             const el = sortSelect.createEl('option', { text: opt.label, value: opt.value });
             if (this.sortBy === opt.value) el.selected = true;
         }
         sortSelect.addEventListener('change', () => {
-            this.sortBy = sortSelect.value as 'type' | 'name' | 'created' | 'modified';
+            this.sortBy = sortSelect.value as 'type' | 'name' | 'created' | 'modified' | 'manual';
             this.renderList(listContainer);
         });
+
+        if (this.activeCategory) {
+            searchRow.createSpan({ cls: 'codex-sort-label', text: 'Group by' });
+            const groupSelect = searchRow.createEl('select', { cls: 'codex-sort-select' });
+            const groupOptions: { value: string; label: string }[] = [
+                { value: 'none', label: 'None' },
+                { value: 'type', label: 'Type' },
+                ...this.getVisualGroups().map(group => ({ value: `named:${group.id}`, label: group.name })),
+            ];
+            for (const opt of groupOptions) {
+                const el = groupSelect.createEl('option', { text: opt.label, value: opt.value });
+                const current = this.groupingMode === 'named'
+                    ? `named:${this.activeVisualGroupId}`
+                    : this.groupingMode;
+                if (current === opt.value) el.selected = true;
+            }
+            groupSelect.addEventListener('change', () => {
+                if (groupSelect.value === 'type') {
+                    this.groupingMode = 'type';
+                    this.activeVisualGroupId = '';
+                } else if (groupSelect.value.startsWith('named:')) {
+                    this.groupingMode = 'named';
+                    this.activeVisualGroupId = groupSelect.value.slice('named:'.length);
+                } else {
+                    this.groupingMode = 'none';
+                    this.activeVisualGroupId = '';
+                }
+                this.renderList(listContainer);
+            });
+        }
 
         // ── List ───────────────────────────────────────
         const listContainer = container.createDiv('codex-list-container');
@@ -317,10 +368,25 @@ export class CodexView extends ItemView {
         // Resolve catDef per-entry helper for hub mode
         const getCatDef = (entry: CodexEntry) =>
             isHub ? this.codexManager.getCategoryDef(entry.type) : catDef;
+        const visualGroups = isHub ? [] : this.getVisualGroups();
+        const getVisualGroup = (entry: CodexEntry): CodexVisualGroup | undefined =>
+            visualGroups.find(group => group.entryPaths.includes(entry.filePath));
+        const manualOrder = new Map(entries.map((entry, index) => [entry.filePath, index]));
 
-        // Sort
-        entries = [...entries].sort((a, b) => {
+        const compareEntries = (a: CodexEntry, b: CodexEntry): number => {
             switch (this.sortBy) {
+                case 'manual': {
+                    if (this.groupingMode === 'named' && !isHub) {
+                        const groupA = getVisualGroup(a);
+                        const groupB = getVisualGroup(b);
+                        if (groupA?.id !== groupB?.id) {
+                            return (groupA ? visualGroups.indexOf(groupA) : visualGroups.length)
+                                - (groupB ? visualGroups.indexOf(groupB) : visualGroups.length);
+                        }
+                        if (groupA) return groupA.entryPaths.indexOf(a.filePath) - groupB!.entryPaths.indexOf(b.filePath);
+                    }
+                    return (manualOrder.get(a.filePath) ?? 0) - (manualOrder.get(b.filePath) ?? 0);
+                }
                 case 'modified':
                     return (b.modified ?? '').localeCompare(a.modified ?? '');
                 case 'created':
@@ -335,6 +401,24 @@ export class CodexView extends ItemView {
                 default:
                     return a.name.localeCompare(b.name);
             }
+        };
+
+        entries = [...entries].sort((a, b) => {
+            if (this.groupingMode === 'type' && !isHub) {
+                const catDefA = getCatDef(a);
+                const catDefB = getCatDef(b);
+                const typeA = catDefA ? this.getTypeField(a, catDefA) : '';
+                const typeB = catDefB ? this.getTypeField(b, catDefB) : '';
+                return typeA.localeCompare(typeB) || compareEntries(a, b);
+            }
+            if (this.groupingMode === 'named' && !isHub) {
+                const groupA = getVisualGroup(a);
+                const groupB = getVisualGroup(b);
+                const rankA = groupA ? visualGroups.indexOf(groupA) : visualGroups.length;
+                const rankB = groupB ? visualGroups.indexOf(groupB) : visualGroups.length;
+                return rankA - rankB || compareEntries(a, b);
+            }
+            return compareEntries(a, b);
         });
 
         // In hub search mode, also gather matching Characters and Locations
@@ -370,7 +454,8 @@ export class CodexView extends ItemView {
             }
         }
 
-        if (entries.length === 0 && hubExtras.length === 0) {
+        const showVisualGroupPens = !isHub && this.groupingMode === 'named' && visualGroups.length > 0;
+        if (entries.length === 0 && hubExtras.length === 0 && !showVisualGroupPens) {
             if (isHub) {
                 container.createEl('p', { cls: 'codex-empty-state', text: 'No matching entries.' });
             } else if (catDef) {
@@ -386,9 +471,52 @@ export class CodexView extends ItemView {
         }
 
         const list = container.createDiv('codex-entry-list');
-        for (const entry of entries) {
-            const entryCatDef = getCatDef(entry);
-            if (entryCatDef) this.renderListItem(list, entry, entryCatDef);
+        if (!isHub && this.groupingMode === 'named') {
+            const groupLists = new Map<string, HTMLElement>();
+            for (const group of visualGroups) {
+                const section = list.createDiv('codex-visual-group');
+                const heading = section.createDiv({ cls: 'codex-entry-group-heading', text: group.name });
+                attachCodexVisualGroupReorder(
+                    section,
+                    heading,
+                    group,
+                    visualGroups,
+                    () => this.plugin.saveSettings(),
+                    () => { if (this.rootContainer) this.renderView(this.rootContainer); },
+                );
+                this.attachVisualGroupDropTarget(section, group, visualGroups);
+                groupLists.set(group.id, section.createDiv('codex-visual-group-items'));
+            }
+            const ungroupedSection = list.createDiv('codex-visual-group');
+            ungroupedSection.createDiv({ cls: 'codex-entry-group-heading', text: 'Ungrouped' });
+            this.attachVisualGroupDropTarget(ungroupedSection, undefined, visualGroups);
+            const ungroupedList = ungroupedSection.createDiv('codex-visual-group-items');
+
+            for (const entry of entries) {
+                const entryCatDef = getCatDef(entry);
+                if (!entryCatDef) continue;
+                const assigned = getVisualGroup(entry);
+                this.renderListItem(groupLists.get(assigned?.id ?? '') ?? ungroupedList, entry, entryCatDef, visualGroups);
+            }
+        } else {
+            let lastGroup = '';
+            let groupList: HTMLElement = list;
+            for (const entry of entries) {
+                const entryCatDef = getCatDef(entry);
+                if (entryCatDef) {
+                    const shouldGroup = !isHub && this.groupingMode !== 'none';
+                    if (shouldGroup) {
+                        const group = this.getTypeField(entry, entryCatDef) || 'Uncategorized';
+                        if (group !== lastGroup) {
+                            const section = list.createDiv('codex-visual-group');
+                            section.createDiv({ cls: 'codex-entry-group-heading', text: group });
+                            groupList = section.createDiv('codex-visual-group-items');
+                            lastGroup = group;
+                        }
+                    }
+                    this.renderListItem(groupList, entry, entryCatDef);
+                }
+            }
         }
 
         // Render character/location hub results
@@ -402,8 +530,44 @@ export class CodexView extends ItemView {
         }
     }
 
-    private renderListItem(list: HTMLElement, entry: CodexEntry, catDef: CodexCategoryDef): void {
+    private renderListItem(list: HTMLElement, entry: CodexEntry, catDef: CodexCategoryDef, visualGroups: CodexVisualGroup[] = []): void {
         const row = list.createDiv('codex-entry-row');
+        let wasDragged = false;
+        if (visualGroups.length > 0) {
+            row.draggable = true;
+            row.addEventListener('dragstart', event => {
+                wasDragged = true;
+                row.addClass('is-dragging');
+                event.dataTransfer?.setData('application/x-storyline-codex-entry', entry.filePath);
+                if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+            });
+            row.addEventListener('dragend', () => row.removeClass('is-dragging'));
+            if (this.groupingMode === 'named') {
+                row.addEventListener('dragover', event => {
+                    if (!event.dataTransfer?.types.includes('application/x-storyline-codex-entry')) return;
+                    event.preventDefault();
+                    row.addClass('codex-entry-drag-over');
+                });
+                row.addEventListener('dragleave', () => row.removeClass('codex-entry-drag-over'));
+                row.addEventListener('drop', event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    row.removeClass('codex-entry-drag-over');
+                    const sourcePath = event.dataTransfer?.getData('application/x-storyline-codex-entry');
+                    if (!sourcePath || sourcePath === entry.filePath) return;
+                    for (const group of visualGroups) {
+                        group.entryPaths = group.entryPaths.filter(path => path !== sourcePath);
+                    }
+                    const targetGroup = visualGroups.find(group => group.entryPaths.includes(entry.filePath));
+                    if (targetGroup) {
+                        const targetIndex = targetGroup.entryPaths.indexOf(entry.filePath);
+                        targetGroup.entryPaths.splice(Math.max(0, targetIndex), 0, sourcePath);
+                    }
+                    void this.plugin.saveSettings();
+                    if (this.rootContainer) this.renderView(this.rootContainer);
+                });
+            }
+        }
 
         // Category icon
         const icon = row.createSpan({ cls: 'codex-entry-icon' });
@@ -427,8 +591,39 @@ export class CodexView extends ItemView {
         }
 
         row.addEventListener('click', () => {
+            if (wasDragged) {
+                wasDragged = false;
+                return;
+            }
             this.activeCategory = entry.type;
             this.selectedEntry = entry.filePath;
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+    }
+
+    private attachVisualGroupDropTarget(
+        section: HTMLElement,
+        targetGroup: CodexVisualGroup | undefined,
+        groups: CodexVisualGroup[],
+    ): void {
+        section.addEventListener('dragover', event => {
+            if (!event.dataTransfer?.types.includes('application/x-storyline-codex-entry')) return;
+            event.preventDefault();
+            section.addClass('codex-visual-group-drop-target');
+        });
+        section.addEventListener('dragleave', event => {
+            if (!section.contains(event.relatedTarget as Node | null)) {
+                section.removeClass('codex-visual-group-drop-target');
+            }
+        });
+        section.addEventListener('drop', event => {
+            event.preventDefault();
+            section.removeClass('codex-visual-group-drop-target');
+            const filePath = event.dataTransfer?.getData('application/x-storyline-codex-entry');
+            if (!filePath) return;
+            for (const group of groups) group.entryPaths = group.entryPaths.filter(path => path !== filePath);
+            if (targetGroup) targetGroup.entryPaths.push(filePath);
+            void this.plugin.saveSettings();
             if (this.rootContainer) this.renderView(this.rootContainer);
         });
     }
@@ -888,12 +1083,24 @@ export class CodexView extends ItemView {
             const select = row.createEl('select', { cls: 'codex-field-input dropdown' });
             select.createEl('option', { text: placeholder || 'Select character…', value: '' });
 
-            const characters = this.plugin.characterManager
+            const characterEntries = this.plugin.characterManager
                 .getAllCharacters()
-                .map(c => c.name)
-                .sort((a, b) => a.localeCompare(b));
+                .sort((a, b) => a.name.localeCompare(b.name));
+            const characters = characterEntries.map(character => character.name);
+            const visualGroups = this.plugin.settings.codexVisualGroups?.character ?? [];
+            const groupedNames = new Set<string>();
 
-            for (const name of characters) {
+            for (const group of visualGroups) {
+                const groupEntries = characterEntries.filter(character => group.entryPaths.includes(character.filePath));
+                if (groupEntries.length === 0) continue;
+                const optionGroup = select.createEl('optgroup', { attr: { label: group.name } });
+                for (const character of groupEntries) {
+                    groupedNames.add(character.name);
+                    const opt = optionGroup.createEl('option', { text: character.name, value: character.name });
+                    if (currentValue === character.name) opt.selected = true;
+                }
+            }
+            for (const name of characters.filter(character => !groupedNames.has(character))) {
                 const opt = select.createEl('option', { text: name, value: name });
                 if (currentValue === name) opt.selected = true;
             }
@@ -1978,6 +2185,157 @@ export class CodexView extends ItemView {
                         this.activeCategory = cats[0].id;
                     }
                     modal.close();
+                    if (this.rootContainer) this.renderView(this.rootContainer);
+                }));
+    }
+
+    private getVisualGroups(): CodexVisualGroup[] {
+        if (!this.activeCategory) return [];
+        if (!this.plugin.settings.codexVisualGroups) this.plugin.settings.codexVisualGroups = {};
+        if (!this.plugin.settings.codexVisualGroups[this.activeCategory]) {
+            this.plugin.settings.codexVisualGroups[this.activeCategory] = [];
+        }
+        return this.plugin.settings.codexVisualGroups[this.activeCategory];
+    }
+
+    private restoreSavedVisualGrouping(): void {
+        const groups = this.getVisualGroups();
+        if (groups.length === 0) return;
+        this.groupingMode = 'named';
+        this.activeVisualGroupId = groups[0].id;
+    }
+
+    private openManageVisualGroupsModal(): void {
+        if (!this.activeCategory) {
+            new Notice('Select a codex category before managing visual groups.');
+            return;
+        }
+        const modal = new Modal(this.app);
+        const category = this.codexManager.getCategoryDef(this.activeCategory);
+        modal.titleEl.setText(`Visual groups${category ? ` — ${category.label}` : ''}`);
+        this.renderVisualGroupManager(modal.contentEl, modal);
+        modal.open();
+    }
+
+    private renderVisualGroupManager(el: HTMLElement, modal: Modal): void {
+        let draggedGroupId: string | null = null;
+        el.empty();
+        el.addClass('codex-category-manager');
+        el.createEl('p', {
+            cls: 'setting-item-description',
+            text: 'Create named display groups for this category. Groups only change the codex view and do not modify entry files.',
+        });
+
+        const groups = this.getVisualGroups();
+        if (groups.length > 0) {
+            el.createEl('h4', { text: 'Groups' });
+            for (const group of groups) {
+                const row = el.createDiv('codex-category-manager-row');
+                row.draggable = true;
+                row.addEventListener('dragstart', event => {
+                    draggedGroupId = group.id;
+                    row.addClass('codex-group-dragging');
+                    event.dataTransfer?.setData('text/plain', group.id);
+                    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+                });
+                row.addEventListener('dragend', () => {
+                    draggedGroupId = null;
+                    row.removeClass('codex-group-dragging');
+                    row.removeClass('codex-group-drag-over');
+                });
+                row.addEventListener('dragover', event => {
+                    if (!draggedGroupId || draggedGroupId === group.id) return;
+                    event.preventDefault();
+                    row.addClass('codex-group-drag-over');
+                });
+                row.addEventListener('dragleave', () => row.removeClass('codex-group-drag-over'));
+                row.addEventListener('drop', event => {
+                    event.preventDefault();
+                    row.removeClass('codex-group-drag-over');
+                    if (!draggedGroupId || draggedGroupId === group.id) return;
+                    const fromIndex = groups.findIndex(item => item.id === draggedGroupId);
+                    const toIndex = groups.indexOf(group);
+                    if (fromIndex < 0 || toIndex < 0) return;
+                    const [moved] = groups.splice(fromIndex, 1);
+                    groups.splice(toIndex, 0, moved);
+                    draggedGroupId = null;
+                    void this.plugin.saveSettings();
+                    this.renderVisualGroupManager(el, modal);
+                });
+                const input = row.createEl('input', {
+                    cls: 'codex-visual-group-name-input',
+                    attr: { type: 'text', 'aria-label': `Rename ${group.name}` },
+                }) as HTMLInputElement;
+                input.value = group.name;
+                input.addEventListener('change', () => {
+                    const name = input.value.trim();
+                    if (!name) {
+                        input.value = group.name;
+                        return;
+                    }
+                    group.name = name;
+                    void this.plugin.saveSettings();
+                });
+                row.createSpan({
+                    cls: 'codex-visual-group-count',
+                    text: `${group.entryPaths.length} entr${group.entryPaths.length === 1 ? 'y' : 'ies'}`,
+                });
+                const deleteBtn = row.createEl('button', {
+                    cls: 'codex-category-delete-btn clickable-icon',
+                    attr: { 'aria-label': `Delete ${group.name}` },
+                });
+                obsidian.setIcon(deleteBtn, 'trash');
+                deleteBtn.addEventListener('click', () => {
+                    const index = groups.indexOf(group);
+                    if (index >= 0) groups.splice(index, 1);
+                    if (this.activeVisualGroupId === group.id) {
+                        this.activeVisualGroupId = '';
+                        this.groupingMode = 'none';
+                    }
+                    void this.plugin.saveSettings();
+                    this.renderVisualGroupManager(el, modal);
+                });
+            }
+        }
+
+        el.createEl('h4', { text: 'Add group' });
+        let groupName = '';
+        let groupInput: HTMLInputElement | null = null;
+        new Setting(el)
+            .setName('Group name')
+            .addText(text => {
+                text.setPlaceholder('Friends');
+                text.onChange(value => { groupName = value; });
+                groupInput = text.inputEl;
+            });
+        new Setting(el)
+            .addButton(button => button
+                .setButtonText('Create group')
+                .setCta()
+                .onClick(() => {
+                    const name = (groupInput?.value || groupName).trim();
+                    if (!name) {
+                        new Notice('Enter a group name');
+                        return;
+                    }
+                    if (groups.some(group => group.name.toLowerCase() === name.toLowerCase())) {
+                        new Notice('A group with that name already exists');
+                        return;
+                    }
+                    groups.push({ id: crypto.randomUUID(), name, entryPaths: [] });
+                    void this.plugin.saveSettings();
+                    this.renderVisualGroupManager(el, modal);
+                }));
+
+        new Setting(el)
+            .addButton(button => button
+                .setButtonText('Done')
+                .onClick(() => {
+                    modal.close();
+                    if (groups.length > 0) {
+                        this.groupingMode = 'named';
+                        this.activeVisualGroupId = groups[groups.length - 1].id;
+                    }
                     if (this.rootContainer) this.renderView(this.rootContainer);
                 }));
     }

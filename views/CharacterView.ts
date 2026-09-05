@@ -23,6 +23,8 @@ import type SceneCardsPlugin from '../main';
 
 import { attachTooltip } from '../components/Tooltip';
 import { renderCodexCategoryTabs } from '../components/CodexCategoryTabs';
+import { attachCodexVisualGroupReorder, getCodexVisualGroups, openCodexVisualGroupManager } from '../components/CodexVisualGroupManager';
+import type { CodexVisualGroup } from '../settings';
 import { ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf } from 'obsidian';
 import { CHARACTER_CATEGORIES, CHARACTER_ROLES, Character, CharacterFieldDef, CharacterRelation, CharacterRelationCategory, RELATION_CATEGORIES, RELATION_TYPES_BY_CATEGORY, RelationHistoryEntry, RoleEntry, TagType, computeReciprocalUpdates, extractCharacterLocationTags, extractCharacterProps, getPrimaryRole, getRoleDisplay, getRoleList, normalizeCharacterRelations, normalizeRelationHistory } from '../models/Character';
 import { CHARACTER_VIEW_TYPE } from '../constants';
@@ -66,6 +68,8 @@ export class CharacterView extends ItemView {
     private searchText: string = '';
     /** Current sort mode for the overview grid */
     private sortBy: 'name' | 'modified' | 'created' | 'role' | 'manual' = 'name';
+    private groupingMode: 'none' | 'named' = 'none';
+    private activeVisualGroupId = '';
     /**
      * When true and the active project belongs to a series, the overview
      * grid hides characters whose `books[]` field excludes the current
@@ -119,6 +123,11 @@ export class CharacterView extends ItemView {
         // Load project characters, then re-apply external source folders so
         // entries stored outside the project Codex are included.
         await this.plugin.reloadEntities();
+        const groups = this.getCharacterVisualGroups();
+        if (groups.length > 0) {
+            this.groupingMode = 'named';
+            this.activeVisualGroupId = groups[0].id;
+        }
         this.renderView(container);
     }
 
@@ -209,6 +218,13 @@ export class CharacterView extends ItemView {
         attachTooltip(addBtn, 'New Character');
         addBtn.addEventListener('click', () => this.promptNewCharacter());
 
+        if (!this.selectedCharacter && this.viewMode === 'grid') {
+            const groupBtn = controls.createEl('button', { cls: 'clickable-icon' });
+            obsidian.setIcon(groupBtn, 'folder-tree');
+            attachTooltip(groupBtn, 'Manage visual groups');
+            groupBtn.addEventListener('click', () => this.openCharacterVisualGroupManager());
+        }
+
         const content = container.createDiv('story-line-character-content');
 
         // Clean up previous map / graph if any
@@ -280,6 +296,23 @@ export class CharacterView extends ItemView {
             void this.plugin.saveSettings();
             this.renderCharacterOverview(container);
         });
+
+        const visualGroups = this.getCharacterVisualGroups();
+        if (visualGroups.length > 0) {
+            searchRow.createSpan({ cls: 'codex-sort-label', text: 'Group by' });
+            const groupSelect = searchRow.createEl('select', { cls: 'codex-sort-select' });
+            groupSelect.createEl('option', { text: 'None', value: 'none' });
+            for (const group of visualGroups) {
+                const option = groupSelect.createEl('option', { text: group.name, value: group.id });
+                if (this.groupingMode === 'named' && this.activeVisualGroupId === group.id) option.selected = true;
+            }
+            if (this.groupingMode === 'none') groupSelect.value = 'none';
+            groupSelect.addEventListener('change', () => {
+                this.groupingMode = groupSelect.value === 'none' ? 'none' : 'named';
+                this.activeVisualGroupId = groupSelect.value === 'none' ? '' : groupSelect.value;
+                this.renderCharacterOverview(container);
+            });
+        }
 
         // Series book filter — only meaningful when the active project belongs
         // to a series and characters are shared at series level.
@@ -362,14 +395,52 @@ export class CharacterView extends ItemView {
             fileCharacters.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
         }
 
+        if (this.groupingMode === 'named') {
+            const groupRank = new Map(visualGroups.map((group, index) => [group.id, index]));
+            fileCharacters.sort((a, b) => {
+                const rankA = this.getCharacterVisualGroup(a, visualGroups);
+                const rankB = this.getCharacterVisualGroup(b, visualGroups);
+                return (groupRank.get(rankA?.id) ?? visualGroups.length) - (groupRank.get(rankB?.id) ?? visualGroups.length)
+                    || a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+            });
+        }
+
         // Characters with files
-        if (fileCharacters.length > 0 || sceneCharNames.length > 0) {
+        if (fileCharacters.length > 0 || sceneCharNames.length > 0
+            || (this.groupingMode === 'named' && visualGroups.length > 0)) {
             const grid = container.createDiv('character-overview-grid');
 
             // Render characters that have dedicated files
             const visibleOrder = fileCharacters.map(character => character.filePath);
-            for (const char of fileCharacters) {
-                this.renderOverviewCard(grid, char, scenes, aliasMap, visibleOrder);
+            if (this.groupingMode === 'named') {
+                for (const group of visualGroups) {
+                    const groupCharacters = fileCharacters
+                        .filter(char => group.entryPaths.includes(char.filePath))
+                        .sort((a, b) => group.entryPaths.indexOf(a.filePath) - group.entryPaths.indexOf(b.filePath));
+                    const section = container.createDiv('codex-visual-group');
+                    const heading = section.createDiv({ cls: 'codex-entry-group-heading', text: group.name });
+                    attachCodexVisualGroupReorder(
+                        section,
+                        heading,
+                        group,
+                        visualGroups,
+                        () => this.plugin.saveSettings(),
+                        () => { if (this.rootContainer) this.renderView(this.rootContainer); },
+                    );
+                    this.attachCharacterGroupDropTarget(section, group, visualGroups);
+                    const sectionGrid = section.createDiv('character-overview-grid codex-visual-group-items');
+                    for (const char of groupCharacters) this.renderOverviewCard(sectionGrid, char, scenes, aliasMap, visibleOrder, visualGroups);
+                }
+                const ungrouped = fileCharacters.filter(char => !visualGroups.some(group => group.entryPaths.includes(char.filePath)));
+                if (ungrouped.length > 0) {
+                    const section = container.createDiv('codex-visual-group');
+                    section.createDiv({ cls: 'codex-entry-group-heading', text: 'Ungrouped' });
+                    this.attachCharacterGroupDropTarget(section, undefined, visualGroups);
+                    const sectionGrid = section.createDiv('character-overview-grid codex-visual-group-items');
+                    for (const char of ungrouped) this.renderOverviewCard(sectionGrid, char, scenes, aliasMap, visibleOrder, visualGroups);
+                }
+            } else {
+                for (const char of fileCharacters) this.renderOverviewCard(grid, char, scenes, aliasMap, visibleOrder);
             }
 
             // Find characters from scenes that don't have files yet
@@ -467,6 +538,7 @@ export class CharacterView extends ItemView {
         scenes: Scene[],
         aliasMap?: Map<string, string>,
         visibleOrder: string[] = [],
+        visualGroups: CodexVisualGroup[] = [],
     ): void {
         const card = grid.createDiv('character-overview-card');
         let wasDragged = false;
@@ -482,7 +554,12 @@ export class CharacterView extends ItemView {
         card.addEventListener('drop', (event) => {
             event.preventDefault();
             const source = event.dataTransfer?.getData('application/x-storyline-character');
-            if (source && source !== char.filePath) void this.reorderCharacters(source, char.filePath, visibleOrder);
+            if (!source || source === char.filePath) return;
+            if (this.groupingMode === 'named' && visualGroups.length > 0) {
+                void this.reorderVisualCharacterGroup(source, char.filePath, visualGroups);
+            } else {
+                void this.reorderCharacters(source, char.filePath, visibleOrder);
+            }
         });
 
         // Role badges — supports string or string[] (issue #72 Tier 1)
@@ -623,6 +700,74 @@ export class CharacterView extends ItemView {
             e.preventDefault();
             this.showCharacterContextMenu(char, e);
         });
+    }
+
+    private getCharacterVisualGroups(): CodexVisualGroup[] {
+        return getCodexVisualGroups(this.plugin.settings, 'character');
+    }
+
+    private getCharacterVisualGroup(char: Character, groups = this.getCharacterVisualGroups()): CodexVisualGroup | undefined {
+        return groups.find(group => group.entryPaths.includes(char.filePath));
+    }
+
+    private async reorderVisualCharacterGroup(
+        sourcePath: string,
+        targetPath: string,
+        groups: CodexVisualGroup[],
+    ): Promise<void> {
+        for (const group of groups) group.entryPaths = group.entryPaths.filter(path => path !== sourcePath);
+        const targetGroup = groups.find(group => group.entryPaths.includes(targetPath));
+        if (targetGroup) {
+            const targetIndex = targetGroup.entryPaths.indexOf(targetPath);
+            targetGroup.entryPaths.splice(Math.max(0, targetIndex), 0, sourcePath);
+        }
+        await this.plugin.saveSettings();
+        if (this.rootContainer) this.renderView(this.rootContainer);
+    }
+
+    private attachCharacterGroupDropTarget(
+        section: HTMLElement,
+        targetGroup: CodexVisualGroup | undefined,
+        groups: CodexVisualGroup[],
+    ): void {
+        section.addEventListener('dragover', event => {
+            if (!event.dataTransfer?.types.includes('application/x-storyline-character')) return;
+            event.preventDefault();
+            section.addClass('codex-visual-group-drop-target');
+        });
+        section.addEventListener('dragleave', event => {
+            if (!section.contains(event.relatedTarget as Node | null)) {
+                section.removeClass('codex-visual-group-drop-target');
+            }
+        });
+        section.addEventListener('drop', event => {
+            event.preventDefault();
+            section.removeClass('codex-visual-group-drop-target');
+            const filePath = event.dataTransfer?.getData('application/x-storyline-character');
+            if (!filePath) return;
+            for (const group of groups) group.entryPaths = group.entryPaths.filter(path => path !== filePath);
+            if (targetGroup) targetGroup.entryPaths.push(filePath);
+            void this.plugin.saveSettings();
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+    }
+
+    private openCharacterVisualGroupManager(): void {
+        openCodexVisualGroupManager(
+            this.app,
+            this.plugin.settings,
+            'character',
+            'characters',
+            () => this.plugin.saveSettings(),
+            () => {
+                const groups = this.getCharacterVisualGroups();
+                if (groups.length > 0) {
+                    this.groupingMode = 'named';
+                    this.activeVisualGroupId = groups[groups.length - 1].id;
+                }
+                if (this.rootContainer) this.renderView(this.rootContainer);
+            },
+        );
     }
 
     private async reorderCharacters(sourcePath: string, targetPath: string, visibleOrder: string[] = []): Promise<void> {
@@ -1877,6 +2022,8 @@ export class CharacterView extends ItemView {
         const mergedNames = Array.from(new Set([...fileCharacters, ...sceneCharacters].map(resolveAlias)))
             .filter(n => n !== draft.name)
             .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        const visualGroups = this.getCharacterVisualGroups();
+        const charactersByPath = new Map(this.characterManager.getAllCharacters().map(character => [character.filePath, character.name]));
 
         const relations: CharacterRelation[] = normalizeCharacterRelations(draft.relations);
         const NEW_CUSTOM_TYPE_VALUE = '__custom_new__';
@@ -1952,7 +2099,20 @@ export class CharacterView extends ItemView {
 
                 const targetSelect = inlineRow.createEl('select', { cls: 'character-field-input dropdown relation-builder-target' });
                 targetSelect.createEl('option', { value: '', text: 'Select character' });
-                for (const name of mergedNames) {
+                const groupedNames = new Set<string>();
+                for (const group of visualGroups) {
+                    const names = group.entryPaths
+                        .map(path => charactersByPath.get(path))
+                        .filter((name): name is string => !!name && mergedNames.includes(name));
+                    if (names.length === 0) continue;
+                    const optionGroup = targetSelect.createEl('optgroup', { attr: { label: group.name } });
+                    for (const name of names) {
+                        groupedNames.add(name);
+                        const opt = optionGroup.createEl('option', { value: name, text: name });
+                        if (name === relation.target) opt.selected = true;
+                    }
+                }
+                for (const name of mergedNames.filter(candidate => !groupedNames.has(candidate))) {
                     const opt = targetSelect.createEl('option', { value: name, text: name });
                     if (name === relation.target) opt.selected = true;
                 }

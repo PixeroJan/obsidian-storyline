@@ -31,6 +31,8 @@ import { RenameConfirmModal } from '../components/RenameConfirmModal';
 import { applyMobileClass } from '../components/MobileAdapter';
 import { attachTooltip } from '../components/Tooltip';
 import { renderCodexCategoryTabs } from '../components/CodexCategoryTabs';
+import { attachCodexVisualGroupReorder, getCodexVisualGroups, openCodexVisualGroupManager } from '../components/CodexVisualGroupManager';
+import type { CodexVisualGroup } from '../settings';
 
 /**
  * Location View — hierarchical World → Location browser with inline editing.
@@ -61,6 +63,8 @@ export class LocationView extends ItemView {
     private searchText: string = '';
     /** Current sort mode for the overview tree */
     private sortBy: 'name' | 'modified' | 'created' | 'type' | 'manual' = 'name';
+    private groupingMode: 'none' | 'named' = 'none';
+    private activeVisualGroupId = '';
     /**
      * When true and the active project belongs to a series, the tree hides
      * worlds and locations whose `books[]` field excludes the current book.
@@ -103,6 +107,11 @@ export class LocationView extends ItemView {
 
         await this.sceneManager.initialize();
         await this.plugin.reloadEntities();
+        const groups = this.getLocationVisualGroups();
+        if (groups.length > 0) {
+            this.groupingMode = 'named';
+            this.activeVisualGroupId = groups[0].id;
+        }
         this.renderView(container);
     }
 
@@ -145,6 +154,13 @@ export class LocationView extends ItemView {
         obsidian.setIcon(addLocBtn, 'map-pin-plus-inside');
         attachTooltip(addLocBtn, 'New Location');
         addLocBtn.addEventListener('click', () => this.promptNewLocation());
+
+        if (!this.selectedItem) {
+            const groupBtn = controls.createEl('button', { cls: 'clickable-icon' });
+            obsidian.setIcon(groupBtn, 'folder-tree');
+            attachTooltip(groupBtn, 'Manage visual groups');
+            groupBtn.addEventListener('click', () => this.openLocationVisualGroupManager());
+        }
 
         const content = container.createDiv('story-line-location-content');
 
@@ -199,6 +215,23 @@ export class LocationView extends ItemView {
             this.sortBy = sortSelect.value as 'type' | 'name' | 'created' | 'modified' | 'manual';
             this.renderOverview(container);
         });
+
+        const visualGroups = this.getLocationVisualGroups();
+        if (visualGroups.length > 0) {
+            searchRow.createSpan({ cls: 'codex-sort-label', text: 'Group by' });
+            const groupSelect = searchRow.createEl('select', { cls: 'codex-sort-select' });
+            groupSelect.createEl('option', { text: 'None', value: 'none' });
+            for (const group of visualGroups) {
+                const option = groupSelect.createEl('option', { text: group.name, value: group.id });
+                if (this.groupingMode === 'named' && this.activeVisualGroupId === group.id) option.selected = true;
+            }
+            if (this.groupingMode === 'none') groupSelect.value = 'none';
+            groupSelect.addEventListener('change', () => {
+                this.groupingMode = groupSelect.value === 'none' ? 'none' : 'named';
+                this.activeVisualGroupId = groupSelect.value === 'none' ? '' : groupSelect.value;
+                this.renderOverview(container);
+            });
+        }
 
         // Series book filter
         const currentBook = this.plugin.sceneManager.getCurrentBookTitle();
@@ -278,7 +311,8 @@ export class LocationView extends ItemView {
         sortItems(worlds);
         sortItems(orphanLocations);
 
-        if (worlds.length === 0 && orphanLocations.length === 0 && !q) {
+        if (worlds.length === 0 && orphanLocations.length === 0 && !q
+            && !(this.groupingMode === 'named' && visualGroups.length > 0)) {
             const empty = container.createDiv('location-empty-state');
             const emptyIcon = empty.createDiv('location-empty-icon');
             obsidian.setIcon(emptyIcon, 'map');
@@ -291,23 +325,55 @@ export class LocationView extends ItemView {
 
         // Render each world and its locations
         const worldOrder = worlds.map(world => world.filePath);
-        for (const world of worlds) {
-            this.renderWorldNode(tree, world, scenes, worldOrder);
-        }
-
-        // Orphan locations (not linked to a world)
-        if (orphanLocations.length > 0) {
-            if (worlds.length > 0) {
-                const divider = tree.createDiv('location-orphan-divider');
-                divider.createSpan({ text: 'Standalone Locations' });
+        const orphanRoots = orphanLocations.filter(loc =>
+            !loc.parent || !orphanLocations.some(parent =>
+                parent.name.toLowerCase() === loc.parent!.toLowerCase()),
+        );
+        const renderRoots = (parent: HTMLElement, group?: CodexVisualGroup) => {
+            const groupWorlds = group
+                ? worlds.filter(world => group.entryPaths.includes(world.filePath))
+                : worlds.filter(world => !visualGroups.some(candidate => candidate.entryPaths.includes(world.filePath)));
+            const groupOrphans = group
+                ? orphanRoots.filter(location => group.entryPaths.includes(location.filePath))
+                : orphanRoots.filter(location => !visualGroups.some(candidate => candidate.entryPaths.includes(location.filePath)));
+            if (group) {
+                groupWorlds.sort((a, b) => group.entryPaths.indexOf(a.filePath) - group.entryPaths.indexOf(b.filePath));
+                groupOrphans.sort((a, b) => group.entryPaths.indexOf(a.filePath) - group.entryPaths.indexOf(b.filePath));
             }
-            const orphanRoots = orphanLocations.filter(loc =>
-                !loc.parent || !orphanLocations.some(parent =>
-                    parent.name.toLowerCase() === loc.parent!.toLowerCase()),
-            );
-            for (const loc of orphanRoots) {
-                this.renderLocationNode(tree, loc, scenes, 0);
+            for (const world of groupWorlds) this.renderWorldNode(parent, world, scenes, worldOrder, visualGroups);
+            if (groupOrphans.length > 0) {
+                if (groupWorlds.length > 0) {
+                    const divider = parent.createDiv('location-orphan-divider');
+                    divider.createSpan({ text: 'Standalone Locations' });
+                }
+                for (const loc of groupOrphans) this.renderLocationNode(parent, loc, scenes, 0, [], visualGroups);
             }
+        };
+        if (this.groupingMode === 'named') {
+            for (const group of visualGroups) {
+                const section = tree.createDiv('codex-visual-group');
+                const heading = section.createDiv({ cls: 'codex-entry-group-heading', text: group.name });
+                attachCodexVisualGroupReorder(
+                    section,
+                    heading,
+                    group,
+                    visualGroups,
+                    () => this.plugin.saveSettings(),
+                    () => { if (this.rootContainer) this.renderOverview(this.rootContainer); },
+                );
+                this.attachLocationGroupDropTarget(section, group, visualGroups);
+                renderRoots(section.createDiv('codex-visual-group-items'), group);
+            }
+            const hasUngroupedRoots = worlds.some(world => !visualGroups.some(group => group.entryPaths.includes(world.filePath)))
+                || orphanRoots.some(location => !visualGroups.some(group => group.entryPaths.includes(location.filePath)));
+            if (hasUngroupedRoots) {
+                const ungroupedSection = tree.createDiv('codex-visual-group');
+                ungroupedSection.createDiv({ cls: 'codex-entry-group-heading', text: 'Ungrouped' });
+                this.attachLocationGroupDropTarget(ungroupedSection, undefined, visualGroups);
+                renderRoots(ungroupedSection.createDiv('codex-visual-group-items'));
+            }
+        } else {
+            renderRoots(tree);
         }
 
         // Locations from scenes that don't have files yet
@@ -333,6 +399,7 @@ export class LocationView extends ItemView {
         world: StoryWorld,
         scenes: Scene[],
         siblingOrder: string[] = [],
+        visualGroups: CodexVisualGroup[] = [],
     ): void {
         const node = parent.createDiv('location-tree-node location-world-node');
         const isCollapsed = this.collapsedTreeNodes.has(world.filePath);
@@ -341,6 +408,7 @@ export class LocationView extends ItemView {
         header.setAttribute('draggable', 'true');
         header.addEventListener('dragstart', (e) => {
             e.dataTransfer?.setData('application/x-storyline-world', world.filePath);
+            e.dataTransfer?.setData('application/x-storyline-location-group', world.filePath);
             if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
         });
         // Issue #238 feedback — drag-and-drop locations onto a world to assign
@@ -355,6 +423,11 @@ export class LocationView extends ItemView {
         header.addEventListener('drop', (e) => {
             e.preventDefault();
             header.removeClass('location-tree-drop-target');
+            const visualSource = e.dataTransfer?.getData('application/x-storyline-location-group');
+            if (visualSource && visualSource !== world.filePath && this.groupingMode === 'named' && visualGroups.length > 0) {
+                void this.reorderVisualLocationGroup(visualSource, world.filePath, visualGroups);
+                return;
+            }
             const sourceWorld = e.dataTransfer?.getData('application/x-storyline-world');
             if (sourceWorld && sourceWorld !== world.filePath) {
                 void this.reorderWorlds(sourceWorld, world.filePath, siblingOrder);
@@ -402,6 +475,7 @@ export class LocationView extends ItemView {
         }
 
         header.createSpan({ cls: 'location-tree-name', text: world.name });
+        this.renderLocationGroupSelect(header, world, visualGroups);
 
 
         header.addEventListener('click', () => {
@@ -425,7 +499,7 @@ export class LocationView extends ItemView {
             this.sortLocations(topLevel);
             const siblingOrder = topLevel.map(location => location.name);
             for (const loc of topLevel) {
-                this.renderLocationNode(children, loc, scenes, 1, siblingOrder);
+                this.renderLocationNode(children, loc, scenes, 1, siblingOrder, visualGroups);
             }
         }
     }
@@ -436,6 +510,7 @@ export class LocationView extends ItemView {
         scenes: Scene[],
         depth: number,
         siblingOrder: string[] = [],
+        visualGroups: CodexVisualGroup[] = [],
     ): void {
         const node = parent.createDiv('location-tree-node');
         const childLocations = this.locationManager.getChildLocations(loc.name);
@@ -449,6 +524,7 @@ export class LocationView extends ItemView {
         header.setAttribute('draggable', 'true');
         header.addEventListener('dragstart', (e) => {
             e.dataTransfer?.setData('application/x-storyline-location', loc.name);
+            e.dataTransfer?.setData('application/x-storyline-location-group', loc.filePath);
             e.dataTransfer?.setData('text/plain', loc.name);
             if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
         });
@@ -463,6 +539,11 @@ export class LocationView extends ItemView {
         header.addEventListener('drop', (e) => {
             e.preventDefault();
             header.removeClass('location-tree-drop-target');
+            const visualSource = e.dataTransfer?.getData('application/x-storyline-location-group');
+            if (visualSource && visualSource !== loc.filePath && this.groupingMode === 'named' && visualGroups.length > 0) {
+                void this.reorderVisualLocationGroup(visualSource, loc.filePath, visualGroups);
+                return;
+            }
             const locName = e.dataTransfer?.getData('application/x-storyline-location');
             if (locName && locName !== loc.name) {
                 const draggedLocation = this.locationManager.getAllLocations().find(location => location.name === locName);
@@ -514,6 +595,7 @@ export class LocationView extends ItemView {
         }
 
         header.createSpan({ cls: 'location-tree-name', text: loc.name });
+        this.renderLocationGroupSelect(header, loc, visualGroups);
 
         // Scene count for this location
         const locLower = loc.name.toLowerCase();
@@ -541,9 +623,96 @@ export class LocationView extends ItemView {
             const children = node.createDiv('location-tree-children');
             const childOrder = childLocations.map(location => location.name);
             for (const child of childLocations) {
-                this.renderLocationNode(children, child, scenes, depth + 1, childOrder);
+                this.renderLocationNode(children, child, scenes, depth + 1, childOrder, visualGroups);
             }
         }
+    }
+
+    private getLocationVisualGroups(): CodexVisualGroup[] {
+        return getCodexVisualGroups(this.plugin.settings, 'location');
+    }
+
+    private async reorderVisualLocationGroup(
+        sourcePath: string,
+        targetPath: string,
+        groups: CodexVisualGroup[],
+    ): Promise<void> {
+        for (const group of groups) group.entryPaths = group.entryPaths.filter(path => path !== sourcePath);
+        const targetGroup = groups.find(group => group.entryPaths.includes(targetPath));
+        if (targetGroup) {
+            const targetIndex = targetGroup.entryPaths.indexOf(targetPath);
+            targetGroup.entryPaths.splice(Math.max(0, targetIndex), 0, sourcePath);
+        }
+        await this.plugin.saveSettings();
+        if (this.rootContainer) this.renderView(this.rootContainer);
+    }
+
+    private attachLocationGroupDropTarget(
+        section: HTMLElement,
+        targetGroup: CodexVisualGroup | undefined,
+        groups: CodexVisualGroup[],
+    ): void {
+        section.addEventListener('dragover', event => {
+            if (!event.dataTransfer?.types.includes('application/x-storyline-location-group')) return;
+            event.preventDefault();
+            section.addClass('codex-visual-group-drop-target');
+        });
+        section.addEventListener('dragleave', event => {
+            if (!section.contains(event.relatedTarget as Node | null)) {
+                section.removeClass('codex-visual-group-drop-target');
+            }
+        });
+        section.addEventListener('drop', event => {
+            event.preventDefault();
+            section.removeClass('codex-visual-group-drop-target');
+            const sourcePath = event.dataTransfer?.getData('application/x-storyline-location-group');
+            if (!sourcePath) return;
+            for (const group of groups) group.entryPaths = group.entryPaths.filter(path => path !== sourcePath);
+            if (targetGroup) targetGroup.entryPaths.push(sourcePath);
+            void this.plugin.saveSettings();
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+    }
+
+    private renderLocationGroupSelect(header: HTMLElement, item: WorldOrLocation, groups: CodexVisualGroup[]): void {
+        if (groups.length === 0) return;
+        const select = header.createEl('select', {
+            cls: 'codex-entry-group-select location-tree-group-select',
+            attr: { 'aria-label': `Visual group for ${item.name}` },
+        });
+        select.createEl('option', { text: 'No group', value: '' });
+        const current = groups.find(group => group.entryPaths.includes(item.filePath));
+        for (const group of groups) {
+            const option = select.createEl('option', { text: group.name, value: group.id });
+            option.selected = group.id === current?.id;
+        }
+        select.addEventListener('click', event => event.stopPropagation());
+        select.addEventListener('mousedown', event => event.stopPropagation());
+        select.addEventListener('change', () => {
+            for (const group of groups) group.entryPaths = group.entryPaths.filter(path => path !== item.filePath);
+            const selected = groups.find(group => group.id === select.value);
+            if (selected) selected.entryPaths.push(item.filePath);
+            void this.plugin.saveSettings();
+            if (this.rootContainer) this.renderView(this.rootContainer);
+        });
+    }
+
+    private openLocationVisualGroupManager(): void {
+        openCodexVisualGroupManager(
+            this.app,
+            this.plugin.settings,
+            'location',
+            'locations',
+            () => this.plugin.saveSettings(),
+            () => {
+                const groups = this.getLocationVisualGroups();
+                if (groups.length > 0) {
+                    this.groupingMode = 'named';
+                    this.activeVisualGroupId = groups[groups.length - 1].id;
+                }
+                if (this.rootContainer) this.renderView(this.rootContainer);
+            },
+        );
     }
 
     private sortLocations(locations: StoryLocation[]): void {

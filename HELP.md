@@ -265,6 +265,7 @@ A dedicated character management system with rich profiles. Characters are acces
 - Cards are color-coded by role (protagonist, antagonist, supporting, minor, mentor, love interest).
 - **Unlinked characters** — characters mentioned in scenes but without a profile are listed separately with a one-click "Create" button.
 - Click any card to open the full character detail editor.
+- **Visual groups** — use the group button to create named, display-only groups such as `Friends`. Drag character cards into bordered groups, reorder cards within a group, and drag a group header onto another group header to reorder the groups. Groups are saved per project and do not move character files or change frontmatter.
 - **Relationship Map** — see [Relationship Map](#relationship-map).
 
 #### Character Detail Editor
@@ -305,6 +306,7 @@ A hierarchical worldbuilding and location management system. Locations are acces
 - Locations nest underneath their world, with further child locations indented below their parent.
 - **Standalone locations** (not linked to any world) appear in a separate section.
 - **Unlinked locations** — places referenced in scenes but without a profile show a "Create" button.
+- **Visual groups** — use the group button to create named, display-only groups. Drag worlds or standalone locations into bordered groups, reorder entries within a group, and drag group headers to reorder the groups. Groups are saved per project and do not change the location hierarchy or move files.
 - Click any node to open its detail editor.
 - **Drag-and-drop reparenting** *(new in 1.10.51)* — drag any location node and drop it onto another location (to make that its parent) or onto a world (to move it into that world as a top-level location). Cycles are prevented automatically. This is a fast way to reorganise your hierarchy without opening each location's Hierarchy section.
 
@@ -334,6 +336,7 @@ The Codex is a unified hub that brings Characters, Locations, and custom categor
 - **Custom categories** — Add your own categories (for example: Props, Factions, Magic Systems, Creatures) from the Codex toolbar. Each category gets its own folder inside `Codex/`, its own search, and individual detail pages with editable fields.
 - **Inspector toggle** — In the Manage Categories modal, each category has an **Inspector** checkbox. When enabled, that category appears as a tag-pill section in the Scene Inspector sidebar, letting you link Codex entries to scenes just like Characters and Locations. Linked entries are stored in the scene’s `codexLinks` frontmatter field.
 - **Search** — A search bar at the top of the hub filters across all entries, including Characters and Locations.
+- **Visual groups** — use the group button to create named, display-only groups for the active Codex category. Drag entries into bordered groups, reorder entries within a group, and drag group headers to reorder the groups. Groups are saved per project and do not move files or change frontmatter. Empty groups remain available as drop targets.
 - **Back navigation** — From any detail page, click the back arrow to return to the Codex hub.
 - **Change detection** — When a codex entry's content has been modified since it was last reviewed, an amber warning banner appears on the detail page listing all scenes that reference the entry. Click any scene name to open it. Click **"Mark as reviewed"** to clear the warning and update the stored digest. Digests are stored per-project in `System/codex-digests.json`.
 - **Backward compatible** — Existing projects that have Characters and Locations folders at the top level (outside Codex/) continue to work without any changes.

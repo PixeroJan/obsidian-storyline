@@ -6,6 +6,24 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.65
+
+### New Features
+
+- **Japanese quotation styles** — Added corner brackets `「text」` and white corner brackets `『text』` to the quotation style options used by dialogue input and statistics.
+- **Visual Codex groups** — Create and name display-only groups for Characters, Locations, and custom Codex categories. Assign entries from dropdowns, drag entries into bordered group areas, reorder entries within groups, and drag group headers to reorder the groups themselves. Empty groups remain available as drop zones. Grouping does not move files or change entry frontmatter.
+- **Per-project group persistence** — Visual group membership, entry order, and group order are saved with project system data and restored when the project is reopened.
+
+### Bug Fixes
+
+- **Safer project data migration** *([#262](https://github.com/PixeroJan/obsidian-storyline/issues/262))* — Existing usable data in legacy project JSON files, including `board.json`, is preserved when System files already exist but are empty or invalid.
+- **Scroll position restoration** *([#263](https://github.com/PixeroJan/obsidian-storyline/issues/263))* — StoryLine view scroll positions are restored after asynchronous refreshes caused by project and scene updates.
+
+### Documentation
+
+- Added Help guidance for creating visual groups, assigning entries, dragging entries, and reordering group headers in Characters, Locations, and Codex.
+- Added an implementation record documenting visual grouping, persistence, ordering, quote styles, and the related data-safety and refresh fixes.
+
 ## Version 1.10.64
 
 ### Bug Fixes
