@@ -550,12 +550,12 @@ export class ManuscriptView extends ItemView {
         this.mountingPaths.add(filePath);
         this._lazyMounting = true;
 
-        // Capture a token for this mount so we can detect if a teardown
-        // (detachAllEmbedded) ran while we were awaiting openFile(). Without
-        // this, a refresh() triggered by the modify event from openFile()
-        // would leave us writing into a detached container.
-        const mountToken = Symbol('mount');
-        this._activeMountToken = mountToken;
+        // Snapshot the current teardown token so we can detect if
+        // detachAllEmbedded() ran while we were awaiting openFile(). Don't
+        // mint a per-mount token: concurrent mounts in the same render cycle
+        // (eager loop + IntersectionObserver) would invalidate each other
+        // and leave freshly opened leaves detached, rendering scenes blank.
+        const mountToken = this._activeMountToken;
 
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!(file instanceof TFile)) {
