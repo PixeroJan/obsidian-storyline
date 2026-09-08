@@ -49,8 +49,8 @@ export class ManuscriptView extends ItemView {
     private lazyObserver: IntersectionObserver | null = null;
     private embeddedLeaves: Map<string, WorkspaceLeaf> = new Map();
     private editorResizeObservers: Map<string, ResizeObserver> = new Map();
-    /** Paths currently being mounted (prevents duplicate async mounts) */
-    private mountingPaths: Set<string> = new Set();
+    /** Mount attempt IDs by path (prevents duplicate async mounts) */
+    private mountingPaths: Map<string, symbol> = new Map();
     private _hasActiveFocus = false;
     /** Prevents refresh() from running during initial mount sequence */
     private _isMounting = false;
@@ -59,10 +59,9 @@ export class ManuscriptView extends ItemView {
      *  get torn down by a vault 'modify' event it itself triggered
      *  (the root cause of the manuscript flicker loop). */
     private _lazyMounting = false;
-    /** Monotonic token used to detect when a teardown happened during an
-     *  async mountEditor() call. detachAllEmbedded() bumps this; the
-     *  in-flight mount checks it after each await and bails if it changed. */
-    private _activeMountToken: symbol | null = null;
+    /** Token for the current render lifetime. detachAllEmbedded() replaces
+     *  it; in-flight mounts use it to detect that their DOM was torn down. */
+    private _teardownToken: symbol = Symbol('initial');
     /** When true, hide wiki-link/tag styling so text reads as plain prose.
      *  Persisted to localStorage so the last toolbar choice survives view
      *  switches and Obsidian restarts. Defaults to ON for first-time users. */
@@ -198,7 +197,7 @@ export class ManuscriptView extends ItemView {
         // Bump the mount token so any in-flight mountEditor() call knows
         // its container/leaf is being torn down and bails out instead of
         // writing into a detached DOM tree.
-        this._activeMountToken = Symbol('detach');
+        this._teardownToken = Symbol('detach');
         for (const [, leaf] of this.embeddedLeaves) {
             leaf.detach();
         }
@@ -216,6 +215,14 @@ export class ManuscriptView extends ItemView {
         if (this.mountingPaths.size === 0) {
             this._lazyMounting = false;
         }
+    }
+
+    /** Release a mount only if it still owns the path entry. */
+    private releaseMount(filePath: string, mountId: symbol): void {
+        if (this.mountingPaths.get(filePath) === mountId) {
+            this.mountingPaths.delete(filePath);
+        }
+        this._maybeClearLazyMounting();
     }
 
     private renderView(container: HTMLElement): void {
@@ -377,6 +384,7 @@ export class ManuscriptView extends ItemView {
     private async renderManuscript(): Promise<void> {
         if (!this.scrollArea || !this.footerEl) return;
         this.detachAllEmbedded();
+        const renderToken = this._teardownToken;
         this.scrollArea.empty();
         this.footerEl.empty();
 
@@ -532,42 +540,46 @@ export class ManuscriptView extends ItemView {
 
         // Eagerly mount the first few editors immediately (don't wait for IntersectionObserver)
         this._isMounting = true;
-        const eagerCount = Math.min(3, editorContainers.length);
-        for (let i = 0; i < eagerCount; i++) {
-            await this.mountEditor(editorContainers[i].el, editorContainers[i].path);
-        }
-        this._isMounting = false;
+        try {
+            const eagerCount = Math.min(3, editorContainers.length);
+            for (let i = 0; i < eagerCount; i++) {
+                if (this._teardownToken !== renderToken) return;
+                await this.mountEditor(editorContainers[i].el, editorContainers[i].path);
+            }
 
-        // Discussion #183 — after the initial render, restore the saved
-        // scroll position and cursor. On a fresh open (no in-memory state)
-        // we fall back to the persisted state on disk.
-        this.restoreStateAfterRender();
+            if (this._teardownToken !== renderToken) return;
+
+            // Discussion #183 — after the initial render, restore the saved
+            // scroll position and cursor. On a fresh open (no in-memory state)
+            // we fall back to the persisted state on disk.
+            this.restoreStateAfterRender();
+        } finally {
+            if (this._teardownToken === renderToken) {
+                this._isMounting = false;
+            }
+        }
     }
 
     /** Mount a real Obsidian MarkdownView (Live Preview) inside the given container */
     private async mountEditor(container: HTMLElement, filePath: string): Promise<void> {
         if (this.embeddedLeaves.has(filePath) || this.mountingPaths.has(filePath)) return;
-        this.mountingPaths.add(filePath);
+        const mountId = Symbol('mount');
+        this.mountingPaths.set(filePath, mountId);
         this._lazyMounting = true;
 
-        // Capture a token for this mount so we can detect if a teardown
-        // (detachAllEmbedded) ran while we were awaiting openFile(). Without
-        // this, a refresh() triggered by the modify event from openFile()
-        // would leave us writing into a detached container.
-        const mountToken = Symbol('mount');
-        this._activeMountToken = mountToken;
+        // Snapshot the teardown token. Concurrent mounts share this token;
+        // only detachAllEmbedded() invalidates them.
+        const teardownToken = this._teardownToken;
 
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!(file instanceof TFile)) {
-            this.mountingPaths.delete(filePath);
-            this._maybeClearLazyMounting();
+            this.releaseMount(filePath, mountId);
             return;
         }
 
         // Bail if the container was detached while we were looking up the file.
-        if (!container.isConnected || this._activeMountToken !== mountToken) {
-            this.mountingPaths.delete(filePath);
-            this._maybeClearLazyMounting();
+        if (!container.isConnected || this._teardownToken !== teardownToken) {
+            this.releaseMount(filePath, mountId);
             return;
         }
 
@@ -576,8 +588,7 @@ export class ManuscriptView extends ItemView {
         // On mobile (phone + tablet), embedded WorkspaceSplit editors
         // don't render reliably. Fall back to static rendered markdown.
         if (isPhone || isTablet) {
-            this.mountingPaths.delete(filePath);
-            this._maybeClearLazyMounting();
+            this.releaseMount(filePath, mountId);
             await this.mountReadOnlyPreview(container, filePath);
             return;
         }
@@ -605,16 +616,14 @@ export class ManuscriptView extends ItemView {
             // *previous* render cycle could still have called
             // detachAllEmbedded(). Detect that via the mount token and
             // bail cleanly instead of registering a detached leaf.
-            if (this._activeMountToken !== mountToken || !splitEl.isConnected) {
+            if (this._teardownToken !== teardownToken || !splitEl.isConnected) {
                 try { leaf.detach(); } catch { /* already gone */ }
-                this.mountingPaths.delete(filePath);
-                this._maybeClearLazyMounting();
+                this.releaseMount(filePath, mountId);
                 return;
             }
 
             this.embeddedLeaves.set(filePath, leaf);
-            this.mountingPaths.delete(filePath);
-            this._maybeClearLazyMounting();
+            this.releaseMount(filePath, mountId);
 
             // Inject the atomic-links extension into the CM6 editor
             this.injectAtomicExtension(leaf);
@@ -735,8 +744,7 @@ export class ManuscriptView extends ItemView {
                 });
             }
         } catch (err) {
-            this.mountingPaths.delete(filePath);
-            this._maybeClearLazyMounting();
+            this.releaseMount(filePath, mountId);
             console.warn('StoryLine: embedded editor failed, falling back to preview', err);
             // Only fall back if the container is still attached — if a
             // teardown happened, there's nothing to render into.

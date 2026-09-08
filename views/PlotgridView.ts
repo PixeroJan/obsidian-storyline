@@ -1365,8 +1365,8 @@ export class PlotgridView extends ItemView {
                             cellEl.addEventListener('dragend', () => {
                                 cellEl.removeClass('dragging');
                             });
-                        } else {
-                        // Render mini scene card inside the cell
+                        } else if (this.plugin?.settings.plotgridShowLinkedSceneCards ?? true) {
+                        // Render mini scene card inside the cell when enabled.
                         const miniCard = cellEl.createDiv('plot-grid-mini-card');
 
                         // Status icon + title row
@@ -1459,16 +1459,17 @@ export class PlotgridView extends ItemView {
                     // POV character as a dedicated first pill below.
                     const scMgr2 = this.plugin.sceneManager as SceneManager | undefined;
                     const linkedScene = cell.linkedSceneId ? scMgr2?.getScene(cell.linkedSceneId) : undefined;
+                    const showLinkedSceneCards = this.plugin.settings.plotgridShowLinkedSceneCards ?? true;
 
                     // Scan linked scene body (uses cache)
-                    if (linkedScene) addMentions(this.plugin.linkScanner.scan(linkedScene));
+                    if (linkedScene && showLinkedSceneCards) addMentions(this.plugin.linkScanner.scan(linkedScene));
 
                     // Scan cell text
                     if (cell.content?.trim()) {
                         addMentions(this.plugin.linkScanner.scanText(cell.content));
                     }
 
-                    const povName = (linkedScene?.pov || '').trim();
+                    const povName = showLinkedSceneCards ? (linkedScene?.pov || '').trim() : '';
 
                     // Sort: characters first, then locations, then everything
                     // else, preserving discovery order within each group.
@@ -2786,6 +2787,19 @@ export class PlotgridView extends ItemView {
                 modeSelect.createEl('option', { text: 'Merge — keep manual rows/columns, add missing', value: 'merge' });
                 modeSelect.createEl('option', { text: 'Replace — rebuild from scenes (manual data cleared)', value: 'replace' });
 
+                let showLinkedSceneCards = view.plugin?.settings.plotgridShowLinkedSceneCards ?? true;
+                new obsidian.Setting(contentEl)
+                    .setName('Show linked scene cards in synced cells')
+                    .setDesc('When enabled, synced cells display a preview card for their linked scene.')
+                    .addToggle(toggle => toggle
+                        .setValue(showLinkedSceneCards)
+                        .onChange(async value => {
+                            showLinkedSceneCards = value;
+                            view.plugin.settings.plotgridShowLinkedSceneCards = value;
+                            await view.plugin.saveSettings();
+                            view.renderGrid();
+                        }));
+
                 const btns = contentEl.createDiv();
                 btns.setCssStyles({
                     display: 'flex',
@@ -2797,9 +2811,11 @@ export class PlotgridView extends ItemView {
                 cancelBtn.addEventListener('click', () => this.close());
 
                 const syncBtn = btns.createEl('button', { text: 'Sync', cls: 'mod-cta' });
-                syncBtn.addEventListener('click', () => {
+                syncBtn.addEventListener('click', async () => {
                     const colSource = colSourceSelect.value;
                     const mode = modeSelect.value as 'merge' | 'replace';
+                    view.plugin.settings.plotgridShowLinkedSceneCards = showLinkedSceneCards;
+                    await view.plugin.saveSettings();
                     view.performSync(colSource, mode);
                     this.close();
                 });

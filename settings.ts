@@ -4,7 +4,7 @@ import { SLDocxSettings, SL_DEFAULT_DOCX_SETTINGS } from './services/DocxConvert
 import { SLPdfSettings, SL_DEFAULT_PDF_SETTINGS } from './services/PdfConverter';
 import { AddFieldModal } from './components/AddFieldModal';
 import type { UniversalFieldTemplate } from './services/FieldTemplateService';
-import { ColorCodingMode, CustomStatusDef, SceneStatus, SceneTemplate, ViewType, getStatusConfig, getStatusOrder, registerCustomStatuses } from './models/Scene';
+import { BeatSheetTemplate, ColorCodingMode, CustomStatusDef, SceneStatus, SceneTemplate, ViewType, getStatusConfig, getStatusOrder, registerCustomStatuses } from './models/Scene';
 import { App, Modal, Notice, PluginSettingTab, Setting, SettingGroup, TFolder, TextAreaComponent, AbstractInputSuggest } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { QUOTE_STYLE_OPTIONS, SUPPORTED_STORYLINE_LOCALES, normalizeStoryLineLocale, type QuoteStyle } from './utils/locale';
@@ -636,6 +636,8 @@ export interface SceneCardsSettings {
     showNotesInKanban: boolean;
     showScenesInCorkboard: boolean;
     plotgridAutoNote: boolean;
+    /** Show linked scene previews in Plotgrid cells */
+    plotgridShowLinkedSceneCards: boolean;
     colorCoding: ColorCodingMode;
     showWordCounts: boolean;
     /** Exclude Arc Point scenes from aggregate word counts and stats */
@@ -665,6 +667,8 @@ export interface SceneCardsSettings {
 
     // Scene templates
     sceneTemplates: SceneTemplate[];
+    /** User-created beat sheet templates reusable across projects */
+    customBeatSheets: BeatSheetTemplate[];
 
     // Tag / plotline color scheme
     colorScheme: ColorScheme;
@@ -944,6 +948,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     showNotesInKanban: false,
     showScenesInCorkboard: true,
     plotgridAutoNote: true,
+    plotgridShowLinkedSceneCards: true,
     colorCoding: 'status',
     showWordCounts: true,
     excludeArcAnchorFromWordcount: true,
@@ -966,6 +971,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     showWarnings: true,
 
     sceneTemplates: [],
+    customBeatSheets: [],
 
     colorScheme: 'mocha' as ColorScheme,
 

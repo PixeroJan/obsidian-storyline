@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { ItemView, WorkspaceLeaf, Menu, Notice, TFile, Modal, Setting, MarkdownRenderer, normalizePath } from 'obsidian';
 import * as obsidian from 'obsidian';
-import { Scene, SceneFilter, SortConfig, BoardGroupBy, SceneStatus, SceneTemplate, BUILTIN_BEAT_SHEETS, getStatusOrder, getStatusConfig, resolveStatusCfg } from '../models/Scene';
+import { Scene, SceneFilter, SortConfig, BoardGroupBy, SceneStatus, SceneTemplate, BeatSheetTemplate, BUILTIN_BEAT_SHEETS, getStatusOrder, getStatusConfig, resolveStatusCfg } from '../models/Scene';
 import { openConfirmModal } from '../components/ConfirmModal';
 import { SceneManager } from '../services/SceneManager';
 import { SceneCardComponent } from '../components/SceneCard';
@@ -3340,6 +3340,66 @@ export class BoardView extends ItemView {
                 toggle.onChange(v => { createScenesForChapters = v; });
             });
 
+        // ── Saved custom beat sheets ──
+        contentEl.createEl('h3', { text: 'Saved custom beat sheets' });
+        contentEl.createEl('p', {
+            cls: 'setting-item-description',
+            text: 'Save a custom act/chapter pattern here so it can be reused in another project.'
+        });
+        const customBeatSheetsList = contentEl.createDiv('structure-list');
+        const renderCustomBeatSheets = () => {
+            customBeatSheetsList.empty();
+            const templates = this.plugin.settings.customBeatSheets || [];
+            if (templates.length === 0) {
+                customBeatSheetsList.createEl('p', { cls: 'structure-empty', text: 'No saved custom beat sheets.' });
+            }
+            for (const template of templates) {
+                const parts = [`${template.beats.length} beats`, `${template.acts.length} acts`];
+                if (template.chapters.length > 0) parts.push(`${template.chapters.length} chapters`);
+                const row = new Setting(customBeatSheetsList)
+                    .setName(template.name)
+                    .setDesc(`${template.summary} · ${parts.join(' · ')}`)
+                    .addButton(btn => btn.setButtonText('Apply').setCta().onClick(async () => {
+                        const doApply = async () => {
+                            await this.sceneManager.applyBeatSheet(template);
+                            if (createPlaceholderScenes) {
+                                const count = await this.sceneManager.createScenesFromBeats(template);
+                                new Notice(count > 0
+                                    ? `Applied "${template.name}" — created ${count} placeholder scene(s)`
+                                    : `Applied "${template.name}" template`);
+                            } else {
+                                new Notice(`Applied "${template.name}" template`);
+                            }
+                            renderActsList();
+                            renderChaptersList();
+                        };
+                        const existingActs = this.sceneManager.getDefinedActs();
+                        const existingChapters = this.sceneManager.getDefinedChapters();
+                        if (existingActs.length > 0 || existingChapters.length > 0) {
+                            openConfirmModal(this.app, {
+                                title: 'Apply Beat Sheet',
+                                message: `Applying "${template.name}" will merge its acts, chapters, and labels into your existing structure. Existing scenes are not modified. Continue?`,
+                                confirmLabel: 'Apply',
+                                confirmClass: 'mod-cta',
+                                onConfirm: doApply,
+                            });
+                        } else {
+                            await doApply();
+                        }
+                    }))
+                    .addButton(btn => btn.setButtonText('Delete').onClick(async () => {
+                        const index = (this.plugin.settings.customBeatSheets || []).findIndex(item => item.name === template.name);
+                        if (index >= 0) {
+                            this.plugin.settings.customBeatSheets.splice(index, 1);
+                            await this.plugin.saveSettings();
+                            renderCustomBeatSheets();
+                        }
+                    }));
+                row.descEl.addClass('structure-template-description');
+            }
+        };
+        renderCustomBeatSheets();
+
         // ── Custom Structure Builder ──
         contentEl.createEl('h3', { text: 'Custom structure builder' });
         contentEl.createEl('p', {
@@ -3351,8 +3411,16 @@ export class BoardView extends ItemView {
         let customChaptersPerAct = 5;
         let customScenesPerChapter = 1;
         let customCreateScenes = false;
+        let customTemplateName = '';
 
         const customRow = contentEl.createDiv('structure-add-row');
+        new Setting(customRow)
+            .setName('Template name')
+            .setDesc('Optional name for saving this structure')
+            .addText(text => {
+                text.setPlaceholder('My story structure');
+                text.onChange(value => { customTemplateName = value.trim(); });
+            });
         new Setting(customRow)
             .setName('Number of acts')
             .addText(text => {
@@ -3405,6 +3473,40 @@ export class BoardView extends ItemView {
                     ? `Created ${result.acts} acts, ${result.chapters} chapters, ${result.scenes} placeholder scene(s).`
                     : `Created ${result.acts} acts and ${result.chapters} chapters.`;
                 new Notice(msg);
+            });
+        customApplyRow.createEl('button', { text: 'Save as beat sheet' })
+            .addEventListener('click', async () => {
+                const name = customTemplateName || `Custom ${customActs} × ${customChaptersPerAct}`;
+                const templates = this.plugin.settings.customBeatSheets || (this.plugin.settings.customBeatSheets = []);
+                if (templates.some(template => template.name.toLowerCase() === name.toLowerCase())) {
+                    new Notice(`A beat sheet named "${name}" already exists.`);
+                    return;
+                }
+                const acts = Array.from({ length: customActs }, (_, index) => index + 1);
+                const chapterCount = customActs * customChaptersPerAct;
+                const chapters = Array.from({ length: chapterCount }, (_, index) => index + 1);
+                const actLabels: Record<number, string> = {};
+                const chapterLabels: Record<number, string> = {};
+                const beats = [] as BeatSheetTemplate['beats'];
+                for (const act of acts) actLabels[act] = `Act ${act}`;
+                for (const chapter of chapters) {
+                    const act = Math.floor((chapter - 1) / customChaptersPerAct) + 1;
+                    const label = `Chapter ${chapter}`;
+                    chapterLabels[chapter] = label;
+                    beats.push({ act, chapter, label, description: '' });
+                }
+                templates.push({
+                    name,
+                    summary: `${customActs} acts with ${customChaptersPerAct} chapters per act`,
+                    acts,
+                    chapters,
+                    actLabels,
+                    chapterLabels,
+                    beats,
+                });
+                await this.plugin.saveSettings();
+                renderCustomBeatSheets();
+                new Notice(`Saved beat sheet "${name}".`);
             });
 
         // Close button

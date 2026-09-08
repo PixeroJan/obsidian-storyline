@@ -1556,6 +1556,10 @@ export class SceneManager implements ISceneStore {
                 this.scenes.set(file.path, scene);
                 const sceneFolder = normalizePath(this.getSceneFolder());
                 if (!scene.corkboardNote && normalizePath(file.path).startsWith(`${sceneFolder}/`)) {
+                    const isSnapshot = file.path.split('/').some(segment => segment === '_snapshots' || segment === '.snapshots');
+                    if (!isSnapshot) {
+                        await this.plugin.snapshotManager?.renameSceneSnapshots(oldPath, file.path);
+                    }
                     const titleFromFile = this.getTitleFromSceneFileName(file);
                     if (titleFromFile && titleFromFile !== scene.title) {
                         const oldTitle = scene.title;

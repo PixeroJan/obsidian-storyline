@@ -6,6 +6,26 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.67
+
+### New Features
+
+- **Reusable custom beat sheets** *([#266](https://github.com/PixeroJan/obsidian-storyline/issues/266))* — Save a custom act/chapter structure from the Board structure modal, then apply or delete it from the saved templates list in later projects. Saved templates retain their acts, chapters, labels, and beat definitions.
+- **Plotgrid linked-scene display control** *([#268](https://github.com/PixeroJan/obsidian-storyline/issues/268))* — The Sync from Scenes modal now includes **Show linked scene cards in synced cells**, enabled by default. Turning it off hides linked scene previews, POV pills, and linked-scene entity pills while preserving scene links and manual cell text. The preference is saved immediately and persists across restarts and projects.
+
+### Bug Fixes
+
+- **Manuscript concurrent editor mounts** *([PR #264](https://github.com/PixeroJan/obsidian-storyline/pull/264))* — Concurrent asynchronous editor mounts no longer cancel or detach one another, preventing blank manuscript scenes and stale mount bookkeeping.
+- **Scene snapshot continuity** *([#265](https://github.com/PixeroJan/obsidian-storyline/issues/265))* — Renaming or moving a scene now renames its snapshot artifacts so saved snapshots remain associated with the scene.
+- **Non-destructive Scene Details Notes refresh** *([#269](https://github.com/PixeroJan/obsidian-storyline/issues/269))* — Scene metadata refreshes no longer rebuild the embedded Notes editor, preserving its scroll position and selection.
+
+### Documentation
+
+- Updated Help with reusable custom beat sheets, Plotgrid linked-scene display behavior, scene snapshot rename continuity, and Notes editor refresh behavior.
+- Expanded the dated implementation record with all changes, changed files, and validation results.
+
+
+
 ## Version 1.10.66
 
 ### Bug Fixes

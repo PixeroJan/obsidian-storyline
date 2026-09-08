@@ -165,6 +165,33 @@ export class SnapshotManager {
         }
     }
 
+    /** Keep snapshot filenames aligned with a renamed scene file. */
+    async renameSceneSnapshots(oldSceneFilePath: string, newSceneFilePath: string): Promise<void> {
+        const oldBase = oldSceneFilePath.split('/').pop()?.replace(/\.md$/, '');
+        const newBase = newSceneFilePath.split('/').pop()?.replace(/\.md$/, '');
+        if (!oldBase || !newBase || oldBase === newBase) return;
+
+        await this.migrateLegacySnapshotsFolder(oldSceneFilePath);
+
+        const oldDir = this.getSnapshotDir(oldSceneFilePath);
+        const newDir = this.getSnapshotDir(newSceneFilePath);
+        const oldFolder = this.app.vault.getAbstractFileByPath(oldDir);
+        if (!(oldFolder instanceof TFolder)) return;
+        if (oldDir !== newDir) await this.ensureFolder(newDir);
+
+        for (const child of [...oldFolder.children]) {
+            if (!(child instanceof TFile) || !child.name.startsWith(`${oldBase}__`)) continue;
+            const newName = `${newBase}${child.name.slice(oldBase.length)}`;
+            const destination = normalizePath(`${newDir}/${newName}`);
+            if (this.app.vault.getAbstractFileByPath(destination)) continue;
+            try {
+                await this.app.fileManager.renameFile(child, destination);
+            } catch {
+                // A snapshot rename should never block the scene rename.
+            }
+        }
+    }
+
     /**
      * Simple diff: returns lines that differ between snapshot and current scene.
      */

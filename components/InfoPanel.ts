@@ -32,12 +32,17 @@ export class InfoPanelComponent {
     }
 
     show(scene: Scene): void {
+        const sameScene = this.currentScene?.filePath === scene.filePath;
+        this.currentScene = scene;
+
+        // Keep the embedded notes editor alive while scene metadata changes.
+        // Re-rendering it here resets its scroll position and selection.
+        if (sameScene && this.mode === 'notes') return;
+
         // Don't clobber active typing inside the panel
         if (this.container.querySelector('input:focus, textarea:focus, select:focus, .cm-focused')) {
-            this.currentScene = scene;
             return;
         }
-        this.currentScene = scene;
         this.render();
     }
 

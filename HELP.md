@@ -191,6 +191,7 @@ A spreadsheet-like grid for detailed scene planning.
 - **Auto-Note** — When the Auto-Note toggle is on (enabled by default), typing text into an empty, unlinked cell automatically creates a corkboard note and links it back to the cell. The note is saved as an *idea* with a `plotgridOrigin` label built from the row and column names, so you can always trace it back to where it started. Toggle Auto-Note on or off with the sticky-note icon in the Plotgrid toolbar — the icon turns accent-colored when active.
 - **Codex entity tags** — Each cell automatically displays small color-coded pills at the bottom showing characters (blue), locations (green), and codex entries (purple) detected in the cell text and/or the linked scene's prose. Entity detection uses the same LinkScanner engine — no manual tagging needed.
 - **Sync from Scenes** — Click the sync button in the toolbar to auto-populate the grid. Choose a column source: Characters, Plotlines (tags), Locations, or any Codex category enabled for the Inspector. Rows are created from scenes (sorted by act → chapter → sequence) and cells are filled where data exists. Manual edits are preserved in merge mode. Click a Codex column header to open the linked entry file.
+- **Linked scene cards** — The Sync from Scenes modal includes **Show linked scene cards in synced cells** (enabled by default). Turn it off to hide linked scene previews, POV pills, and entity pills derived from linked scenes while keeping the scene links and manual cell text. The preference is saved immediately and applies across projects.
 - **Drag with confirmation** — Dragging a cell onto another cell that already has content asks for confirmation before overwriting. Cell-to-cell moves can be undone with `Ctrl+Z`.
 
 ### Timeline View
@@ -772,10 +773,12 @@ Apply proven story structure templates to quickly scaffold your acts:
 2. Select a **Beat Sheet Template** and click **Apply** — StoryLine creates the acts and assigns beat labels automatically.
 3. **Create placeholder scenes** — toggle "Create placeholder scenes from beats" before applying to auto-create one scene per beat with the correct act, chapter, and synopsis.
 4. **Custom Structure** — use the Custom Structure builder at the bottom of the modal to define your own number of acts, chapters per act, and scenes per chapter.
-5. **Act labels** appear on column headers (Board View) and timeline dividers (Timeline View).
-6. **Edit labels inline** by clicking the label text on any act divider.
-7. To **add chapters**, use the "Add chapters" section in the same modal. Enter a range (e.g. "1-10") and click Add.
-8. **Seeing chapters**: After adding chapters, switch to Board View → **Kanban** mode → set "Group by" to **Chapter**. Chapters will appear as columns.
+5. **Save a custom beat sheet** — enter a Template name in the Custom Structure builder and click **Save as beat sheet**. The saved template appears in the Saved custom beat sheets section and is available from any project.
+6. **Apply or delete saved templates** from the Saved custom beat sheets section. Applying uses the same merge behavior as built-in templates and can optionally create placeholder scenes.
+7. **Act labels** appear on column headers (Board View) and timeline dividers (Timeline View).
+8. **Edit labels inline** by clicking the label text on any act divider.
+9. To **add chapters**, use the "Add chapters" section in the same modal. Enter a range (e.g. "1-10") and click Add.
+10. **Seeing chapters**: After adding chapters, switch to Board View → **Kanban** mode → set "Group by" to **Chapter**. Chapters will appear as columns.
 
 Beat names are stored as `actLabels` on the project and persist across sessions.
 
@@ -803,6 +806,7 @@ Each scene can have an external **notes file** for editorial comments, reminders
 - Type `[[` *(new in 1.9.9)* to get inline wikilink autocomplete — link to characters, locations, research notes, or anything else in your vault directly from the comments field.
 
 - **Live Markdown editor** *(new in 1.10.18)* — The Notes tab in the Scene Details sidebar now renders as a full Obsidian Live Preview editor. Write with markdown formatting, wikilinks, and tags — just like a regular note file. Edits are saved automatically.
+- **Refresh-safe editing** — Refreshing scene metadata while the same scene remains selected no longer rebuilds the embedded Notes editor, so its scroll position and selection are preserved.
 
 ---
 
@@ -865,6 +869,7 @@ Save point-in-time snapshots of a scene for version tracking:
 - **Save Snapshot** — captures the current state of a scene (frontmatter + body).
 - **View Snapshots** — browse previous snapshots with timestamps.
 - **Restore** — revert a scene to any previous snapshot.
+- **Rename continuity** — renaming or moving a scene also renames its snapshot files, keeping the snapshot history attached to that scene.
 
 Useful for experimenting with rewrites without losing your earlier work.
 

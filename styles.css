@@ -6751,6 +6751,7 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 .structure-close-row {
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
     margin-top: 16px;
     padding-top: 12px;
     border-top: 1px solid var(--background-modifier-border);
