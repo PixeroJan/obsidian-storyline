@@ -92,6 +92,8 @@ export class LinkScanner {
     private characterManager: CharacterManager;
     private locationManager: LocationManager;
     private codexManager: CodexManager | null = null;
+    /** Supplies the current scene set when a reverse index is requested. */
+    private sceneProvider: (() => Scene[]) | null = null;
 
     /** Pre-built lookup sets (lowercased) — rebuilt on invalidate */
     private charNames: Set<string> = new Set();
@@ -140,6 +142,10 @@ export class LinkScanner {
     /** Set the codex manager (called after initial construction) */
     setCodexManager(codexManager: CodexManager): void {
         this.codexManager = codexManager;
+    }
+
+    setSceneProvider(sceneProvider: () => Scene[]): void {
+        this.sceneProvider = sceneProvider;
     }
 
     // ── Public API ─────────────────────────────────────
@@ -711,6 +717,13 @@ export class LinkScanner {
         // Ensure lookups are built
         if (this.charNames.size === 0 && this.locNames.size === 0) {
             this.rebuildLookups(this.lastManualAliases);
+        }
+
+        // A dashboard can be opened before the startup refresh has populated
+        // the scanner cache. Populate it from the authoritative scene index
+        // before building reverse references, including explicit codexLinks.
+        if (this.sceneProvider) {
+            this.scanAll(this.sceneProvider());
         }
 
         const index = new Map<string, EntityReference[]>();

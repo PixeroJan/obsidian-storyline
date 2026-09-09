@@ -3404,14 +3404,23 @@ export class BoardView extends ItemView {
         contentEl.createEl('h3', { text: 'Custom structure builder' });
         contentEl.createEl('p', {
             cls: 'setting-item-description',
-            text: 'Quickly generate a custom act/chapter structure with optional placeholder scenes.'
+            text: 'Name your acts and scene beats, choose how many beats belong in each act, then apply or save the structure.'
         });
 
-        let customActs = 3;
-        let customChaptersPerAct = 5;
-        let customScenesPerChapter = 1;
-        let customCreateScenes = false;
         let customTemplateName = '';
+        let customCreateScenes = false;
+        const customActsDraft: Array<{
+            label: string;
+            beats: Array<{ label: string; subtitle: string; description: string; arcAnchor: boolean }>;
+        }> = Array.from({ length: 3 }, (_, actIndex) => ({
+            label: `Act ${actIndex + 1}`,
+            beats: Array.from({ length: 5 }, (_, beatIndex) => ({
+                label: `Scene ${beatIndex + 1}`,
+                subtitle: '',
+                description: '',
+                arcAnchor: false,
+            })),
+        }));
 
         const customRow = contentEl.createDiv('structure-add-row');
         new Setting(customRow)
@@ -3421,92 +3430,198 @@ export class BoardView extends ItemView {
                 text.setPlaceholder('My story structure');
                 text.onChange(value => { customTemplateName = value.trim(); });
             });
-        new Setting(customRow)
-            .setName('Number of acts')
-            .addText(text => {
-                text.setValue('3');
-                text.inputEl.type = 'number';
-                text.inputEl.addClass('structure-number-input');
-                text.onChange(v => { customActs = parseInt(v) || 3; });
+
+        const customEditor = contentEl.createDiv('custom-structure-editor');
+        const renderCustomEditor = () => {
+            customEditor.empty();
+            customActsDraft.forEach((act, actIndex) => {
+                const actBlock = customEditor.createDiv('structure-custom-act');
+                const actHeader = actBlock.createDiv('structure-custom-act-header');
+                actHeader.createSpan({ cls: 'structure-custom-act-number', text: `Act ${actIndex + 1}` });
+                const actInput = actHeader.createEl('input', {
+                    type: 'text',
+                    cls: 'structure-custom-name-input',
+                    placeholder: `Act ${actIndex + 1} name`,
+                });
+                actInput.value = act.label;
+                actInput.addEventListener('input', () => { act.label = actInput.value; });
+                if (customActsDraft.length > 1) {
+                    const removeAct = actHeader.createEl('button', {
+                        cls: 'clickable-icon structure-remove',
+                        attr: { 'aria-label': `Remove Act ${actIndex + 1}` },
+                    });
+                    removeAct.textContent = '×';
+                    removeAct.addEventListener('click', () => {
+                        customActsDraft.splice(actIndex, 1);
+                        renderCustomEditor();
+                    });
+                }
+
+                const beatsList = actBlock.createDiv('structure-custom-beats');
+                act.beats.forEach((beat, beatIndex) => {
+                    const beatRow = beatsList.createDiv('structure-custom-beat');
+                    const beatNumber = beatRow.createSpan({ cls: 'structure-custom-beat-number', text: `${beatIndex + 1}.` });
+                    beatNumber.setAttr('aria-hidden', 'true');
+                    const beatFields = beatRow.createDiv('structure-custom-beat-fields');
+                    const nameInput = beatFields.createEl('input', {
+                        type: 'text',
+                        cls: 'structure-custom-name-input',
+                        placeholder: 'Scene / beat name',
+                    });
+                    nameInput.value = beat.label;
+                    nameInput.addEventListener('input', () => { beat.label = nameInput.value; });
+                    const subtitleInput = beatFields.createEl('input', {
+                        type: 'text',
+                        cls: 'structure-custom-subtitle-input',
+                        placeholder: 'Optional subtitle',
+                    });
+                    subtitleInput.value = beat.subtitle;
+                    subtitleInput.addEventListener('input', () => { beat.subtitle = subtitleInput.value; });
+                    const descriptionInput = beatFields.createEl('textarea', {
+                        cls: 'structure-custom-description-input',
+                        placeholder: 'Optional synopsis / beat description',
+                    });
+                    descriptionInput.value = beat.description;
+                    descriptionInput.rows = 2;
+                    descriptionInput.addEventListener('input', () => { beat.description = descriptionInput.value; });
+                    const beatOptions = beatFields.createDiv('structure-custom-beat-options');
+                    const arcLabel = beatOptions.createEl('label', { cls: 'structure-custom-arc-label' });
+                    const arcInput = arcLabel.createEl('input', { type: 'checkbox' });
+                    arcInput.checked = beat.arcAnchor;
+                    arcInput.addEventListener('change', () => { beat.arcAnchor = arcInput.checked; });
+                    arcLabel.createSpan({ text: 'Arc Point' });
+                    const removeBeat = beatOptions.createEl('button', {
+                        cls: 'clickable-icon structure-remove',
+                        attr: { 'aria-label': `Remove scene ${beatIndex + 1}` },
+                    });
+                    removeBeat.textContent = '×';
+                    removeBeat.addEventListener('click', () => {
+                        act.beats.splice(beatIndex, 1);
+                        renderCustomEditor();
+                    });
+                });
+
+                const addBeat = actBlock.createEl('button', { text: 'Add scene beat', cls: 'mod-muted' });
+                addBeat.addEventListener('click', () => {
+                    act.beats.push({
+                        label: `Scene ${act.beats.length + 1}`,
+                        subtitle: '',
+                        description: '',
+                        arcAnchor: false,
+                    });
+                    renderCustomEditor();
+                });
             });
-        new Setting(customRow)
-            .setName('Chapters per act')
-            .addText(text => {
-                text.setValue('5');
-                text.inputEl.type = 'number';
-                text.inputEl.addClass('structure-number-input');
-                text.onChange(v => { customChaptersPerAct = parseInt(v) || 5; });
+
+            const addAct = customEditor.createEl('button', { text: 'Add act', cls: 'mod-muted' });
+            addAct.addEventListener('click', () => {
+                const actNumber = customActsDraft.length + 1;
+                customActsDraft.push({
+                    label: `Act ${actNumber}`,
+                    beats: [{ label: 'Scene 1', subtitle: '', description: '', arcAnchor: false }],
+                });
+                renderCustomEditor();
             });
-        new Setting(customRow)
-            .setName('Scenes per chapter')
-            .setDesc('Set to 0 to skip creating scenes.')
-            .addText(text => {
-                text.setValue('1');
-                text.inputEl.type = 'number';
-                text.inputEl.addClass('structure-number-input');
-                text.onChange(v => { customScenesPerChapter = parseInt(v) || 0; });
-            });
-        new Setting(customRow)
+        };
+        renderCustomEditor();
+
+        new Setting(contentEl)
             .setName('Create placeholder scenes')
-            .setDesc('Generate one "idea" scene per chapter (or per scene slot if > 1).')
+            .setDesc('Generate one "idea" scene for every named beat, using its name, subtitle, act, and arc point setting.')
             .addToggle(toggle => {
                 toggle.setValue(false);
                 toggle.onChange(v => { customCreateScenes = v; });
             });
 
+        const buildCustomTemplate = (): BeatSheetTemplate | null => {
+            const acts: number[] = [];
+            const chapters: number[] = [];
+            const actLabels: Record<number, string> = {};
+            const chapterLabels: Record<number, string> = {};
+            const beats: BeatSheetTemplate['beats'] = [];
+            let chapter = 1;
+
+            for (let actIndex = 0; actIndex < customActsDraft.length; actIndex++) {
+                const actNumber = actIndex + 1;
+                const act = customActsDraft[actIndex];
+                const actLabel = act.label.trim() || `Act ${actNumber}`;
+                acts.push(actNumber);
+                actLabels[actNumber] = actLabel;
+                for (const beat of act.beats) {
+                    const label = beat.label.trim() || `Scene ${chapter}`;
+                    chapters.push(chapter);
+                    chapterLabels[chapter] = label;
+                    beats.push({
+                        act: actNumber,
+                        chapter,
+                        label,
+                        subtitle: beat.subtitle.trim() || undefined,
+                        description: beat.description.trim(),
+                        arcAnchor: beat.arcAnchor || undefined,
+                    });
+                    chapter++;
+                }
+            }
+
+            if (acts.length === 0 || beats.length === 0) {
+                new Notice('Add at least one act with one scene beat.');
+                return null;
+            }
+
+            const name = customTemplateName || `Custom ${acts.length}-act structure`;
+            return {
+                name,
+                summary: `${acts.length} acts with ${beats.length} named scene beats`,
+                acts,
+                chapters,
+                actLabels,
+                chapterLabels,
+                beats,
+            };
+        };
+
         const customApplyRow = contentEl.createDiv('structure-close-row');
         customApplyRow.createEl('button', { text: 'Apply custom structure', cls: 'mod-cta' })
             .addEventListener('click', async () => {
-                if (customActs < 1 || customChaptersPerAct < 1) {
-                    new Notice('Enter at least 1 act and 1 chapter per act.');
-                    return;
+                const template = buildCustomTemplate();
+                if (!template) return;
+                const doApply = async () => {
+                    await this.sceneManager.applyBeatSheet(template);
+                    let count = 0;
+                    if (customCreateScenes) count = await this.sceneManager.createScenesFromBeats(template);
+                    renderActsList();
+                    renderChaptersList();
+                    new Notice(customCreateScenes
+                        ? `Applied "${template.name}" — created ${count} placeholder scene(s).`
+                        : `Applied "${template.name}" template.`);
+                };
+                const existingActs = this.sceneManager.getDefinedActs();
+                const existingChapters = this.sceneManager.getDefinedChapters();
+                if (existingActs.length > 0 || existingChapters.length > 0) {
+                    openConfirmModal(this.app, {
+                        title: 'Apply custom structure',
+                        message: `Applying "${template.name}" will merge its acts, chapters, and labels into your existing structure. Existing scenes are not modified. Continue?`,
+                        confirmLabel: 'Apply',
+                        confirmClass: 'mod-cta',
+                        onConfirm: doApply,
+                    });
+                } else {
+                    await doApply();
                 }
-                const result = await this.sceneManager.applyCustomStructure(
-                    customActs,
-                    customChaptersPerAct,
-                    customScenesPerChapter,
-                    customCreateScenes,
-                );
-                renderActsList();
-                renderChaptersList();
-                const msg = customCreateScenes
-                    ? `Created ${result.acts} acts, ${result.chapters} chapters, ${result.scenes} placeholder scene(s).`
-                    : `Created ${result.acts} acts and ${result.chapters} chapters.`;
-                new Notice(msg);
             });
         customApplyRow.createEl('button', { text: 'Save as beat sheet' })
             .addEventListener('click', async () => {
-                const name = customTemplateName || `Custom ${customActs} × ${customChaptersPerAct}`;
+                const template = buildCustomTemplate();
+                if (!template) return;
                 const templates = this.plugin.settings.customBeatSheets || (this.plugin.settings.customBeatSheets = []);
-                if (templates.some(template => template.name.toLowerCase() === name.toLowerCase())) {
-                    new Notice(`A beat sheet named "${name}" already exists.`);
+                if (templates.some(item => item.name.toLowerCase() === template.name.toLowerCase())) {
+                    new Notice(`A beat sheet named "${template.name}" already exists.`);
                     return;
                 }
-                const acts = Array.from({ length: customActs }, (_, index) => index + 1);
-                const chapterCount = customActs * customChaptersPerAct;
-                const chapters = Array.from({ length: chapterCount }, (_, index) => index + 1);
-                const actLabels: Record<number, string> = {};
-                const chapterLabels: Record<number, string> = {};
-                const beats = [] as BeatSheetTemplate['beats'];
-                for (const act of acts) actLabels[act] = `Act ${act}`;
-                for (const chapter of chapters) {
-                    const act = Math.floor((chapter - 1) / customChaptersPerAct) + 1;
-                    const label = `Chapter ${chapter}`;
-                    chapterLabels[chapter] = label;
-                    beats.push({ act, chapter, label, description: '' });
-                }
-                templates.push({
-                    name,
-                    summary: `${customActs} acts with ${customChaptersPerAct} chapters per act`,
-                    acts,
-                    chapters,
-                    actLabels,
-                    chapterLabels,
-                    beats,
-                });
+                templates.push(template);
                 await this.plugin.saveSettings();
                 renderCustomBeatSheets();
-                new Notice(`Saved beat sheet "${name}".`);
+                new Notice(`Saved beat sheet "${template.name}".`);
             });
 
         // Close button

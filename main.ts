@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, no-useless-escape -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { App, ButtonComponent, DropdownComponent, FuzzySuggestModal, ItemView, Modal, Notice, Platform, Plugin, Setting, TFile, TextComponent, ToggleComponent, WorkspaceLeaf, normalizePath, parseYaml, setIcon } from 'obsidian';
+import { addIcon, App, ButtonComponent, DropdownComponent, FuzzySuggestModal, ItemView, Modal, Notice, Platform, Plugin, Setting, TFile, TextComponent, ToggleComponent, WorkspaceLeaf, normalizePath, parseYaml, setIcon } from 'obsidian';
 import { SceneCardsSettings, SceneCardsSettingTab, DEFAULT_SETTINGS } from './settings';
 import { asRecord, isRecord } from './utils/narrow';
 import type { FilterPreset } from './models/Scene';
@@ -173,6 +173,7 @@ export default class SceneCardsPlugin extends Plugin {
         this.viewSnapshotService = new ViewSnapshotService(this);
         this.linkScanner = new LinkScanner(this.characterManager, this.locationManager);
         this.linkScanner.setCodexManager(this.codexManager);
+        this.linkScanner.setSceneProvider(() => this.sceneManager.getAllScenes());
         this.cascadeRename = new CascadeRenameService(this.app, this.sceneManager, this.characterManager, this.locationManager);
         this.fieldTemplates = new FieldTemplateService(this.app, () => this.getProjectSystemFolder());
         // Issue #71 — expose templates to parsers for top-level YAML mirroring
@@ -336,8 +337,16 @@ export default class SceneCardsPlugin extends Plugin {
             }
         });
 
-        // Ribbon icons — open project chooser (load/create) so users can switch projects
-        this.addRibbonIcon('layout-grid', 'StoryLine projects', () => {
+        // Register the supplied StoryLine mark in Obsidian's icon registry.
+        addIcon('storyline-logo', `
+            <path d="M10.4 8.3h29.2a2.1 2.1 0 0 1 2.1 2.1v29.2a2.1 2.1 0 0 1-2.1 2.1H10.4a2.1 2.1 0 0 1-2.1-2.1V10.4a2.1 2.1 0 0 1 2.1-2.1Z" fill="none" stroke="currentColor" stroke-width="7.5"/>
+            <path d="M60.4 8.3h29.2a2.1 2.1 0 0 1 2.1 2.1v29.2a2.1 2.1 0 0 1-2.1 2.1H60.4a2.1 2.1 0 0 1-2.1-2.1V10.4a2.1 2.1 0 0 1 2.1-2.1Z" fill="currentColor" stroke="currentColor" stroke-width="7.5"/>
+            <path d="M60.4 58.3h29.2a2.1 2.1 0 0 1 2.1 2.1v29.2a2.1 2.1 0 0 1-2.1 2.1H60.4a2.1 2.1 0 0 1-2.1-2.1V60.4a2.1 2.1 0 0 1 2.1-2.1Z" fill="currentColor" stroke="currentColor" stroke-width="7.5"/>
+            <path d="M10.4 58.3h29.2a2.1 2.1 0 0 1 2.1 2.1v29.2a2.1 2.1 0 0 1-2.1 2.1H10.4a2.1 2.1 0 0 1-2.1-2.1V60.4a2.1 2.1 0 0 1 2.1-2.1Z" fill="currentColor" stroke="currentColor" stroke-width="7.5"/>
+        `);
+
+        // Ribbon icon — open project chooser (load/create) so users can switch projects
+        this.addRibbonIcon('storyline-logo', 'StoryLine projects', () => {
             const modal = new ProjectSelectModal(this.app, this);
             modal.open();
         });

@@ -365,8 +365,12 @@ export interface BeatDefinition {
     chapter?: number;
     /** Beat label (e.g. "Opening Image", "Catalyst") */
     label: string;
+    /** Optional subtitle used when creating a placeholder scene */
+    subtitle?: string;
     /** Short description of the beat's purpose */
     description: string;
+    /** Whether placeholder scenes created from this beat start as Arc Points */
+    arcAnchor?: boolean;
 }
 
 /**

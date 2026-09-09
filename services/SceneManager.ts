@@ -839,7 +839,7 @@ export class SceneManager implements ISceneStore {
      */
     addFile(content: string, filePath: string): boolean {
         if (this.scenes.has(filePath)) return false;
-        if (filePath.includes('/_snapshots/')) return false; // issue #100 — snapshots aren't scenes
+        if (filePath.split('/').some(segment => segment === '_snapshots' || segment === '.snapshots')) return false; // issue #100 — snapshots aren't scenes
         const scene = MetadataParser.parseContent(content, filePath);
         if (scene) {
             this.scenes.set(filePath, scene);
@@ -864,7 +864,7 @@ export class SceneManager implements ISceneStore {
         const listing = await adapter.list(folderPath);
         for (const f of listing.files) {
             if (!f.endsWith('.md')) continue;
-            if (f.includes('/_snapshots/')) continue; // issue #100 — skip snapshot files
+            if (f.split('/').some(segment => segment === '_snapshots' || segment === '.snapshots')) continue; // issue #100 — skip snapshot files
             try {
                 const content = await adapter.read(f);
                 const scene = MetadataParser.parseContent(content, f);
@@ -875,7 +875,7 @@ export class SceneManager implements ISceneStore {
         }
         for (const sub of listing.folders) {
             const segment = sub.split('/').pop() ?? '';
-            if (segment === '_snapshots') continue; // issue #100 — don't recurse into snapshots
+            if (segment === '_snapshots' || segment === '.snapshots') continue; // issue #100 — don't recurse into snapshots
             await this.scanFolderAdapter(sub);
         }
     }
@@ -1066,7 +1066,38 @@ export class SceneManager implements ISceneStore {
             currentPath = await this.syncSceneFileName(currentPath);
         }
 
+        // A title/sequence/act change can rename the scene file. Corkboard
+        // positions are keyed by file path, so migrate the layout before
+        // callers refresh the board and see the new path as an unpositioned
+        // scene.
+        if (currentPath !== filePath) {
+            await this.plugin.flushCorkboardPositions();
+            await this.migrateCorkboardPosition(filePath, currentPath);
+            this.plugin.invalidateCorkboardCache();
+        }
+
         return currentPath;
+    }
+
+    /** Move a scene's saved corkboard position when its file path changes. */
+    private async migrateCorkboardPosition(oldPath: string, newPath: string): Promise<void> {
+        const positions = this._activeProject?.corkboardPositions;
+        if (!positions) return;
+
+        const oldKey = normalizePath(oldPath);
+        const newKey = normalizePath(newPath);
+        if (oldKey === newKey) return;
+
+        const oldEntries = Object.entries(positions)
+            .filter(([key]) => normalizePath(key) === oldKey);
+        if (oldEntries.length === 0) return;
+
+        const position = oldEntries[0][1];
+        for (const [key] of oldEntries) {
+            delete positions[key];
+        }
+        positions[newKey] = position;
+        await this.setCorkboardPositions(positions);
     }
 
     /**
@@ -1525,6 +1556,12 @@ export class SceneManager implements ISceneStore {
     async handleFileChange(file: TFile): Promise<void> {
         if (file.extension !== 'md') return;
 
+        if (file.path.split('/').some(segment => segment === '_snapshots' || segment === '.snapshots')) {
+            this.scenes.delete(file.path);
+            this.bumpVersion(file.path);
+            return;
+        }
+
         // Check if file is in scene folder or notes folder
         if (!file.path.startsWith(this.getSceneFolder()) && !file.path.startsWith(this.getNotesFolder())) return;
 
@@ -1550,16 +1587,28 @@ export class SceneManager implements ISceneStore {
      */
     async handleFileRename(file: TFile, oldPath: string): Promise<void> {
         this.scenes.delete(oldPath);
+        const isSnapshot = file.path.split('/').some(segment => segment === '_snapshots' || segment === '.snapshots');
+        if (isSnapshot) {
+            this.scenes.delete(file.path);
+            this.bumpVersion(file.path);
+            return;
+        }
+        const isProjectContent = file.path.startsWith(this.getSceneFolder())
+            || file.path.startsWith(this.getNotesFolder())
+            || oldPath.startsWith(this.getSceneFolder())
+            || oldPath.startsWith(this.getNotesFolder());
+        if (isProjectContent) {
+            await this.plugin.flushCorkboardPositions();
+            await this.migrateCorkboardPosition(oldPath, file.path);
+            this.plugin.invalidateCorkboardCache();
+        }
         if (file.extension === 'md' && (file.path.startsWith(this.getSceneFolder()) || file.path.startsWith(this.getNotesFolder()))) {
             const scene = await MetadataParser.parseFile(this.app, file);
             if (scene) {
                 this.scenes.set(file.path, scene);
                 const sceneFolder = normalizePath(this.getSceneFolder());
                 if (!scene.corkboardNote && normalizePath(file.path).startsWith(`${sceneFolder}/`)) {
-                    const isSnapshot = file.path.split('/').some(segment => segment === '_snapshots' || segment === '.snapshots');
-                    if (!isSnapshot) {
-                        await this.plugin.snapshotManager?.renameSceneSnapshots(oldPath, file.path);
-                    }
+                    await this.plugin.snapshotManager?.renameSceneSnapshots(oldPath, file.path);
                     const titleFromFile = this.getTitleFromSceneFileName(file);
                     if (titleFromFile && titleFromFile !== scene.title) {
                         const oldTitle = scene.title;
@@ -2061,6 +2110,8 @@ export class SceneManager implements ISceneStore {
                 sequence: nextSeq++,
                 beatsheet: template.name,
                 synopsis: beat.description,
+                subtitle: beat.subtitle,
+                arcAnchor: beat.arcAnchor,
                 status: 'idea' as SceneStatus,
             });
             created++;

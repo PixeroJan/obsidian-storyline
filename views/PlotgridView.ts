@@ -477,13 +477,29 @@ export class PlotgridView extends ItemView {
         const alignSelect = fmtGroup.createEl('select');
         alignSelect.addClass('dropdown');
         alignSelect.title = 'Alignment for selection';
+        alignSelect.createEl('option', { text: 'Align', value: '', disabled: true });
         for (const [value, label] of [['left', 'Left'], ['center', 'Center'], ['right', 'Right']] as const) {
             const option = alignSelect.createEl('option', { text: label });
             option.value = value;
         }
         alignSelect.addEventListener('change', () => this.setAlignSelected(alignSelect.value as 'left' | 'center' | 'right'));
-        // default to centered
-        alignSelect.value = 'center';
+        const selectedAlignments = new Set<'left' | 'center' | 'right'>();
+        const selectedCell = this.getSelectedCellData();
+        if (selectedCell) {
+            selectedAlignments.add(selectedCell.cell.align || 'center');
+        } else if (this.selectedRow !== null) {
+            for (const column of this.data.columns) {
+                const cell = this.data.cells[`${this.data.rows[this.selectedRow].id}-${column.id}`];
+                selectedAlignments.add(cell?.align || 'center');
+            }
+        } else if (this.selectedCol !== null) {
+            for (const row of this.data.rows) {
+                const cell = this.data.cells[`${row.id}-${this.data.columns[this.selectedCol].id}`];
+                selectedAlignments.add(cell?.align || 'center');
+            }
+        }
+        if (selectedAlignments.size === 1) alignSelect.value = [...selectedAlignments][0];
+        else alignSelect.value = '';
 
         const bgColorBtn = fmtGroup.createEl('button', { cls: 'clickable-icon' });
         obsidian.setIcon(bgColorBtn, 'palette');

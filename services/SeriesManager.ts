@@ -457,7 +457,18 @@ export class SeriesManager {
             const fileName = filePath.split('/').pop() ?? '';
             const destFile = normalizePath(`${destCodex}/${fileName}`);
             if (await adapter.exists(destFile)) {
-                // Duplicate — skip (series version takes precedence)
+                // If the entries are identical, the series copy is already
+                // authoritative and the source duplicate can be removed so
+                // the migrated book does not look like a second copy. Keep
+                // differing files for manual review rather than losing data.
+                try {
+                    const sourceContent = await adapter.read(filePath);
+                    const destContent = await adapter.read(destFile);
+                    if (sourceContent === destContent) {
+                        const sourceFile = this.app.vault.getAbstractFileByPath(filePath);
+                        if (sourceFile) await this.app.fileManager.trashFile(sourceFile);
+                    }
+                } catch { /* keep an unreadable duplicate */ }
                 continue;
             }
             // Use fileManager.renameFile for safe link updates

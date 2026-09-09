@@ -6,6 +6,23 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.68
+
+
+### New Features
+
+- **Named custom Kanban beat sheets** *([#272](https://github.com/PixeroJan/obsidian-storyline/issues/272))* — The Manage Story Structure modal now lets users define named acts and scene beats, including optional subtitles, descriptions, and Arc Point flags. Custom structures can be saved as reusable beat sheets or applied with optional placeholder scene creation.
+**New ribbon icon.**
+
+### Bug Fixes
+
+- **Series migration cleanup** *([#270](https://github.com/PixeroJan/obsidian-storyline/issues/270))* — Byte-identical codex duplicates are removed after the shared series copy wins, so migrated books do not retain misleading duplicate codex folders.
+- **Snapshot index isolation** *([#271](https://github.com/PixeroJan/obsidian-storyline/issues/271))* — Renamed snapshots remain excluded from scene indexes and dashboard views, including legacy `.snapshots` folders.
+- **Plotgrid alignment control** *([#273](https://github.com/PixeroJan/obsidian-storyline/issues/273))* — Alignment selection now survives toolbar rerenders and no longer shows a tiled native-arrow artifact.
+- **Corkboard scene position persistence** *([#275](https://github.com/PixeroJan/obsidian-storyline/issues/275))* — Scene positions no longer snap back to their defaults when a scene title, sequence, act, or file path changes.
+- **Mobile StoryLine navigation and manuscript layout** *([#276](https://github.com/PixeroJan/obsidian-storyline/issues/276), [#277](https://github.com/PixeroJan/obsidian-storyline/issues/277), [#278](https://github.com/PixeroJan/obsidian-storyline/issues/278))* — Mobile navigation stays at the top, manuscript content is contained within the leaf, and the formatting toolbar remains reachable within the phone viewport.
+- **Complete dashboard reference indexing** — Reverse references now populate from every active scene even when a dashboard opens before the scanner cache has been warmed, preserving links across view reloads.
+
 ## Version 1.10.67
 
 ### New Features
