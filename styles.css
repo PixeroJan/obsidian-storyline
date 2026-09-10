@@ -8383,9 +8383,10 @@ body /* Clamp title on mobile too, in case it's very long */
 .sl-phone .story-line-column-header {
     position: sticky;
     top: 0;
-    z-index: 5;
-    background: var(--background-primary);
+    z-index: 20;
+    background: var(--background-secondary) !important;
     padding: 8px 12px;
+    isolation: isolate;
 }
 
 /* Tablets: allow 3 columns side-by-side */
