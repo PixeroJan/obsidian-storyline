@@ -8742,7 +8742,7 @@ body /* Clamp title on mobile too, in case it's very long */
 
 /* Smaller filter bar on mobile */
 .sl-mobile .story-line-filters-container {
-    padding: 2px 8px;
+    padding: 8px 8px 6px;
 }
 
 /* Compact filter bar on phone */
