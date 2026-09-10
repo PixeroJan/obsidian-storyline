@@ -205,6 +205,17 @@ body.theme-dark {
 }
 
 @media (max-width: 768px) {
+    /* Obsidian's mobile custom-view header can expand into a large empty
+       region above StoryLine. StoryLine already renders its own toolbar. */
+    body.is-mobile .workspace-leaf-content[data-type^="story-line-"] > .view-header {
+        display: none !important;
+    }
+
+    body.is-mobile .workspace-leaf-content[data-type^="story-line-"] > .view-content {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
     .story-line-board-container,
     .story-line-timeline-container,
     .story-line-storyline-container,
@@ -8813,8 +8824,8 @@ body /* Clamp title on mobile too, in case it's very long */
 .sl-phone .story-line-toolbar {
     flex-wrap: wrap;
     overflow-x: hidden;
-    overflow-y: auto;
-    max-height: 50dvh;
+    overflow-y: visible;
+    max-height: none;
 }
 
 .sl-phone .story-line-toolbar-controls {
