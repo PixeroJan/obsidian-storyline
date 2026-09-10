@@ -704,7 +704,18 @@ export default class SceneCardsPlugin extends Plugin {
         // File watchers for reactive updates
         // We debounce the async refresh pipeline so multiple rapid edits
         // only trigger one re-render after the index has finished updating.
-        const debouncedRefresh = this.debounce(() => this.refreshOpenViews(), 500);
+        // Issue #279 — a Git pull can replace or add markdown files without
+        // following the same event sequence as an in-app edit. The sync
+        // refresh therefore rebuilds the active scene index from disk.
+        const debouncedRefresh = this.debounce(() => this.refreshOpenViews(true), 500);
+
+        this.registerEvent(
+            this.app.vault.on('create', (file) => {
+                if (file instanceof TFile) {
+                    debouncedRefresh();
+                }
+            })
+        );
 
         this.registerEvent(
             this.app.vault.on('modify', (file) => {
@@ -2426,7 +2437,19 @@ export default class SceneCardsPlugin extends Plugin {
     /**
      * Refresh all open Scene Cards views
      */
-    async refreshOpenViews(): Promise<void> {
+    async refreshOpenViews(reloadScenes = false): Promise<void> {
+        // Issue #279 — external sync tools can add, replace, or remove files
+        // without leaving SceneManager's in-memory index in a usable state.
+        // Rebuild it from the active project's folders before loading the
+        // entity managers and rebuilding reverse references.
+        if (reloadScenes) {
+            try {
+                await this.sceneManager.initialize();
+            } catch (e) {
+                console.error('[StoryLine] Failed to reload scenes from disk:', e);
+            }
+        }
+
         // Keep LocationManager, CharacterManager, and CodexManager in sync
         try {
             await this.loadActiveProjectEntities();

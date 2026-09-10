@@ -6,6 +6,12 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.70
+
+### Bug Fixes
+
+- **Git-synced scenes stay current** *([#279](https://github.com/PixeroJan/obsidian-storyline/issues/279))* — Sync-triggered refreshes now rebuild the active project's scene index from disk, and newly created files trigger the same refresh. Scenes changed or added by Obsidian Git no longer remain missing from StoryLine until the user manually reloads the project.
+
 ## Version 1.10.69
 
 ### Bug Fixes
@@ -15,9 +21,6 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 - **Mobile navigation and manuscript layout** *([#276](https://github.com/PixeroJan/obsidian-storyline/issues/276), [#278](https://github.com/PixeroJan/obsidian-storyline/issues/278))* — Mobile StoryLine containers no longer reserve desktop inspector space, and the manuscript toolbar stays aligned within the phone safe area.
 - **Dashboard links after reload** — LinkScanner caches are invalidated and rebuilt when projects activate or the workspace starts, after Characters, Locations, and Codex entities load. This keeps reverse references and dashboard relationships available after reopening a vault.
 
-### Documentation
-
-- Added `2026-09-10-1.10.69-implementation.md` with the implementation summary, changed files, and validation details.
 
 ## Version 1.10.68
 
