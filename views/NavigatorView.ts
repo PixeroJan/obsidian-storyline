@@ -120,9 +120,11 @@ export class NavigatorView extends ItemView {
             const menu = new Menu();
             for (const mode of Object.keys(SORT_LABELS) as NavSortMode[]) {
                 menu.addItem((item) => {
-                    item.setTitle(mode === 'words' && this.plugin.settings.countUnit === 'chars'
-                        ? 'Character count'
-                        : SORT_LABELS[mode]);
+                    let title = SORT_LABELS[mode];
+                    if (mode === 'words' && this.plugin.settings.countUnit === 'chars') {
+                        title = 'Character count';
+                    }
+                    item.setTitle(title);
                     item.setIcon(SORT_ICONS[mode]);
                     if (mode === this.sortMode) item.setChecked(true);
                     item.onClick(() => {
@@ -417,13 +419,15 @@ export class NavigatorView extends ItemView {
         const title = row.createSpan('sl-nav-title');
         title.textContent = scene.title;
 
-        // Scene length
+        // Scene length (with unit label)
         const sceneCount = this.getSceneCount(scene);
         if (sceneCount > 0) {
             const wc = row.createSpan('sl-nav-wc');
-            wc.textContent = sceneCount >= 1000
+            const formatted = sceneCount >= 1000
                 ? `${(sceneCount / 1000).toFixed(1)}k`
                 : `${sceneCount}`;
+            const unitLabel = this.getCountUnitLabel();
+            wc.textContent = `${formatted}${unitLabel === 'character' ? 'c' : 'w'}`;
         }
 
         // Click to open the scene file (or scroll in Manuscript view)
@@ -588,19 +592,21 @@ export class NavigatorView extends ItemView {
         if (!this.progressBar || !this.progressLabel) return;
 
         const stats = this.sceneManager.queryService.getStatistics();
-        const totalWords = stats.totalWords;
-        const targetWords = stats.totalTargetWords;
+        const useChars = this.plugin.settings.countUnit === 'chars';
+        const totalCount = useChars ? stats.totalChars : stats.totalWords;
+        const targetCount = useChars ? stats.totalTargetChars : stats.totalTargetWords;
+        const unit = useChars ? 'characters' : 'words';
 
-        if (targetWords > 0) {
-            const pct = Math.min(100, Math.round((totalWords / targetWords) * 100));
+        if (targetCount > 0) {
+            const pct = Math.min(100, Math.round((totalCount / targetCount) * 100));
             const fill = this.progressBar.querySelector('.sl-nav-progress-fill') as HTMLElement;
             if (fill) fill.setCssStyles({ width: `${pct}%` });
-            this.progressLabel.textContent = `${this.formatWords(totalWords)} / ${this.formatWords(targetWords)} (${pct}%)`;
+            this.progressLabel.textContent = `${this.formatWords(totalCount)} / ${this.formatWords(targetCount)} (${pct}%)`;
         } else {
             const fill = this.progressBar.querySelector('.sl-nav-progress-fill') as HTMLElement;
             if (fill) fill.setCssStyles({ width: '0%' });
             const totalScenes = this.sceneManager.getAllScenes().filter(s => !s.corkboardNote && !s.inactive).length;
-            this.progressLabel.textContent = `${this.formatWords(totalWords)} words · ${totalScenes} scenes`;
+            this.progressLabel.textContent = `${this.formatWords(totalCount)} ${unit} · ${totalScenes} scenes`;
         }
     }
 
@@ -613,6 +619,10 @@ export class NavigatorView extends ItemView {
         return this.plugin.settings.countUnit === 'chars'
             ? (scene.charcount || 0)
             : (scene.wordcount || 0);
+    }
+
+    private getCountUnitLabel(): 'word' | 'character' {
+        return this.plugin.settings.countUnit === 'chars' ? 'character' : 'word';
     }
 }
 /* eslint-enable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion -- end of file-wide suppression block opened at line 1 */

@@ -191,6 +191,10 @@ export class SeriesManager {
                 }
             }
 
+            // Issue #270 follow-up: keep a cleanup pass for legacy root folders
+            // that remain behind after the move, especially when the original
+            // folder was just a duplicate of the migrated project.
+            await this.removeDuplicateLegacyFolder(bookFolders.baseFolder, targetBookFolder);
             await this.removeFolderIfEmpty(bookFolders.baseFolder);
         }
 
@@ -276,6 +280,7 @@ export class SeriesManager {
         // Move the book folder into the series
         if (normalizePath(bookFolders.baseFolder) !== targetBookFolder) {
             await this.moveFolderRecursive(bookFolders.baseFolder, targetBookFolder);
+            await this.removeDuplicateLegacyFolder(bookFolders.baseFolder, targetBookFolder);
         }
 
         // Migrate codex
@@ -540,6 +545,83 @@ export class SeriesManager {
             if (remaining.files.length === 0 && remaining.folders.length === 0) {
                 await adapter.rmdir(folder, false);
             }
+        } catch { /* non-fatal */ }
+    }
+
+    /**
+     * Remove a stale legacy book folder once its contents were already moved
+     * into the new series location. This catches the follow-up cleanup for
+     * duplicated folders left behind after a book is migrated into a series.
+     */
+    private async removeDuplicateLegacyFolder(legacyFolder: string, migratedFolder: string): Promise<void> {
+        const adapter = this.app.vault.adapter;
+        if (!legacyFolder || !migratedFolder) return;
+        if (normalizePath(legacyFolder) === normalizePath(migratedFolder)) return;
+        if (!await adapter.exists(legacyFolder) || !await adapter.exists(migratedFolder)) return;
+
+        const equivalent = await this.isFolderTreeEquivalent(legacyFolder, migratedFolder);
+        if (!equivalent) {
+            await this.removeFolderIfEmpty(legacyFolder);
+            return;
+        }
+
+        await this.deleteFolderTree(legacyFolder);
+    }
+
+    /**
+     * True when both folders contain the same file tree, so a stale duplicate
+     * can be safely removed after a successful migration.
+     */
+    private async isFolderTreeEquivalent(folderA: string, folderB: string): Promise<boolean> {
+        const adapter = this.app.vault.adapter;
+        try {
+            const aList = await adapter.list(folderA);
+            const bList = await adapter.list(folderB);
+
+            if (aList.files.length !== bList.files.length || aList.folders.length !== bList.folders.length) {
+                return false;
+            }
+
+            const aFiles = [...aList.files].map(f => f.split('/').pop() ?? '').sort();
+            const bFiles = [...bList.files].map(f => f.split('/').pop() ?? '').sort();
+            if (aFiles.length !== bFiles.length || aFiles.some((f, i) => f !== bFiles[i])) {
+                return false;
+            }
+
+            for (const filePath of aList.files) {
+                const base = filePath.split('/').pop() ?? '';
+                const aContent = await adapter.read(filePath);
+                const bContent = await adapter.read(normalizePath(`${folderB}/${base}`));
+                if (aContent !== bContent) return false;
+            }
+
+            for (const folderPath of aList.folders) {
+                const name = folderPath.split('/').pop() ?? '';
+                if (!await this.isFolderTreeEquivalent(folderPath, normalizePath(`${folderB}/${name}`))) {
+                    return false;
+                }
+            }
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private async deleteFolderTree(folder: string): Promise<void> {
+        const adapter = this.app.vault.adapter;
+        try {
+            if (!await adapter.exists(folder)) return;
+            const listing = await adapter.list(folder);
+            for (const filePath of listing.files) {
+                const file = this.app.vault.getAbstractFileByPath(filePath);
+                if (file) await this.app.fileManager.trashFile(file);
+                else await adapter.remove(filePath);
+            }
+            for (const childFolder of listing.folders) {
+                await this.deleteFolderTree(childFolder);
+            }
+            await this.removeFolderIfEmpty(folder);
         } catch { /* non-fatal */ }
     }
 

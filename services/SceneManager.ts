@@ -513,6 +513,13 @@ export class SceneManager implements ISceneStore {
         await this.loadCorkboardPositions();
         await this.plugin.saveSettings();
         await this.initialize();
+        // Issue #271 follow-up: explicitly invalidate and re-scan LinkScanner cache
+        // when the active project changes, so entities don't appear "unlinked" on reload.
+        // This ensures the dashboard views (Codex, Characters, Locations) show the correct
+        // entity references even after the app was closed and reopened.
+        if (this.plugin && typeof this.plugin.invalidateAndReScanLinks === 'function') {
+            await this.plugin.invalidateAndReScanLinks();
+        }
         // Ask the plugin to refresh any open StoryLine views so the UI updates
         try {
             if (this.plugin && typeof this.plugin.refreshOpenViews === 'function') {

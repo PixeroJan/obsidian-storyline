@@ -184,7 +184,8 @@ body.theme-dark {
 .story-line-character-container,
 .story-line-location-container,
 .story-line-codex-container,
-.story-line-stats-container {
+.story-line-stats-container,
+.story-line-manuscript-container {
     --sc-card-bg: var(--background-secondary);
     --sc-card-hover: var(--background-modifier-hover);
     --sc-card-border: var(--background-modifier-border);
@@ -201,6 +202,33 @@ body.theme-dark {
     padding: 0;
     /* reserve space on the right for the inspector panel so it doesn't overlap Obsidian's right sidebar */
     padding-right: 320px;
+}
+
+@media (max-width: 768px) {
+    .story-line-board-container,
+    .story-line-timeline-container,
+    .story-line-storyline-container,
+    .story-line-character-container,
+    .story-line-location-container,
+    .story-line-codex-container,
+    .story-line-stats-container,
+    .story-line-manuscript-container {
+        padding-right: 0 !important;
+        padding-left: 0 !important;
+        padding-top: env(safe-area-inset-top, 0px) !important;
+    }
+
+    .sl-mobile .story-line-toolbar {
+        position: sticky;
+        top: env(safe-area-inset-top, 0px);
+        z-index: 30;
+        padding-top: max(8px, calc(env(safe-area-inset-top, 0px) + 8px));
+        border-top: 1px solid var(--sc-card-border);
+    }
+
+    .sl-mobile .story-line-toolbar::before {
+        height: 0;
+    }
 }
 
 /* --- Toolbar --- */

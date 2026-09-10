@@ -6,6 +6,19 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.69
+
+### Bug Fixes
+
+- **Count-unit consistency** *([#259](https://github.com/PixeroJan/obsidian-storyline/issues/259))* — Navigator progress totals now use the selected words/characters unit, including character targets, labels, sorting, and scene-row indicators.
+- **Series migration cleanup** *([#270](https://github.com/PixeroJan/obsidian-storyline/issues/270))* — A migration cleanup pass removes stale duplicate legacy book folders when the moved folder tree is equivalent to the new series copy.
+- **Mobile navigation and manuscript layout** *([#276](https://github.com/PixeroJan/obsidian-storyline/issues/276), [#278](https://github.com/PixeroJan/obsidian-storyline/issues/278))* — Mobile StoryLine containers no longer reserve desktop inspector space, and the manuscript toolbar stays aligned within the phone safe area.
+- **Dashboard links after reload** — LinkScanner caches are invalidated and rebuilt when projects activate or the workspace starts, after Characters, Locations, and Codex entities load. This keeps reverse references and dashboard relationships available after reopening a vault.
+
+### Documentation
+
+- Added `2026-09-10-1.10.69-implementation.md` with the implementation summary, changed files, and validation details.
+
 ## Version 1.10.68
 
 

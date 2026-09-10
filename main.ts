@@ -278,60 +278,79 @@ export default class SceneCardsPlugin extends Plugin {
         // Wait for the workspace layout to be ready, then bootstrap projects
         this.app.workspace.onLayoutReady(async () => {
             try {
-            // Apply frontmatter visibility (scoped to StoryLine files only — issue #104)
-            this.updateFrontmatterVisibility();
-            // Apply toolbar visibility settings (v1.10.17) — hide the
-            // "StoryLine" title row and/or auto-collapse view-tab labels
-            // when the toolbar is narrow.
-            this.updateToolbarVisibility();
+                // Apply frontmatter visibility (scoped to StoryLine files only — issue #104)
+                this.updateFrontmatterVisibility();
+                // Apply toolbar visibility settings (v1.10.17) — hide the
+                // "StoryLine" title row and/or auto-collapse view-tab labels
+                // when the toolbar is narrow.
+                this.updateToolbarVisibility();
 
-            await this.bootstrapProjects();
-            // Re-initialize scene index now that the active project is set.
-            // Views that opened before bootstrapProjects may have scanned a
-            // fallback folder and found no scenes.
-            await this.sceneManager.initialize();
-            // Migrate legacy data from data.json into project frontmatter
-            await this.migrateProjectDataFromSettings();
-            // Load per-project data from System/ files (tagColors, aliases, etc.)
-            await this.loadProjectSystemData();
-            // Load universal field templates from System/field-templates.json
-            await this.fieldTemplates.load();
-            // Load corkboard layout from System/board.json
-            await this.sceneManager.loadCorkboardPositions();
-            // Load active view snapshot state
-            await this.viewSnapshotService.loadActiveState();
-            // Load locations and characters for the active project
-            try {
-                await this.loadActiveProjectEntities();
-            } catch { /* not set yet */ }
-            // Scan extra source folders and route by frontmatter type
-            try {
-                await this.scanExtraFolders();
-            } catch { /* not set yet */ }
-            // Scan scene bodies for wikilinks after entities are loaded
-            this.linkScanner.rebuildLookups(this.settings.characterAliases);
-            this.linkScanner.scanAll(this.sceneManager.getAllScenes());
-            // Ensure a plotgrid file exists for the active project (or default location)", "oldString": "        this.app.workspace.onLayoutReady(async () => {\n            await this.bootstrapProjects();\n            // Ensure a plotgrid file exists for the active project (or default location)
-            // (removed — createPlotGridIfMissing was causing race-condition overwrites)
+                await this.bootstrapProjects();
+                // Re-initialize scene index now that the active project is set.
+                // Views that opened before bootstrapProjects may have scanned a
+                // fallback folder and found no scenes.
+                await this.sceneManager.initialize();
+                // Migrate legacy data from data.json into project frontmatter
+                await this.migrateProjectDataFromSettings();
+                // Load per-project data from System/ files (tagColors, aliases, etc.)
+                await this.loadProjectSystemData();
+                // Load universal field templates from System/field-templates.json
+                await this.fieldTemplates.load();
+                // Load corkboard layout from System/board.json
+                await this.sceneManager.loadCorkboardPositions();
+                // Load active view snapshot state
+                await this.viewSnapshotService.loadActiveState();
+                // Load locations and characters for the active project
+                try {
+                    await this.loadActiveProjectEntities();
+                } catch (e) {
+                    console.error('[StoryLine] Failed to load active project entities:', e);
+                }
+                // Scan extra source folders and route by frontmatter type
+                try {
+                    await this.scanExtraFolders();
+                } catch (e) {
+                    console.error('[StoryLine] Failed to scan extra folders:', e);
+                }
+                // Load and initialize codex (must be before LinkScanner.scanAll)
+                try {
+                    const codexFolder = this.sceneManager.getCodexFolder();
+                    if (codexFolder) {
+                        const customDefs = (this.settings.codexCustomCategories || []).map(
+                            (cc: { id: string; label: string; icon: string }) => makeCustomCodexCategory(cc.id, cc.label, cc.icon)
+                        );
+                        this.codexManager.initCategories(this.settings.codexEnabledCategories || [], customDefs);
+                        await this.codexManager.loadAll(codexFolder);
+                    }
+                } catch (e) {
+                    console.error('[StoryLine] Failed to load codex:', e);
+                }
+                // Scan scene bodies for wikilinks after entities are fully loaded
+                // Issue #271 fix: explicitly re-scan to ensure link discovery works on reload
+                this.linkScanner.invalidateAll();
+                this.linkScanner.rebuildLookups(this.settings.characterAliases);
+                this.linkScanner.scanAll(this.sceneManager.getAllScenes());
+                // Ensure a plotgrid file exists for the active project (or default location)
+                // (removed — createPlotGridIfMissing was causing race-condition overwrites)
 
-            // Initialize writing tracker from per-project System/stats.json
-            const stats = this.sceneManager.queryService.getStatistics();
-            this.writingTracker.startSession(stats.totalWords);
+                // Initialize writing tracker from per-project System/stats.json
+                const stats = this.sceneManager.queryService.getStatistics();
+                this.writingTracker.startSession(stats.totalWords);
 
-            // Issue #238 — periodic autosave of writing stats so a crash or
-            // force-quit no longer loses the whole session. A debounced save
-            // runs 60s after the last scene change, and a safety-net interval
-            // flushes+persists every 5 minutes regardless of activity.
-            this.scheduleWritingStatsSave();
-            this.writingStatsIntervalId = window.setInterval(
-                () => this.scheduleWritingStatsSave(true),
-                5 * 60_000,
-            );
+                // Issue #238 — periodic autosave of writing stats so a crash or
+                // force-quit no longer loses the whole session. A debounced save
+                // runs 60s after the last scene change, and a safety-net interval
+                // flushes+persists every 5 minutes regardless of activity.
+                this.scheduleWritingStatsSave();
+                this.writingStatsIntervalId = window.setInterval(
+                    () => this.scheduleWritingStatsSave(true),
+                    5 * 60_000,
+                );
 
-            // Refresh all open views now that the project is set — this ensures
-            // PlotGrid and other views that opened before bootstrapProjects reload
-            // their data from the correct project folder.
-            this.refreshOpenViews();
+                // Refresh all open views now that the project is set — this ensures
+                // PlotGrid and other views that opened before bootstrapProjects reload
+                // their data from the correct project folder.
+                this.refreshOpenViews();
             } catch (startupErr) {
                 void startupErr;
             }
@@ -2387,6 +2406,20 @@ export default class SceneCardsPlugin extends Plugin {
             if (typeof view?.flushPendingCorkboardPersist === 'function') {
                 await (view as unknown as { flushPendingCorkboardPersist(): Promise<void> }).flushPendingCorkboardPersist();
             }
+        }
+    }
+
+    /**
+     * Issue #271 fix: Invalidate LinkScanner cache and re-scan all scenes.
+     * Called when the active project changes to ensure link discovery is fresh.
+     */
+    async invalidateAndReScanLinks(): Promise<void> {
+        try {
+            this.linkScanner.invalidateAll();
+            this.linkScanner.rebuildLookups(this.settings.characterAliases);
+            this.linkScanner.scanAll(this.sceneManager.getAllScenes());
+        } catch (e) {
+            console.error('[StoryLine] Failed to re-scan links:', e);
         }
     }
 

@@ -275,6 +275,7 @@ export class SceneQueryService {
         let totalWords = 0;
         let totalChars = 0;
         let totalTargetWords = 0;
+        let totalTargetChars = 0;
         const actCounts: Record<string, number> = {};
         const povCounts: Record<string, number> = {};
         const locationCounts: Record<string, number> = {};
@@ -288,11 +289,22 @@ export class SceneQueryService {
             const status = scene.status || 'unknown';
             statusCounts[status] = (statusCounts[status] || 0) + 1;
 
-            // Words
+            // Words and characters
             if (!skipWords) {
-                totalWords += scene.wordcount || 0;
-                totalChars += scene.charcount || 0;
-                totalTargetWords += scene.target_wordcount || 0;
+                const wordCount = scene.wordcount || 0;
+                const charCount = scene.charcount || 0;
+                totalWords += wordCount;
+                totalChars += charCount;
+                const targetWords = scene.target_wordcount || 0;
+                totalTargetWords += targetWords;
+                // Estimate target character count: if charcount exists and target_wordcount exists,
+                // compute the char-to-word ratio and apply to target. Otherwise use charcount.
+                if (targetWords > 0 && wordCount > 0) {
+                    const ratio = charCount / wordCount;
+                    totalTargetChars += Math.round(targetWords * ratio);
+                } else if (charCount > 0) {
+                    totalTargetChars += charCount;
+                }
             }
 
             // Acts
@@ -321,6 +333,7 @@ export class SceneQueryService {
             totalWords,
             totalChars,
             totalTargetWords,
+            totalTargetChars,
             actCounts,
             povCounts,
             locationCounts,
