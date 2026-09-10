@@ -8492,6 +8492,29 @@ body /* Clamp title on mobile too, in case it's very long */
 .sl-mobile .story-line-filter-bar {
     flex-wrap: wrap;
     gap: 6px;
+    align-items: flex-start;
+    overflow: visible;
+}
+
+.sl-mobile .story-line-main-area {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.sl-mobile .story-line-arc-filter,
+.sl-mobile .story-line-active-filter {
+    min-height: 44px;
+    overflow: visible;
+    flex: 0 1 auto;
+}
+
+.sl-mobile .story-line-arc-filter-btn,
+.sl-mobile .story-line-active-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    box-sizing: border-box;
 }
 
 .sl-mobile .story-line-search {
