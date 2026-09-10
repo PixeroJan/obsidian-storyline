@@ -8497,13 +8497,28 @@ body /* Clamp title on mobile too, in case it's very long */
 }
 
 .sl-mobile .story-line-main-area {
+    height: auto;
+    min-height: calc(100% - 52px);
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: visible;
+}
+
+.sl-mobile .story-line-filters-container {
+    height: auto;
+    min-height: 52px;
+    overflow: visible;
+    flex: 0 0 auto;
+}
+
+.sl-mobile .story-line-filter-bar {
+    height: auto;
+    min-height: 52px;
 }
 
 .sl-mobile .story-line-arc-filter,
 .sl-mobile .story-line-active-filter {
     min-height: 44px;
+    height: auto;
     overflow: visible;
     flex: 0 1 auto;
 }
