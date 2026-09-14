@@ -6,6 +6,13 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.71
+
+### Bug Fixes
+
+- **Act inference for chapter-column scenes** *([#280](https://github.com/PixeroJan/obsidian-storyline/issues/280))* — Scenes created from a Board chapter column now inherit the act when the existing project data maps that chapter to exactly one act. Ambiguous or new chapter mappings remain unassigned rather than guessing.
+- **Navigator chapter sorting** *([#281](https://github.com/PixeroJan/obsidian-storyline/issues/281))* — Navigator chapter mode now sorts chapters numerically, with act and global sequence used as tie-breakers.
+
 ## Version 1.10.70
 
 ### Bug Fixes

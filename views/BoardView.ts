@@ -3679,7 +3679,10 @@ export class BoardView extends ItemView {
                 if (match) defaults.act = parseActChapterInput(match[1]);
             } else if (this.groupBy === 'chapter') {
                 const match = presetColumn.match(/^Chapter\s+(.+)$/);
-                if (match) defaults.chapter = parseActChapterInput(match[1]);
+                if (match) {
+                    defaults.chapter = parseActChapterInput(match[1]);
+                    defaults.act = this.sceneManager.inferActForChapter(defaults.chapter);
+                }
             } else if (this.groupBy === 'status') {
                 // Build a label→id mapping from the dynamic status config
                 const cfg = getStatusConfig();

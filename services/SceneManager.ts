@@ -895,6 +895,25 @@ export class SceneManager implements ISceneStore {
     }
 
     /**
+     * Infer the act for a chapter when that chapter is used as a Board column.
+     * A chapter can theoretically occur in more than one act, so only return
+     * an act when the existing project data gives us one unambiguous answer.
+     */
+    inferActForChapter(chapter: number | string | undefined): number | string | undefined {
+        if (chapter === undefined || chapter === null || String(chapter).trim() === '') return undefined;
+
+        const acts = new Map<string, number | string>();
+        for (const scene of this.getAllScenes()) {
+            if (scene.corkboardNote || scene.act === undefined || scene.act === null) continue;
+            if (String(scene.chapter) !== String(chapter)) continue;
+            acts.set(String(scene.act), scene.act);
+        }
+
+        const act = Array.from(acts.values())[0];
+        return acts.size === 1 ? act : undefined;
+    }
+
+    /**
      * Get a scene by file path
      */
     getScene(filePath: string): Scene | undefined {

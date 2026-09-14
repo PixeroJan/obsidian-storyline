@@ -541,6 +541,16 @@ export class NavigatorView extends ItemView {
                     if (chapterCmp !== 0) return chapterCmp;
                     return (a.sequence ?? 9999) - (b.sequence ?? 9999);
                 }
+                case 'chapter': {
+                    // Chapter view hides acts, but acts remain the first
+                    // tiebreaker so chapters from different acts stay in
+                    // reading order when chapter numbers repeat.
+                    const actCmp = compareActChapter(a.act, b.act);
+                    if (actCmp !== 0) return actCmp;
+                    const chapterCmp = compareActChapter(a.chapter, b.chapter);
+                    if (chapterCmp !== 0) return chapterCmp;
+                    return (a.sequence ?? 9999) - (b.sequence ?? 9999);
+                }
                 case 'chronological': {
                     // Prefer chronologicalOrder, then storyDate+storyTime, then sequence
                     if (a.chronologicalOrder != null || b.chronologicalOrder != null) {
