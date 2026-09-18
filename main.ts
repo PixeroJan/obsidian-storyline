@@ -99,6 +99,8 @@ export default class SceneCardsPlugin extends Plugin {
     private writingStatsSaveTimer: number | null = null;
     /** Issue #238 — periodic autosave interval id (5 min) */
     private writingStatsIntervalId: number | null = null;
+    /** Invalidates overlapping view refresh pipelines during project switches. */
+    private openViewsRefreshGeneration = 0;
 
     isAutomaticQuoteReplacementEnabled(): boolean {
         return this.automaticQuoteReplacement;
@@ -1854,8 +1856,9 @@ export default class SceneCardsPlugin extends Plugin {
      * Save the plot grid data to the System/ folder under the active project.
      * This centralizes persistence and avoids views overwriting settings.
      */
-    async savePlotGrid(data: PlotGridData): Promise<void> {
+    async savePlotGrid(data: PlotGridData, expectedProjectKey?: string): Promise<void> {
         try {
+            if (expectedProjectKey && this.sceneManager.activeProject?.filePath !== expectedProjectKey) return;
             const folder = this.getProjectSystemFolder();
             const filePath = `${folder}/plotgrid.json`;
             const adapter = this.app.vault.adapter;
@@ -1879,6 +1882,7 @@ export default class SceneCardsPlugin extends Plugin {
             if (!await adapter.exists(folder)) {
                 await this.app.vault.createFolder(folder);
             }
+            if (expectedProjectKey && this.sceneManager.activeProject?.filePath !== expectedProjectKey) return;
 
             await adapter.write(filePath, contents);
         } catch (e) {
@@ -2438,6 +2442,12 @@ export default class SceneCardsPlugin extends Plugin {
      * Refresh all open Scene Cards views
      */
     async refreshOpenViews(reloadScenes = false): Promise<void> {
+        const refreshGeneration = ++this.openViewsRefreshGeneration;
+        const projectKey = this.sceneManager?.activeProject?.filePath ?? null;
+        const isCurrentRefresh = (): boolean =>
+            refreshGeneration === this.openViewsRefreshGeneration
+            && (this.sceneManager?.activeProject?.filePath ?? null) === projectKey;
+
         // Issue #279 — external sync tools can add, replace, or remove files
         // without leaving SceneManager's in-memory index in a usable state.
         // Rebuild it from the active project's folders before loading the
@@ -2448,6 +2458,7 @@ export default class SceneCardsPlugin extends Plugin {
             } catch (e) {
                 console.error('[StoryLine] Failed to reload scenes from disk:', e);
             }
+            if (!isCurrentRefresh()) return;
         }
 
         // Keep LocationManager, CharacterManager, and CodexManager in sync
@@ -2463,11 +2474,13 @@ export default class SceneCardsPlugin extends Plugin {
                 await this.codexManager.loadAll(codexFolder);
             }
         } catch { /* project may not be set yet */ }
+        if (!isCurrentRefresh()) return;
 
         // Re-scan wikilinks after entity data is loaded
         this.linkScanner.invalidateAll();
         this.linkScanner.rebuildLookups(this.settings.characterAliases);
         this.linkScanner.scanAll(this.sceneManager.getAllScenes());
+        if (!isCurrentRefresh()) return;
 
         // Update codex digests (baseline new entries, prune deleted ones)
         void this.refreshCodexDigests();
@@ -2496,15 +2509,25 @@ export default class SceneCardsPlugin extends Plugin {
             const leaves = this.app.workspace.getLeavesOfType(viewType);
             for (const leaf of leaves) {
                 const viewRoot = (leaf.view as unknown as { containerEl?: HTMLElement }).containerEl;
-                const scrollState = viewRoot ? this.captureViewScrollState(viewRoot) : [];
+                // Plot Grid owns its scroll restoration because it rebuilds
+                // its canvas asynchronously. Restoring it here as well lets
+                // stale refresh callbacks move it back to an older position.
+                const ownsScrollState = viewType !== PLOTGRID_VIEW_TYPE;
+                const scrollState = ownsScrollState && viewRoot ? this.captureViewScrollState(viewRoot) : [];
                 const view = leaf.view as unknown as { refresh?: () => void | Promise<void> };
                 if (view && typeof view.refresh === 'function') {
                     await view.refresh();
-                    this.restoreViewScrollState(viewRoot, scrollState);
-                    window.requestAnimationFrame(() => {
+                    if (!isCurrentRefresh()) return;
+                    if (ownsScrollState) {
                         this.restoreViewScrollState(viewRoot, scrollState);
-                        window.setTimeout(() => this.restoreViewScrollState(viewRoot, scrollState), 120);
-                    });
+                        window.requestAnimationFrame(() => {
+                            if (!isCurrentRefresh()) return;
+                            this.restoreViewScrollState(viewRoot, scrollState);
+                            window.setTimeout(() => {
+                                if (isCurrentRefresh()) this.restoreViewScrollState(viewRoot, scrollState);
+                            }, 120);
+                        });
+                    }
                 }
                 // Update the tab title so it reflects the new project name immediately
                 (leaf as unknown as { updateHeader?: () => void }).updateHeader?.();
@@ -2552,8 +2575,14 @@ export default class SceneCardsPlugin extends Plugin {
      */
     private async updatePlotGridLinkedSceneIds(oldPath: string, newPath: string): Promise<void> {
         try {
+            const projectKey = this.sceneManager.activeProject?.filePath;
+            const projectBase = this.getProjectBaseFolder().replace(/\\/g, '/').replace(/\/$/, '');
+            const normalizedOldPath = oldPath.replace(/\\/g, '/');
+            if (!projectKey || !normalizedOldPath.startsWith(projectBase + '/')) return;
+
             const data = await this.loadPlotGrid();
             if (!data?.cells) return;
+            if (this.sceneManager.activeProject?.filePath !== projectKey) return;
 
             let dirty = false;
             for (const key of Object.keys(data.cells)) {
@@ -2565,7 +2594,7 @@ export default class SceneCardsPlugin extends Plugin {
             }
 
             if (dirty) {
-                await this.savePlotGrid(data);
+                await this.savePlotGrid(data, projectKey);
             }
         } catch {
             // non-fatal — PlotGrid may not exist yet

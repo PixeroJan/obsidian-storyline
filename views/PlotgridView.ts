@@ -52,6 +52,11 @@ export class PlotgridView extends ItemView {
     private filtersComponent: FiltersComponent | null = null;
     private currentFilter: SceneFilter = {};
     private currentSort: SortConfig = { field: 'sequence', direction: 'asc' };
+    private dataLoadGeneration = 0;
+    private renderedProjectKey: string | null = null;
+    private scrollRestoreGeneration = 0;
+    private scrollRestoreFrame: number | null = null;
+    private saveProjectKey: string | null = null;
     /** Simple undo stack for plot grid cell operations */
     private undoStack: PlotGridData[] = [];
     private static readonly MAX_UNDO = 20;
@@ -86,7 +91,8 @@ export class PlotgridView extends ItemView {
 
         this.containerEl.addClass('plot-grid-root');
 
-        await this.loadData();
+        const loaded = await this.loadData();
+        if (!loaded) return;
 
         this.buildLayout(container);
         this.renderToolbar();
@@ -112,10 +118,30 @@ export class PlotgridView extends ItemView {
     }
 
     async onClose(): Promise<void> {
-        // nothing yet
+        this.dataLoadGeneration++;
+        this.scrollRestoreGeneration++;
+        if (this.scrollRestoreFrame !== null) {
+            window.cancelAnimationFrame(this.scrollRestoreFrame);
+            this.scrollRestoreFrame = null;
+        }
+        if (this.saveDebounce) {
+            window.clearTimeout(this.saveDebounce);
+            this.saveDebounce = null;
+        }
+        this.saveProjectKey = null;
     }
 
-    private async loadData() {
+    private getProjectKey(): string | null {
+        return this.plugin?.sceneManager?.activeProject?.filePath ?? null;
+    }
+
+    private isCurrentProject(projectKey: string | null): boolean {
+        return projectKey === this.getProjectKey();
+    }
+
+    private async loadData(): Promise<boolean> {
+        const projectKey = this.getProjectKey();
+        const generation = ++this.dataLoadGeneration;
         try {
             let loaded: PlotGridData | null = null;
             if (this.plugin && typeof this.plugin.loadPlotGrid === 'function') {
@@ -124,6 +150,7 @@ export class PlotgridView extends ItemView {
                 // No plugin-level plotgrid loader available — treat as no data
                 loaded = null;
             }
+            if (generation !== this.dataLoadGeneration || !this.isCurrentProject(projectKey)) return false;
             if (loaded && typeof loaded === 'object') {
                 // Clamp zoom to the supported UI range (30%–200%). Older
                 // installs (or corrupted snapshots) sometimes wrote absurd
@@ -144,14 +171,18 @@ export class PlotgridView extends ItemView {
             }
             // Auto-repair broken linkedSceneId paths (e.g. after project migration).
             // Must run AFTER scenes are loaded — see repairLinkedScenePaths().
-            await this.repairLinkedScenePaths();
+            await this.repairLinkedScenePaths(projectKey, generation);
+            if (generation !== this.dataLoadGeneration || !this.isCurrentProject(projectKey)) return false;
             // Strip legacy auto-sync markers ("✓", "★ POV", "POV: …") that
             // older builds wrote into cell.content. The pill row inside each
             // cell now carries that information instead, so the marker text
             // would just show up twice and clutter the top of the cell.
             this.stripLegacyAutoMarkers();
+            return true;
         } catch (e) {
+            if (generation !== this.dataLoadGeneration || !this.isCurrentProject(projectKey)) return false;
             this.data = { rows: [], columns: [], cells: {}, zoom: 1 };
+            return true;
         }
     }
 
@@ -189,7 +220,7 @@ export class PlotgridView extends ItemView {
      * entirely if the scene list is empty (defensive — never clear links
      * we can't verify).
      */
-    private async repairLinkedScenePaths(): Promise<void> {
+    private async repairLinkedScenePaths(projectKey: string | null, generation: number): Promise<void> {
         const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
         if (!scMgr) return;
 
@@ -206,6 +237,7 @@ export class PlotgridView extends ItemView {
             // be scanning. Wait briefly, then bail if still empty.
             for (let i = 0; i < 20; i++) {
                 await new Promise<void>(r => window.setTimeout(r, 100));
+                if (generation !== this.dataLoadGeneration || !this.isCurrentProject(projectKey)) return;
                 allScenes = scMgr.getAllScenes();
                 if (allScenes.length > 0) break;
             }
@@ -215,6 +247,7 @@ export class PlotgridView extends ItemView {
             }
         }
 
+        if (generation !== this.dataLoadGeneration || !this.isCurrentProject(projectKey)) return;
         let dirty = false;
         for (const key of Object.keys(this.data.cells)) {
             const cell = this.data.cells[key];
@@ -238,23 +271,43 @@ export class PlotgridView extends ItemView {
                 dirty = true;
             }
         }
-        if (dirty) this.scheduleSave();
+        if (dirty && generation === this.dataLoadGeneration && this.isCurrentProject(projectKey)) this.scheduleSave();
     }
 
     private scheduleSave() {
         const plugin = this.plugin;
         if (!plugin) return;
+        const projectKey = this.getProjectKey();
+        if (!projectKey) return;
         if (this.saveDebounce) window.clearTimeout(this.saveDebounce);
+        this.saveProjectKey = projectKey;
         // debounce and call plugin-level save API if available
         const timerId = window.setTimeout(async () => {
             try {
-                if (typeof plugin.savePlotGrid === 'function') await plugin.savePlotGrid(this.data);
+                if (this.getProjectKey() !== projectKey) return;
+                const dataToSave: PlotGridData = {
+                    rows: this.data.rows.map(row => ({ ...row })),
+                    columns: this.data.columns.map(column => ({ ...column })),
+                    cells: Object.fromEntries(
+                        Object.entries(this.data.cells).map(([key, cell]) => [key, { ...cell }])
+                    ),
+                    zoom: this.data.zoom,
+                    stickyHeaders: this.data.stickyHeaders,
+                };
+                if (typeof plugin.savePlotGrid === 'function') {
+                    await plugin.savePlotGrid(dataToSave, projectKey);
+                }
+                if (this.getProjectKey() !== projectKey) return;
                 plugin.viewSnapshotService.scheduleAutoSave();
             } catch (e) {
                 // ignore save errors
+            } finally {
+                // Only clear if no newer timer was set during the async save.
+                if (this.saveDebounce === timerId) {
+                    this.saveDebounce = null;
+                    this.saveProjectKey = null;
+                }
             }
-            // Only clear if no newer timer was set during the async save
-            if (this.saveDebounce === timerId) this.saveDebounce = null;
         }, 500);
         this.saveDebounce = timerId;
     }
@@ -762,9 +815,16 @@ export class PlotgridView extends ItemView {
     private renderGrid() {
         if (!this.canvasEl || !this.scrollAreaEl) return;
 
-        // Preserve scroll position across re-renders so the view doesn't jump
-        const prevScrollTop = this.scrollAreaEl.scrollTop;
-        const prevScrollLeft = this.scrollAreaEl.scrollLeft;
+        const projectKey = this.getProjectKey();
+        const preserveScroll = this.renderedProjectKey === projectKey;
+        const prevScrollTop = preserveScroll ? this.scrollAreaEl.scrollTop : 0;
+        const prevScrollLeft = preserveScroll ? this.scrollAreaEl.scrollLeft : 0;
+        const scrollRestoreGeneration = ++this.scrollRestoreGeneration;
+        if (this.scrollRestoreFrame !== null) {
+            window.cancelAnimationFrame(this.scrollRestoreFrame);
+            this.scrollRestoreFrame = null;
+        }
+        this.renderedProjectKey = projectKey;
 
         this.ensureDefaults();
         this.canvasEl.empty();
@@ -1763,9 +1823,12 @@ export class PlotgridView extends ItemView {
         // reapply selection visuals after render
         this.applySelectionVisuals();
 
-        // Restore scroll position after DOM rebuild
-        window.requestAnimationFrame(() => {
-            if (this.scrollAreaEl) {
+        // Restore scroll position after DOM rebuild. Only the latest render may
+        // restore it; project switches intentionally start at the top.
+        this.scrollRestoreFrame = window.requestAnimationFrame(() => {
+            this.scrollRestoreFrame = null;
+            if (scrollRestoreGeneration !== this.scrollRestoreGeneration) return;
+            if (this.scrollAreaEl && this.isCurrentProject(projectKey)) {
                 this.scrollAreaEl.scrollTop = prevScrollTop;
                 this.scrollAreaEl.scrollLeft = prevScrollLeft;
             }
@@ -1773,13 +1836,20 @@ export class PlotgridView extends ItemView {
     }
     async refresh(): Promise<void> {
         try {
+            const projectKey = this.getProjectKey();
             // If a save is pending, skip reloading from disk (would overwrite in-memory changes)
-            if (this.saveDebounce) return;
+            if (this.saveDebounce && this.saveProjectKey === projectKey) return;
+            if (this.saveDebounce) {
+                window.clearTimeout(this.saveDebounce);
+                this.saveDebounce = null;
+                this.saveProjectKey = null;
+            }
             // If a cell is being edited, skip refresh to avoid destroying the textarea
             if (this.canvasEl?.querySelector('.plot-grid-cell.editing')) return;
             // If any input/textarea in the grid or inspector is focused, skip refresh to avoid losing edits
             if (this.wrapperEl?.querySelector('input:focus, textarea:focus')) return;
-            await this.loadData();
+            const loaded = await this.loadData();
+            if (!loaded || !this.isCurrentProject(projectKey)) return;
             // If the view hasn't been opened yet, `wrapperEl` will be null — skip rendering
             if (!this.wrapperEl) return;
             this.renderToolbar();

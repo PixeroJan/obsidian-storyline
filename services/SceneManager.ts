@@ -523,7 +523,7 @@ export class SceneManager implements ISceneStore {
         // Ask the plugin to refresh any open StoryLine views so the UI updates
         try {
             if (this.plugin && typeof this.plugin.refreshOpenViews === 'function') {
-                this.plugin.refreshOpenViews();
+                await this.plugin.refreshOpenViews();
             }
         } catch (e) {
             // non-fatal; UI may refresh on next file event

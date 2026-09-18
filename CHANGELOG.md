@@ -6,6 +6,13 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.72
+
+### Bug Fixes
+
+- **Corkboard sticky-note editing** *([#286](https://github.com/PixeroJan/obsidian-storyline/issues/286))* — Sticky-note textareas now keep their content-driven height while editing instead of collapsing to the minimum note size.
+- **Plot Grid project isolation and scrolling** *([#287](https://github.com/PixeroJan/obsidian-storyline/issues/287))* — Stale project loads, saves, refreshes, and scroll restorations are rejected so switching books or moving books into a Series cannot display or overwrite another book's grid.
+
 ## Version 1.10.71
 
 ### Bug Fixes

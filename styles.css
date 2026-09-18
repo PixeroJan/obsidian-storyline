@@ -1030,7 +1030,6 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     flex-direction: column;
     gap: 6px;
     height: 100%;
-    flex: 1;
     padding-top: 20px;
     box-sizing: border-box;
 }
@@ -1049,7 +1048,6 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     box-sizing: border-box;
     overflow: hidden;
     box-shadow: none;
-    flex: 1;
     overflow-wrap: anywhere;
     word-break: break-word;
 }
