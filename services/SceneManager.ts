@@ -526,7 +526,7 @@ export class SceneManager implements ISceneStore {
             if (this.plugin && typeof this.plugin.refreshOpenViews === 'function') {
                 await this.plugin.refreshOpenViews();
             }
-        } catch (e) {
+        } catch {
             // non-fatal; UI may refresh on next file event
         }
     }
@@ -1640,7 +1640,7 @@ export class SceneManager implements ISceneStore {
                     const titleFromFile = this.getTitleFromSceneFileName(file);
                     if (titleFromFile && titleFromFile !== scene.title) {
                         const oldTitle = scene.title;
-                        const newPath = await this.updateScene(file.path, { title: titleFromFile }) || file.path;
+                        await this.updateScene(file.path, { title: titleFromFile });
                         if (oldTitle) await this.updateSceneTitleReferences(oldTitle, titleFromFile);
                     }
                 }

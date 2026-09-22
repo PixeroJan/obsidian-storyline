@@ -7842,6 +7842,12 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 /* ============================================
    Settings — Collapsible Color Section
    ============================================ */
+.story-line-declarative-settings-host {
+    display: block;
+    flex: 0 0 100%;
+    width: 100%;
+}
+
 .story-line-settings-section {
     margin: 12px 0;
     border: 1px solid var(--background-modifier-border);

@@ -1064,8 +1064,8 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
 /**
  * Settings tab for the StoryLine plugin.
  *
- * The settings UI uses Obsidian's imperative API because it contains many
- * advanced and custom controls that do not map cleanly to declarative rows.
+ * Obsidian 1.13+ enters through the declarative definition below, while the
+ * complete settings UI remains in the imperative renderer for compatibility.
  */
 export class SceneCardsSettingTab extends PluginSettingTab {
     plugin: SceneCardsPlugin;
@@ -1077,6 +1077,25 @@ export class SceneCardsSettingTab extends PluginSettingTab {
 
     private refreshSettingsView(): void {
         this.renderSettingsTab(this.containerEl);
+    }
+
+    /** Obsidian 1.13+ entry point; older versions continue to use display(). */
+    getSettingDefinitions(): Array<{
+        name: string;
+        desc: string;
+        render: (setting: Setting) => void;
+    }> {
+        return [
+            {
+                name: 'StoryLine settings',
+                desc: 'Display, writing, project, export, and advanced settings.',
+                render: (setting) => {
+                    setting.settingEl.addClass('story-line-declarative-settings-host');
+                    setting.settingEl.empty();
+                    this.renderSettingsTab(setting.settingEl);
+                },
+            },
+        ];
     }
 
     display(): void {
