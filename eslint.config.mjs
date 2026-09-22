@@ -20,16 +20,12 @@ export default defineConfig([
       "obsidianmd/ui/sentence-case": ["error", {
         brands: ["StoryLine", "Scrivener", "Obsidian"],
       }],
-      // StoryLine still targets Obsidian 1.12.x (see manifest.json →
-      // minAppVersion), where getSettingDefinitions() doesn't exist. The
-      // declarative settings API is 1.13.0+ only, so the imperative display()
-      // path in settings.ts is intentional until we drop 1.12.x support.
+      // StoryLine supports both settings APIs: getSettingDefinitions() is used
+      // by Obsidian 1.13+, while display() remains the 1.12.x fallback.
       //
       // The plugin's recommended config forbids inline-disabling ANY
       // obsidianmd/* rule (via eslint-comments/no-restricted-disable with
       // the "obsidianmd/*" wildcard), so the suppression must live here.
-      // Re-enable this rule (and remove this entry) once minAppVersion is
-      // bumped to 1.13.0 and settings.ts migrates to getSettingDefinitions().
       "obsidianmd/settings-tab/prefer-setting-definitions": "off",
     },
   },

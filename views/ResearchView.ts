@@ -8,6 +8,7 @@ import { RESEARCH_VIEW_TYPE } from '../constants';
 import { attachTooltip } from '../components/Tooltip';
 import { pickImage, resolveImagePath } from '../components/ImagePicker';
 import { tokenizeWords, isScriptioContinuaLocale, DEFAULT_STORYLINE_LOCALE, type StoryLineLocale } from '../utils/locale';
+import { getVaultFiles } from '../utils/vault';
 
 /**
  * ResearchView — a right-sidebar panel for browsing, searching,
@@ -458,7 +459,7 @@ export class ResearchView extends ItemView {
     // ════════════════════════════════════════════════════
 
     private openLinkNoteModal(): void {
-        const allFiles = this.app.vault.getFiles();
+        const allFiles = getVaultFiles(this.app);
         // Exclude files already in the Research folder or already linked
         const researchFolder = this.manager.getResearchFolder();
         const linked = new Set(this.manager.getLinkedPaths());

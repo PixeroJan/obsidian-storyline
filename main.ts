@@ -71,7 +71,6 @@ import { getQuotePair } from './utils/locale';
  */
 export default class SceneCardsPlugin extends Plugin {
     settings: SceneCardsSettings = DEFAULT_SETTINGS;
-    private static readonly AUTOMATIC_QUOTE_REPLACEMENT_KEY = 'sl-automatic-quotation-marks';
     private automaticQuoteReplacement = true;
     sceneManager!: SceneManager;
     /** Set to true once System/ migration is confirmed — guards saveSettings stripping */
@@ -101,6 +100,11 @@ export default class SceneCardsPlugin extends Plugin {
     private writingStatsIntervalId: number | null = null;
     /** Invalidates overlapping view refresh pipelines during project switches. */
     private openViewsRefreshGeneration = 0;
+    /** Single-flight refresh queue; prevents overlapping disk/index pipelines. */
+    private openViewsRefreshPromise: Promise<void> | null = null;
+    private queuedOpenViewsRefreshRequested = false;
+    private queuedOpenViewsRefreshReloadScenes = false;
+    private queuedOpenViewsRefreshPaths = new Set<string>();
 
     isAutomaticQuoteReplacementEnabled(): boolean {
         return this.automaticQuoteReplacement;
@@ -108,28 +112,13 @@ export default class SceneCardsPlugin extends Plugin {
 
     setAutomaticQuoteReplacementEnabled(enabled: boolean): void {
         this.automaticQuoteReplacement = enabled;
-        try {
-            window.localStorage.setItem(
-                SceneCardsPlugin.AUTOMATIC_QUOTE_REPLACEMENT_KEY,
-                enabled ? '1' : '0',
-            );
-        } catch {
-            // localStorage may be unavailable in some contexts.
-        }
-    }
-
-    private loadAutomaticQuoteReplacementPreference(): boolean {
-        try {
-            const value = window.localStorage.getItem(SceneCardsPlugin.AUTOMATIC_QUOTE_REPLACEMENT_KEY);
-            return value === null ? true : value !== '0' && value !== 'false';
-        } catch {
-            return true;
-        }
+        this.settings.automaticQuoteReplacement = enabled;
+        void this.saveSettings();
     }
 
     async onload(): Promise<void> {
         await this.loadSettings();
-        this.automaticQuoteReplacement = this.loadAutomaticQuoteReplacementPreference();
+        this.automaticQuoteReplacement = this.settings.automaticQuoteReplacement !== false;
         registerCustomStatuses(this.settings.customStatuses || []);
         this.applyImageSizingVariables();
 
@@ -331,7 +320,7 @@ export default class SceneCardsPlugin extends Plugin {
                 // Issue #271 fix: explicitly re-scan to ensure link discovery works on reload
                 this.linkScanner.invalidateAll();
                 this.linkScanner.rebuildLookups(this.settings.characterAliases);
-                this.linkScanner.scanAll(this.sceneManager.getAllScenes());
+                await this.linkScanner.scanAllAsync(this.sceneManager.getAllScenes());
                 // Ensure a plotgrid file exists for the active project (or default location)
                 // (removed — createPlotGridIfMissing was causing race-condition overwrites)
 
@@ -710,10 +699,16 @@ export default class SceneCardsPlugin extends Plugin {
         // following the same event sequence as an in-app edit. The sync
         // refresh therefore rebuilds the active scene index from disk.
         const debouncedRefresh = this.debounce(() => this.refreshOpenViews(true), 500);
+        const modifiedPaths = new Set<string>();
+        const debouncedIncrementalRefresh = this.debounce(() => {
+            const paths = Array.from(modifiedPaths);
+            modifiedPaths.clear();
+            void this.refreshOpenViews(false, paths);
+        }, 500);
 
         this.registerEvent(
             this.app.vault.on('create', (file) => {
-                if (file instanceof TFile) {
+                if (file instanceof TFile && this.isRelevantStoryLineFile(file.path)) {
                     debouncedRefresh();
                 }
             })
@@ -721,8 +716,11 @@ export default class SceneCardsPlugin extends Plugin {
 
         this.registerEvent(
             this.app.vault.on('modify', (file) => {
-                if (file instanceof TFile) {
-                    this.sceneManager.handleFileChange(file).then(() => debouncedRefresh());
+                if (file instanceof TFile && this.isRelevantStoryLineFile(file.path)) {
+                    this.sceneManager.handleFileChange(file).then(() => {
+                        modifiedPaths.add(file.path);
+                        debouncedIncrementalRefresh();
+                    });
                     // Issue #238 — schedule a debounced writing-stats save on
                     // any scene edit so stats survive crashes/force-quits.
                     // Issue #242 — skip StoryLine's own System/ files here;
@@ -742,7 +740,7 @@ export default class SceneCardsPlugin extends Plugin {
 
         this.registerEvent(
             this.app.vault.on('delete', (file) => {
-                if (file instanceof TFile) {
+                if (file instanceof TFile && this.isRelevantStoryLineFile(file.path)) {
                     this.sceneManager.handleFileDelete(file.path);
                     debouncedRefresh();
                 }
@@ -751,7 +749,7 @@ export default class SceneCardsPlugin extends Plugin {
 
         this.registerEvent(
             this.app.vault.on('rename', (file, oldPath) => {
-                if (file instanceof TFile) {
+                if (file instanceof TFile && (this.isRelevantStoryLineFile(file.path) || this.isRelevantStoryLineFile(oldPath))) {
                     this.sceneManager.handleFileRename(file, oldPath).then(async () => {
                         // Update any PlotGrid cells that reference the old path
                         await this.updatePlotGridLinkedSceneIds(oldPath, file.path);
@@ -883,10 +881,12 @@ export default class SceneCardsPlugin extends Plugin {
      */
     /** Cached state to skip redundant DOM work (issue #215 — WebKit scroll jumps). */
     private _lastFrontmatterHide: boolean | null = null;
+    private _lastManuscriptFrontmatterHide: boolean | null = null;
     private _lastFrontmatterFileSet: string = '';
 
     public updateFrontmatterVisibility(): void {
         const hide = !!this.settings.hideFrontmatter;
+        const hideInManuscript = !!this.settings.hideFrontmatterInManuscript;
         const root = this.settings.storyLineRoot.replace(/\\/g, '/').replace(/\/$/, '') + '/';
 
         // Issue #215 — skip all DOM work if nothing changed since the last run.
@@ -901,17 +901,22 @@ export default class SceneCardsPlugin extends Plugin {
             const filePath = view?.file?.path;
             if (filePath) fileSet += filePath + '|';
         }
-        const fingerprint = `${hide}|${fileSet}`;
-        if (fingerprint === this._lastFrontmatterFileSet && hide === this._lastFrontmatterHide) {
+        const fingerprint = `${hide}|${hideInManuscript}|${fileSet}`;
+        if (fingerprint === this._lastFrontmatterFileSet
+            && hide === this._lastFrontmatterHide
+            && hideInManuscript === this._lastManuscriptFrontmatterHide) {
             return;
         }
         this._lastFrontmatterFileSet = fingerprint;
         this._lastFrontmatterHide = hide;
+        this._lastManuscriptFrontmatterHide = hideInManuscript;
 
         const body = activeDocument.body;
         if (body) {
             if (hide) body.classList.add('sl-hide-frontmatter-global');
             else body.classList.remove('sl-hide-frontmatter-global');
+            if (hideInManuscript) body.classList.add('sl-hide-manuscript-frontmatter');
+            else body.classList.remove('sl-hide-manuscript-frontmatter');
         }
 
         for (const leaf of leaves) {
@@ -2311,12 +2316,15 @@ export default class SceneCardsPlugin extends Plugin {
             return normalizePath(p);
         };
 
+        const visitedFolders = new Set<string>();
         const scan = async (folderPath: string): Promise<void> => {
             // Convert absolute OS paths to vault-relative, then normalise
             // (strips leading/trailing slashes, converts backslashes) so
             // adapter.exists() doesn't silently fail.
             const normalized = toVaultRelative(folderPath);
             if (!normalized || !await adapter.exists(normalized)) return;
+            if (visitedFolders.has(normalized)) return;
+            visitedFolders.add(normalized);
             const listing = await adapter.list(normalized);
             for (const f of listing.files) {
                 if (!f.endsWith('.md')) continue;
@@ -2432,7 +2440,7 @@ export default class SceneCardsPlugin extends Plugin {
         try {
             this.linkScanner.invalidateAll();
             this.linkScanner.rebuildLookups(this.settings.characterAliases);
-            this.linkScanner.scanAll(this.sceneManager.getAllScenes());
+            await this.linkScanner.scanAllAsync(this.sceneManager.getAllScenes());
         } catch (e) {
             console.error('[StoryLine] Failed to re-scan links:', e);
         }
@@ -2441,7 +2449,32 @@ export default class SceneCardsPlugin extends Plugin {
     /**
      * Refresh all open Scene Cards views
      */
-    async refreshOpenViews(reloadScenes = false): Promise<void> {
+    async refreshOpenViews(reloadScenes = false, changedPaths: string[] = []): Promise<void> {
+        this.queuedOpenViewsRefreshRequested = true;
+        this.queuedOpenViewsRefreshReloadScenes ||= reloadScenes;
+        for (const path of changedPaths) this.queuedOpenViewsRefreshPaths.add(normalizePath(path));
+
+        if (this.openViewsRefreshPromise) return this.openViewsRefreshPromise;
+
+        const refreshPromise = (async () => {
+            while (this.queuedOpenViewsRefreshRequested) {
+                this.queuedOpenViewsRefreshRequested = false;
+                const nextReloadScenes = this.queuedOpenViewsRefreshReloadScenes;
+                this.queuedOpenViewsRefreshReloadScenes = false;
+                const nextChangedPaths = Array.from(this.queuedOpenViewsRefreshPaths);
+                this.queuedOpenViewsRefreshPaths.clear();
+                await this.performRefreshOpenViews(nextReloadScenes, nextChangedPaths);
+            }
+        })();
+        this.openViewsRefreshPromise = refreshPromise;
+        try {
+            await refreshPromise;
+        } finally {
+            if (this.openViewsRefreshPromise === refreshPromise) this.openViewsRefreshPromise = null;
+        }
+    }
+
+    private async performRefreshOpenViews(reloadScenes: boolean, changedPaths: string[]): Promise<void> {
         const refreshGeneration = ++this.openViewsRefreshGeneration;
         const projectKey = this.sceneManager?.activeProject?.filePath ?? null;
         const isCurrentRefresh = (): boolean =>
@@ -2454,32 +2487,53 @@ export default class SceneCardsPlugin extends Plugin {
         // entity managers and rebuilding reverse references.
         if (reloadScenes) {
             try {
-                await this.sceneManager.initialize();
+                await this.sceneManager.initialize(true);
             } catch (e) {
                 console.error('[StoryLine] Failed to reload scenes from disk:', e);
             }
             if (!isCurrentRefresh()) return;
         }
 
-        // Keep LocationManager, CharacterManager, and CodexManager in sync
-        try {
-            await this.loadActiveProjectEntities();
-            await this.scanExtraFolders();
-            const codexFolder = this.sceneManager.getCodexFolder();
-            if (codexFolder) {
-                const customDefs = (this.settings.codexCustomCategories || []).map(
-                    (cc: { id: string; label: string; icon: string }) => makeCustomCodexCategory(cc.id, cc.label, cc.icon)
-                );
-                this.codexManager.initCategories(this.settings.codexEnabledCategories || [], customDefs);
-                await this.codexManager.loadAll(codexFolder);
-            }
-        } catch { /* project may not be set yet */ }
+        const entityChanges = changedPaths.some(path => this.isEntityRefreshPath(path));
+
+        // Keep entity managers in sync only when an entity or a full sync changed.
+        if (reloadScenes) {
+            try {
+                await this.loadActiveProjectEntities();
+                await this.scanExtraFolders();
+                const codexFolder = this.sceneManager.getCodexFolder();
+                if (codexFolder) {
+                    const customDefs = (this.settings.codexCustomCategories || []).map(
+                        (cc: { id: string; label: string; icon: string }) => makeCustomCodexCategory(cc.id, cc.label, cc.icon)
+                    );
+                    this.codexManager.initCategories(this.settings.codexEnabledCategories || [], customDefs);
+                    await this.codexManager.loadAll(codexFolder);
+                }
+            } catch { /* project may not be set yet */ }
+        } else if (entityChanges) {
+            try {
+                await this.updateEntityFiles(changedPaths);
+            } catch { /* project may not be set yet */ }
+        }
         if (!isCurrentRefresh()) return;
 
-        // Re-scan wikilinks after entity data is loaded
-        this.linkScanner.invalidateAll();
-        this.linkScanner.rebuildLookups(this.settings.characterAliases);
-        this.linkScanner.scanAll(this.sceneManager.getAllScenes());
+        // Re-scan only changed scenes for ordinary edits. Full refreshes rebuild
+        // all links after entity lookups have been refreshed.
+        if (reloadScenes || entityChanges) {
+            this.linkScanner.invalidateAll();
+            await this.linkScanner.scanAllAsync(this.sceneManager.getAllScenes());
+        } else {
+            const changedScenePaths = new Set<string>();
+            for (const path of changedPaths) {
+                this.linkScanner.invalidate(path);
+                if (this.sceneManager.getScene(path)) changedScenePaths.add(path);
+            }
+            if (changedScenePaths.size > 0) {
+                await this.linkScanner.scanAllAsync(
+                    this.sceneManager.getAllScenes().filter(scene => changedScenePaths.has(scene.filePath)),
+                );
+            }
+        }
         if (!isCurrentRefresh()) return;
 
         // Update codex digests (baseline new entries, prune deleted ones)
@@ -2565,6 +2619,96 @@ export default class SceneCardsPlugin extends Plugin {
             if (valid) {
                 element.scrollTop = saved.top;
                 element.scrollLeft = saved.left;
+            }
+        }
+    }
+
+    private isPathInside(filePath: string, folderPath: string): boolean {
+        const file = normalizePath(filePath).replace(/\/$/, '');
+        const folder = normalizePath(folderPath).replace(/\/$/, '');
+        return Boolean(folder) && (file === folder || file.startsWith(`${folder}/`));
+    }
+
+    private getConfiguredExtraFolderPaths(): string[] {
+        const paths = new Set<string>();
+        for (const folder of this.settings.extraFolders || []) {
+            if (!folder) continue;
+            try {
+                const relative = this.toVaultRelativePath(folder);
+                if (relative) paths.add(normalizePath(relative));
+            } catch { /* ignore invalid or unavailable source folders */ }
+        }
+        return Array.from(paths);
+    }
+
+    private isRelevantStoryLineFile(filePath: string): boolean {
+        const activeProject = this.sceneManager?.activeProject;
+        if (!activeProject) return false;
+
+        const normalized = normalizePath(filePath);
+        const systemFolder = this.getProjectSystemFolder();
+        if (this.isPathInside(normalized, systemFolder)) return false;
+
+        try {
+            if (normalized === normalizePath(activeProject.filePath)
+                || this.isPathInside(normalized, this.getProjectBaseFolder())) {
+                return true;
+            }
+        } catch { /* project folders may not be ready during startup */ }
+
+        return this.getConfiguredExtraFolderPaths().some(folder => this.isPathInside(normalized, folder));
+    }
+
+    private isEntityRefreshPath(filePath: string): boolean {
+        const normalized = normalizePath(filePath);
+        const activeProject = this.sceneManager?.activeProject;
+        if (!activeProject || !this.isRelevantStoryLineFile(normalized)) return false;
+        if (normalized === normalizePath(activeProject.filePath)) return true;
+
+        const entityFolders = [
+            this.sceneManager.getCharacterFolder(),
+            this.sceneManager.getLocationFolder(),
+            this.sceneManager.getCodexFolder(),
+        ].filter((folder): folder is string => Boolean(folder));
+        if (entityFolders.some(folder => this.isPathInside(normalized, folder))) return true;
+
+        return this.getConfiguredExtraFolderPaths().some(folder => this.isPathInside(normalized, folder));
+    }
+
+    private async updateEntityFiles(filePaths: string[]): Promise<void> {
+        const adapter = this.app.vault.adapter;
+        for (const filePath of filePaths) {
+            const normalized = normalizePath(filePath);
+            if (!normalized.endsWith('.md')) continue;
+
+            this.characterManager.removeFile(normalized);
+            this.locationManager.removeFile(normalized);
+            this.codexManager.removeFile(normalized);
+
+            if (!await adapter.exists(normalized)) continue;
+            let content: string;
+            try {
+                content = await adapter.read(normalized);
+            } catch {
+                continue;
+            }
+
+            const type = this.extractFrontmatterType(content);
+            const characterFolder = this.sceneManager.getCharacterFolder();
+            const locationFolder = this.sceneManager.getLocationFolder();
+            const codexFolder = this.sceneManager.getCodexFolder();
+            if (characterFolder && this.isPathInside(normalized, characterFolder)) {
+                this.characterManager.updateFile(content, normalized, true);
+            } else if (locationFolder && this.isPathInside(normalized, locationFolder)) {
+                this.locationManager.updateFile(content, normalized, true);
+            } else if (codexFolder && this.isPathInside(normalized, codexFolder)) {
+                this.codexManager.updateFile(content, normalized, true);
+            } else if (type === 'character') {
+                this.characterManager.updateFile(content, normalized);
+            } else if (type === 'location' || type === 'world') {
+                this.locationManager.updateFile(content, normalized);
+            } else if (type) {
+                this.codexManager.updateFile(content, normalized);
             }
         }
     }

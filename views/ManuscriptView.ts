@@ -62,10 +62,8 @@ export class ManuscriptView extends ItemView {
     /** Token for the current render lifetime. detachAllEmbedded() replaces
      *  it; in-flight mounts use it to detect that their DOM was torn down. */
     private _teardownToken: symbol = Symbol('initial');
-    /** When true, hide wiki-link/tag styling so text reads as plain prose.
-     *  Persisted to localStorage so the last toolbar choice survives view
-     *  switches and Obsidian restarts. Defaults to ON for first-time users. */
-    private _plainText = ManuscriptView.loadPlainTextPref();
+    /** When true, hide wiki-link/tag styling so text reads as plain prose. */
+    private _plainText = true;
     /** When true, links/tags are atomic (cursor skips over them) */
     private _lockLinks = true;
     /** Cached sorted scene list from last renderManuscript */
@@ -103,36 +101,11 @@ export class ManuscriptView extends ItemView {
         super(leaf);
         this.plugin = plugin;
         this.sceneManager = sceneManager;
+        this._plainText = plugin.settings.manuscriptPlainText !== false;
     }
 
     getViewType(): string {
         return MANUSCRIPT_VIEW_TYPE;
-    }
-
-    /** localStorage key for the Plain Text toolbar toggle preference. */
-    private static readonly PLAIN_TEXT_PREF_KEY = 'sl-manuscript-plain-text';
-
-    /** Load the persisted Plain Text preference (default ON for first use). */
-    private static loadPlainTextPref(): boolean {
-        try {
-            const v = window.localStorage.getItem(ManuscriptView.PLAIN_TEXT_PREF_KEY);
-            // Treat null/missing as ON (default); '0' / 'false' as OFF.
-            return v === null ? true : v !== '0' && v !== 'false';
-        } catch {
-            return true;
-        }
-    }
-
-    /** Persist the Plain Text preference so it survives view switches/restarts. */
-    private persistPlainTextPref(): void {
-        try {
-            window.localStorage.setItem(
-                ManuscriptView.PLAIN_TEXT_PREF_KEY,
-                this._plainText ? '1' : '0',
-            );
-        } catch {
-            // best-effort — localStorage may be unavailable in some contexts
-        }
     }
 
     getDisplayText(): string {
@@ -229,12 +202,6 @@ export class ManuscriptView extends ItemView {
         this.detachAllEmbedded();
         container.empty();
 
-        // Plain Text mode is persisted to localStorage (see
-        // loadPlainTextPref / persistPlainTextPref) so the last toolbar
-        // choice survives view switches and Obsidian restarts. No need to
-        // re-read it here — the field is initialised from storage at
-        // construction time and kept in sync by the toolbar handler.
-
         // Toolbar
         const toolbar = container.createDiv('story-line-toolbar');
         const titleRow = toolbar.createDiv('story-line-title-row');
@@ -296,7 +263,8 @@ export class ManuscriptView extends ItemView {
             plainWrap.createSpan({ cls: 'sl-toggle-track' });
             plainCb.addEventListener('change', () => {
                 this._plainText = plainCb.checked;
-                this.persistPlainTextPref();
+                this.plugin.settings.manuscriptPlainText = this._plainText;
+                void this.plugin.saveSettings();
                 this.scrollArea?.toggleClass('sl-manuscript-plain', this._plainText);
             });
 

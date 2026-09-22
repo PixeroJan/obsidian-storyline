@@ -61,6 +61,18 @@ export class CharacterManager {
         return false;
     }
 
+    updateFile(content: string, filePath: string, folderFallback = false): boolean {
+        this.characters.delete(filePath);
+        const character = this.parseCharacterContent(content, filePath, folderFallback);
+        if (!character) return false;
+        this.characters.set(filePath, character);
+        return true;
+    }
+
+    removeFile(filePath: string): void {
+        this.characters.delete(filePath);
+    }
+
     /**
      * Get all loaded characters sorted by name.
      */

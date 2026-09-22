@@ -6,6 +6,15 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.73
+
+### Bug Fixes
+
+- **StoryLine refresh performance and freeze prevention** *([#288](https://github.com/PixeroJan/obsidian-storyline/issues/288))* — View refreshes are now serialized and coalesced, ordinary scene and entity edits update incrementally, link scans yield during large batches, unrelated vault events are ignored, and overlapping Additional Source Folder scans are deduplicated.
+- **Independent frontmatter visibility** — Scene-file frontmatter and Manuscript-view frontmatter now have separate settings. Both remain hidden by default, while users can show Properties in direct scene files without showing them in Manuscript view. Obsidian's global Properties setting and the scene YAML are unchanged.
+- **Settings search compatibility** — Added declarative settings definitions for Obsidian 1.13+ so StoryLine settings appear in global settings search, while retaining the imperative settings UI for Obsidian 1.12.x.
+- **Storage and vault access cleanup** — UI preferences now use Obsidian plugin data, and broad vault-list APIs were replaced with internal folder-tree lookups or narrower feature-scoped resolution.
+
 ## Version 1.10.72
 
 ### Bug Fixes

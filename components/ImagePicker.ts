@@ -9,6 +9,7 @@
  */
 import { App, Modal, TFile, Notice, FuzzySuggestModal } from 'obsidian';
 import * as obsidian from 'obsidian';
+import { getVaultFiles } from '../utils/vault';
 
 function normalizeImagePath(imagePath: string): string {
     let normalized = imagePath.trim();
@@ -69,17 +70,6 @@ export function resolveImagePath(app: App, imagePath: string): string {
         }
     } catch { /* fall through */ }
 
-    // Fallback: match by basename when only filename was stored in frontmatter
-    try {
-        const lower = normalizedPath.toLowerCase();
-        const allFiles = app.vault.getFiles();
-        const byExactPath = allFiles.find(f => f.path.toLowerCase() === lower);
-        if (byExactPath) return app.vault.getResourcePath(byExactPath);
-
-        const byTail = allFiles.find(f => f.path.toLowerCase().endsWith(`/${lower}`));
-        if (byTail) return app.vault.getResourcePath(byTail);
-    } catch { /* fall through */ }
-    
     // Fallback to adapter resource path
     return app.vault.adapter.getResourcePath(normalizedPath);
 }
@@ -287,7 +277,7 @@ class ImageChoiceModal extends Modal {
             this.resolved = true;
             this.close();
 
-            const allFiles = this.app.vault.getFiles()
+            const allFiles = getVaultFiles(this.app)
                 .filter(f => /\.(png|jpe?g|gif|svg|webp|bmp|avif)$/i.test(f.path))
                 .sort((a, b) => a.path.localeCompare(b.path));
 

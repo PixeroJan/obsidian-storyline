@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unused-vars -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; matching enable at end of file */
 import { StoryLineProject, deriveProjectFolders, deriveProjectFoldersFromFilePath } from '../models/StoryLineProject';
 import { MetadataParser, setWordcountLocale, setSceneTitleToStemMap } from './MetadataParser';
 import { normalizeStoryLineLocale, resolveLocale, DEFAULT_STORYLINE_LOCALE, AUTO_DETECT_LOCALE, type StoryLineLocale } from '../utils/locale';
@@ -8,6 +8,7 @@ import { formatActChapterPrefix, sanitizeActChapterForPath, compareActChapter } 
 import type SceneCardsPlugin from '../main';
 import { App, Notice, TFile, TFolder, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { BeatSheetTemplate, FilterPreset, Scene, SceneFilter, SceneStatus, SortConfig, getStatusOrder } from '../models/Scene';
+import { getVaultMarkdownFiles } from '../utils/vault';
 
 /**
  * Normalize a frontmatter `acts` / `chapters` value into a clean sorted
@@ -316,7 +317,7 @@ export class SceneManager implements ISceneStore {
         // Scan the entire vault for .md files with type: storyline
         // that live outside the root folder (custom locations).
         try {
-            const allFiles = this.app.vault.getMarkdownFiles();
+            const allFiles = getVaultMarkdownFiles(this.app);
             for (const file of allFiles) {
                 if (this.projects.has(file.path)) continue; // already found in root scan
                 const cache = this.app.metadataCache.getFileCache(file);
@@ -512,7 +513,7 @@ export class SceneManager implements ISceneStore {
         await this.plugin.fieldTemplates.load();
         await this.loadCorkboardPositions();
         await this.plugin.saveSettings();
-        await this.initialize();
+        await this.initialize(true);
         // Issue #271 follow-up: explicitly invalidate and re-scan LinkScanner cache
         // when the active project changes, so entities don't appear "unlinked" on reload.
         // This ensures the dashboard views (Codex, Characters, Locations) show the correct
@@ -830,7 +831,8 @@ export class SceneManager implements ISceneStore {
      * Uses the vault adapter (filesystem) for reliable discovery of
      * externally-created or synced files.
      */
-    async initialize(): Promise<void> {
+    async initialize(force = false): Promise<void> {
+        if (this.initialized && !force) return;
         this.scenes.clear();
         const sceneFolder = this.getSceneFolder();
         await this.scanFolderAdapter(sceneFolder);
@@ -2826,4 +2828,4 @@ export class SceneManager implements ISceneStore {
         return primaryFile;
     }
 }
-/* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unused-vars -- end of file-wide suppression block opened at line 1 */
+/* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unnecessary-type-assertion -- end of file-wide suppression block opened at line 1 */

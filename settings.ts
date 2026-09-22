@@ -697,8 +697,15 @@ export interface SceneCardsSettings {
     // Character names to hide from the "no profile yet" list (lowercased)
     ignoredCharacters: string[];
 
-    // Hide frontmatter (properties) in live preview / reading mode
+    // Hide frontmatter (properties) in direct StoryLine note editors
     hideFrontmatter: boolean;
+
+    // Hide frontmatter (properties) in Manuscript view's embedded scene editors
+    hideFrontmatterInManuscript: boolean;
+
+    // Persist editor preferences in Obsidian's plugin data
+    automaticQuoteReplacement: boolean;
+    manuscriptPlainText: boolean;
 
     /**
      * Hide the Obsidian tab header ("StoryLine - Projectname") above the
@@ -992,6 +999,9 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     ignoredCharacters: [],
 
     hideFrontmatter: true,
+    hideFrontmatterInManuscript: true,
+    automaticQuoteReplacement: true,
+    manuscriptPlainText: true,
     hideToolbarTitle: true,
     autoHideViewLabels: true,
 
@@ -1054,11 +1064,8 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
 /**
  * Settings tab for the StoryLine plugin.
  *
- * Note on the declarative settings API (Obsidian 1.13.0+):
- * StoryLine still supports Obsidian 1.12.x (see `manifest.json` → `minAppVersion`),
- * where `getSettingDefinitions()` doesn't exist. The imperative `display()` path
- * below is intentional; migrating this ~3400-line settings surface to the
- * declarative API is tracked separately once we drop 1.12.x support.
+ * The settings UI uses Obsidian's imperative API because it contains many
+ * advanced and custom controls that do not map cleanly to declarative rows.
  */
 export class SceneCardsSettingTab extends PluginSettingTab {
     plugin: SceneCardsPlugin;
@@ -1076,7 +1083,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         this.renderSettingsTab(this.containerEl);
     }
 
-    private renderSettingsTab(containerEl: HTMLElement): void {
+    private renderSettingsTab(containerEl: HTMLElement, includeFrontmatterSettings = true): void {
         containerEl.empty();
 
         const createSettingsSection = (title: string, open = false): HTMLElement => {
@@ -1097,7 +1104,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.storyLineRoot = value || 'StoryLine';
                     await this.plugin.saveSettings();
-                }));
+                        }));
 
         new Setting(generalBody)
             .setName('Auto-open navigator')
@@ -1107,11 +1114,12 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.autoOpenNavigator = value;
                     await this.plugin.saveSettings();
-                }));
+                        }));
 
-        new Setting(generalBody)
-            .setName('Hide frontmatter')
-            .setDesc('Hide the properties/frontmatter block on StoryLine notes only (live preview and reading mode). Since all fields are editable from the inspector, frontmatter can safely be hidden. Your global Obsidian "properties in document" setting is left untouched.')
+        const frontmatterSettings: Setting[] = [];
+        frontmatterSettings.push(new Setting(generalBody)
+            .setName('Hide frontmatter in scene files')
+            .setDesc('Hide the properties/frontmatter block in direct StoryLine scene editors. Your global Obsidian "properties in document" setting is left untouched.')
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.hideFrontmatter)
                 .onChange(async (value) => {
@@ -1119,7 +1127,22 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                     // Re-apply scoped hiding to currently open markdown leaves (issue #104)
                     this.plugin.updateFrontmatterVisibility();
-                }));
+                })));
+
+        frontmatterSettings.push(new Setting(generalBody)
+            .setName('Hide frontmatter in manuscript view')
+            .setDesc('Hide the properties/frontmatter block in scene editors embedded in manuscript view. This does not change the scene file or Obsidian\'s global properties setting.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.hideFrontmatterInManuscript)
+                .onChange(async (value) => {
+                    this.plugin.settings.hideFrontmatterInManuscript = value;
+                    await this.plugin.saveSettings();
+                    this.plugin.updateFrontmatterVisibility();
+                })));
+
+        if (!includeFrontmatterSettings) {
+            for (const setting of frontmatterSettings) setting.settingEl.remove();
+        }
 
         new Setting(generalBody)
             .setName('Hide "StoryLine" title above view tabs')

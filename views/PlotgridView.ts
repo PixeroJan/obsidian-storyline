@@ -22,6 +22,7 @@ import { attachTooltip } from '../components/Tooltip';
 import type SceneCardsPlugin from '../main';
 import { Scene, getStatusOrder, resolveStatusCfg } from '../models/Scene';
 import { openConfirmModal } from '../components/ConfirmModal';
+import { getVaultMarkdownFiles } from '../utils/vault';
 
 // Use the shared view-type constant from `constants.ts` so the ViewSwitcher
 // can correctly detect and style the active tab.
@@ -2779,7 +2780,7 @@ export class PlotgridView extends ItemView {
                 if (!this.listEl || !this.inputEl) return;
                 this.listEl.empty();
                 const q = this.inputEl.value.toLowerCase();
-                const files = this.app.vault.getMarkdownFiles().filter((f: TFile) => f.path.toLowerCase().includes(q) || f.basename.toLowerCase().includes(q));
+                const files = getVaultMarkdownFiles(this.app).filter((f: TFile) => f.path.toLowerCase().includes(q) || f.basename.toLowerCase().includes(q));
                 for (const f of files) {
                     const row = this.listEl.createDiv('scene-link-row');
                     row.setCssStyles({

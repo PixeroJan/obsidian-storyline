@@ -12,6 +12,7 @@
  */
 
 import { App } from 'obsidian';
+import { getVaultMarkdownFiles } from '../utils/vault';
 
 export interface WikilinkSuggestOptions {
     app: App;
@@ -107,7 +108,7 @@ export class WikilinkSuggest {
     // ─── Suggestions ──────────────────────────────────────────
 
     private getCandidates(query: string): string[] {
-        const files = this.app.vault.getMarkdownFiles();
+        const files = getVaultMarkdownFiles(this.app);
         const q = query.toLowerCase();
         const scored: { name: string; score: number }[] = [];
         for (const f of files) {

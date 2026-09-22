@@ -10836,12 +10836,10 @@ body.theme-dark .location-field-input.dropdown {
     display: none;
 }
 
-/* Hide frontmatter / properties — gated on the Hide-Frontmatter setting via
-   the body-level class so toggling the setting OFF restores frontmatter
-   inside Manuscript-embedded scenes too. */
-body.sl-hide-frontmatter-global .sl-manuscript-embedded-split.sl-manuscript-embedded-split .metadata-container,
-body.sl-hide-frontmatter-global .sl-manuscript-embedded-split.sl-manuscript-embedded-split .metadata-properties-container,
-body.sl-hide-frontmatter-global .sl-manuscript-embedded-split.sl-manuscript-embedded-split .metadata-properties-heading {
+/* Hide frontmatter / properties in Manuscript view only. */
+body.sl-hide-manuscript-frontmatter .sl-manuscript-embedded-split.sl-manuscript-embedded-split .metadata-container,
+body.sl-hide-manuscript-frontmatter .sl-manuscript-embedded-split.sl-manuscript-embedded-split .metadata-properties-container,
+body.sl-hide-manuscript-frontmatter .sl-manuscript-embedded-split.sl-manuscript-embedded-split .metadata-properties-heading {
     display: none !important;
 }
 
@@ -10860,22 +10858,19 @@ body.sl-hide-frontmatter-global .view-content.sl-hide-frontmatter.sl-hide-frontm
     display: none;
 }
 
-/* Frontmatter inside any StoryLine custom view (Board, Manuscript, Scene
-   Inspector sidebar, Research, etc.) — those views have no `view.file`, so
-   we can't tag them per-leaf. Use the body-class + view data-type instead. */
-body.sl-hide-frontmatter-global .workspace-leaf-content.workspace-leaf-content[data-type^="story-line-"] .metadata-container.metadata-container,
-body.sl-hide-frontmatter-global .workspace-leaf-content.workspace-leaf-content[data-type^="story-line-"] .metadata-properties-container.metadata-properties-container,
-body.sl-hide-frontmatter-global .workspace-leaf-content.workspace-leaf-content[data-type^="story-line-"] .metadata-properties-heading.metadata-properties-heading,
-body.sl-hide-frontmatter-global .workspace-leaf-content.workspace-leaf-content[data-type^="story-line-"] .cm-line.HyperMD-frontmatter.HyperMD-frontmatter {
+/* Frontmatter inside StoryLine custom views (Board, Scene Inspector sidebar,
+    Research, etc.) — exclude Manuscript's embedded editors because they have
+    their own setting above. */
+body.sl-hide-frontmatter-global .workspace-leaf-content.workspace-leaf-content[data-type^="story-line-"] .metadata-container.metadata-container:not(.sl-manuscript-embedded-split .metadata-container),
+body.sl-hide-frontmatter-global .workspace-leaf-content.workspace-leaf-content[data-type^="story-line-"] .metadata-properties-container.metadata-properties-container:not(.sl-manuscript-embedded-split .metadata-properties-container),
+body.sl-hide-frontmatter-global .workspace-leaf-content.workspace-leaf-content[data-type^="story-line-"] .metadata-properties-heading.metadata-properties-heading:not(.sl-manuscript-embedded-split .metadata-properties-heading),
+body.sl-hide-frontmatter-global .workspace-leaf-content.workspace-leaf-content[data-type^="story-line-"] .cm-line.HyperMD-frontmatter.HyperMD-frontmatter:not(.sl-manuscript-embedded-split .cm-line.HyperMD-frontmatter) {
     display: none;
 }
 
-/* Issue #110 — Manuscript view embeds scene editors via detached splits, so
-   the JS toggle in updateFrontmatterVisibility() can't reach them. Gate on the
-   body-level `sl-hide-frontmatter-global` class so the setting still
-   round-trips: turning Hide Frontmatter OFF removes the class and restores
-   frontmatter inside Manuscript-embedded scenes too. */
-body.sl-hide-frontmatter-global .sl-manuscript-embedded-split .cm-line.HyperMD-frontmatter {
+/* Manuscript view embeds scene editors via detached splits, so the JS toggle
+    in updateFrontmatterVisibility() can't reach their raw YAML lines. */
+body.sl-hide-manuscript-frontmatter .sl-manuscript-embedded-split .cm-line.HyperMD-frontmatter {
     display: none !important;
 }
 

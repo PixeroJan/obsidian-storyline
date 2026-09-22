@@ -50,6 +50,23 @@ export class LocationManager {
         return false;
     }
 
+    updateFile(content: string, filePath: string, folderFallback = false): boolean {
+        this.worlds.delete(filePath);
+        this.locations.delete(filePath);
+        const fm = this.extractFrontmatter(content);
+        if (!fm && !folderFallback) return false;
+        if (fm?.type === 'world' || fm?.type === 'location' || folderFallback) {
+            this.parseAndStoreContent(content, filePath, folderFallback);
+            return this.worlds.has(filePath) || this.locations.has(filePath);
+        }
+        return false;
+    }
+
+    removeFile(filePath: string): void {
+        this.worlds.delete(filePath);
+        this.locations.delete(filePath);
+    }
+
     private async scanFolderAdapter(folderPath: string): Promise<void> {
         const adapter = this.app.vault.adapter;
         if (!await adapter.exists(folderPath)) return;

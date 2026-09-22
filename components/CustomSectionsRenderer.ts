@@ -15,6 +15,7 @@
 import { App, Menu, Modal, Notice, Setting, setIcon } from 'obsidian';
 import { attachTooltip } from './Tooltip';
 import { openConfirmModal } from './ConfirmModal';
+import { getVaultMarkdownFiles } from '../utils/vault';
 
 /** Composite-key separator used to namespace fields inside custom sections. */
 export const CUSTOM_SECTION_KEY_SEP = ' :: ';
@@ -135,7 +136,7 @@ function folderOptionNames(app: App, folderSource?: string): string[] {
     if (!normalized) return [];
     const prefix = normalized + '/';
     const names = new Set<string>();
-    for (const file of app.vault.getMarkdownFiles()) {
+    for (const file of getVaultMarkdownFiles(app)) {
         const path = file.path.replace(/\\/g, '/');
         if (path.startsWith(prefix)) names.add(file.basename);
     }

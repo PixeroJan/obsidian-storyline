@@ -153,6 +153,26 @@ export class CodexManager {
         return false;
     }
 
+    updateFile(content: string, filePath: string, folderFallback = false): boolean {
+        this.removeFile(filePath);
+        for (const [catId, catDef] of this.categoryDefs) {
+            const entry = this.parseEntry(content, filePath, catDef, folderFallback);
+            if (!entry) continue;
+            let catMap = this.entriesByCategory.get(catId);
+            if (!catMap) {
+                catMap = new Map();
+                this.entriesByCategory.set(catId, catMap);
+            }
+            catMap.set(filePath, entry);
+            return true;
+        }
+        return false;
+    }
+
+    removeFile(filePath: string): void {
+        for (const catMap of this.entriesByCategory.values()) catMap.delete(filePath);
+    }
+
     // ── Query ──────────────────────────────────────────
 
     /** All entries for a category, sorted by name. */

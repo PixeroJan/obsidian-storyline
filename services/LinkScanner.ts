@@ -183,6 +183,22 @@ export class LinkScanner {
         return this.cache;
     }
 
+    /** Scan scenes in batches so large projects yield to Obsidian between batches. */
+    async scanAllAsync(scenes: Scene[], batchSize = 20): Promise<Map<string, LinkScanResult>> {
+        this.rebuildLookups(this.lastManualAliases);
+        for (let index = 0; index < scenes.length; index++) {
+            const scene = scenes[index];
+            if (!this.cache.has(scene.filePath)) {
+                this.cache.set(scene.filePath, this.performScan(scene));
+            }
+            this.sceneCache.set(scene.filePath, scene);
+            if ((index + 1) % batchSize === 0) {
+                await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+            }
+        }
+        return this.cache;
+    }
+
     /**
      * Get a previously computed result (or null).
      */
