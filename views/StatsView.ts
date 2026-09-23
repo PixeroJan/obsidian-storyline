@@ -90,7 +90,8 @@ export class StatsView extends ItemView {
 
         const content = container.createDiv('story-line-stats-content');
         const stats = this.sceneManager.queryService.getStatistics(this.plugin.settings.excludeArcAnchorFromWordcount ?? true);
-        const allScenes = this.sceneManager.getAllScenes().filter(scene => !scene.inactive);
+        const allScenes = this.sceneManager.getAllScenes()
+            .filter(scene => !scene.inactive && !scene.corkboardNote);
 
         // 1. Overview (always open)
         this.renderOverview(content, stats);

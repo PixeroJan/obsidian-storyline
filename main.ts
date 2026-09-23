@@ -1740,13 +1740,34 @@ export default class SceneCardsPlugin extends Plugin {
             this.settings.customLocationTypes = Array.isArray(customSections.customLocationTypes)
                 ? (customSections.customLocationTypes as string[])
                 : [];
-            const codexCategories = hasSeriesCodexCategories ? seriesCodexCategories : customSections;
-            this.settings.codexCustomCategories = Array.isArray(codexCategories.codexCustomCategories)
-                ? (codexCategories.codexCustomCategories as typeof this.settings.codexCustomCategories)
+            const projectCustomCategories = Array.isArray(customSections.codexCustomCategories)
+                ? customSections.codexCustomCategories as typeof this.settings.codexCustomCategories
                 : [];
-            this.settings.codexEnabledCategories = Array.isArray(codexCategories.codexEnabledCategories)
-                ? (codexCategories.codexEnabledCategories as string[])
+            const projectEnabledCategories = Array.isArray(customSections.codexEnabledCategories)
+                ? customSections.codexEnabledCategories as string[]
                 : [];
+            if (hasSeriesCodexCategories) {
+                const seriesCustomCategories = Array.isArray(seriesCodexCategories.codexCustomCategories)
+                    ? seriesCodexCategories.codexCustomCategories as typeof this.settings.codexCustomCategories
+                    : [];
+                const mergedCategories = new Map(
+                    seriesCustomCategories.map(category => [category.id, category]),
+                );
+                for (const category of projectCustomCategories) {
+                    if (!mergedCategories.has(category.id)) mergedCategories.set(category.id, category);
+                }
+                this.settings.codexCustomCategories = Array.from(mergedCategories.values());
+                const seriesEnabledCategories = Array.isArray(seriesCodexCategories.codexEnabledCategories)
+                    ? seriesCodexCategories.codexEnabledCategories as string[]
+                    : [];
+                this.settings.codexEnabledCategories = Array.from(new Set([
+                    ...seriesEnabledCategories,
+                    ...projectEnabledCategories,
+                ]));
+            } else {
+                this.settings.codexCustomCategories = projectCustomCategories;
+                this.settings.codexEnabledCategories = projectEnabledCategories;
+            }
         } else if (this._systemMigrationDone) {
             // Subsequent project switch with no System file — this is a new
             // project (or one that has never had custom sections). Reset to

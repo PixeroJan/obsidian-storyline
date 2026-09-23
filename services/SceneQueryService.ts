@@ -269,7 +269,7 @@ export class SceneQueryService {
      */
     getStatistics(excludeArcAnchor = false) {
         const scenes = this.sceneStore.getAllScenes();
-        const activeScenes = scenes.filter(scene => !scene.inactive);
+        const activeScenes = scenes.filter(scene => !scene.inactive && !scene.corkboardNote);
         const totalScenes = activeScenes.length;
         const statusCounts: Record<string, number> = {};
         let totalWords = 0;

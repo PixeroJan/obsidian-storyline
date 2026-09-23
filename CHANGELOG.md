@@ -14,7 +14,8 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 - **Plot Grid row sizing** — Edited rows grow only when their content needs more space. Manual row resizing now respects zoom, divider rows, and the actual rendered grid tracks.
 - **Plot Grid linked scene cards** — Scene lookup now tolerates normalized path differences so synced cells reliably resolve their linked scene cards.
 - **Plot Grid alignment control** — The alignment dropdown now reserves enough width and arrow space so its labels remain readable.
-
+- **Series Codex category merging** — Book-specific custom Codex categories are now merged into the shared series definitions instead of disappearing when a series category file exists.
+- **Statistics exclude sticky notes** — Corkboard sticky notes are now excluded from scene counts, word and character totals, progress calculations, and Stats view breakdowns.
 
 ## Version 1.10.74 
 
