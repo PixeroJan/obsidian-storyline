@@ -919,7 +919,19 @@ export class SceneManager implements ISceneStore {
      * Get a scene by file path
      */
     getScene(filePath: string): Scene | undefined {
-        return this.scenes.get(filePath);
+        const direct = this.scenes.get(filePath);
+        if (direct) return direct;
+
+        const normalizedPath = normalizePath(filePath);
+        const normalized = this.scenes.get(normalizedPath);
+        if (normalized) return normalized;
+
+        for (const [indexedPath, scene] of this.scenes) {
+            if (normalizePath(indexedPath) === normalizedPath || normalizePath(scene.filePath) === normalizedPath) {
+                return scene;
+            }
+        }
+        return undefined;
     }
 
     /**

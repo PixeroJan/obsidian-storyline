@@ -58,6 +58,8 @@ export class PlotgridView extends ItemView {
     private scrollRestoreGeneration = 0;
     private scrollRestoreFrame: number | null = null;
     private saveProjectKey: string | null = null;
+    private rowAutosizeGeneration = 0;
+    private renderedRowTrackIndices = new Map<number, number>();
     /** Simple undo stack for plot grid cell operations */
     private undoStack: PlotGridData[] = [];
     private static readonly MAX_UNDO = 20;
@@ -528,8 +530,14 @@ export class PlotgridView extends ItemView {
         attachTooltip(italicBtn, 'Italic');
         italicBtn.addEventListener('click', () => this.toggleItalicSelected());
 
-        const alignSelect = fmtGroup.createEl('select');
+        const alignSelect = fmtGroup.createEl('select', { cls: 'plot-grid-align-select' });
         alignSelect.addClass('dropdown');
+        alignSelect.setCssStyles({
+            width: '96px',
+            minWidth: '96px',
+            paddingRight: '28px',
+            boxSizing: 'border-box',
+        });
         alignSelect.title = 'Alignment for selection';
         alignSelect.createEl('option', { text: 'Align', value: '', disabled: true });
         for (const [value, label] of [['left', 'Left'], ['center', 'Center'], ['right', 'Right']] as const) {
@@ -803,14 +811,39 @@ export class PlotgridView extends ItemView {
     }
 
     private measureCellHeight(cellEl: HTMLElement): number {
-        let requiredHeight = cellEl.scrollHeight + 2;
+        const styles = getComputedStyle(cellEl);
+        const verticalChrome = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom)
+            + parseFloat(styles.borderTopWidth) + parseFloat(styles.borderBottomWidth);
+        let requiredHeight = cellEl.scrollHeight;
         const descendants = Array.from(cellEl.querySelectorAll<HTMLElement>('*'));
         for (const descendant of descendants) {
-            if (descendant.scrollHeight > descendant.clientHeight) {
-                requiredHeight = Math.max(requiredHeight, cellEl.offsetHeight + descendant.scrollHeight - descendant.clientHeight + 2);
-            }
+            requiredHeight = Math.max(requiredHeight, descendant.scrollHeight + verticalChrome);
         }
         return requiredHeight;
+    }
+
+    private async autosizeRowToContent(rowIndex: number): Promise<void> {
+        if (!this.canvasEl || !this.data.rows[rowIndex]) return;
+        const generation = this.rowAutosizeGeneration;
+
+        await this.waitForPlotGridLayout();
+        if (generation !== this.rowAutosizeGeneration || !this.canvasEl || !this.data.rows[rowIndex]) return;
+
+        const cells = Array.from(this.canvasEl.querySelectorAll<HTMLElement>('.plot-grid-cell[data-row][data-col]'))
+            .filter(cell => Number(cell.dataset.row) === rowIndex);
+        if (cells.length === 0) return;
+
+        const requiredHeight = Math.min(
+            900,
+            Math.max(40, ...cells.map(cell => this.measureCellHeight(cell))),
+        );
+        const nextHeight = Math.round(requiredHeight);
+        if (nextHeight <= this.data.rows[rowIndex].height) return;
+        if (generation !== this.rowAutosizeGeneration) return;
+
+        this.data.rows[rowIndex].height = nextHeight;
+        this.scheduleSave();
+        this.renderGrid();
     }
 
     private renderGrid() {
@@ -929,11 +962,20 @@ export class PlotgridView extends ItemView {
 
         // Build row template including divider rows (visible only)
         const rowHeightParts: string[] = [];
+        this.renderedRowTrackIndices.clear();
+        let gridTrackIndex = 1;
         for (const ri of rowIndices) {
             if (!visibleRows.has(ri)) continue;
             const divs = dividersBefore.get(ri);
-            if (divs) for (const d of divs) rowHeightParts.push(d.type === 'act' ? '32px' : '26px');
+            if (divs) {
+                for (const d of divs) {
+                    rowHeightParts.push(d.type === 'act' ? '32px' : '26px');
+                    gridTrackIndex++;
+                }
+            }
+            this.renderedRowTrackIndices.set(ri, gridTrackIndex);
             rowHeightParts.push(this.data.rows[ri].height + 'px');
+            gridTrackIndex++;
         }
         let rowTemplate = [COL_HEADER_HEIGHT + 'px', ...rowHeightParts].join(' ');
 
@@ -1341,7 +1383,7 @@ export class PlotgridView extends ItemView {
                     cursor: 'default',
                     display: 'flex',
                     flexDirection: 'column',
-                    justifyContent: 'center',
+                    justifyContent: 'flex-start',
                 });
 
                 const bg = cell.bgColor || row.bgColor || col.bgColor || '';
@@ -2575,6 +2617,7 @@ export class PlotgridView extends ItemView {
     }
 
     private enterEditMode(cellEl: HTMLElement, cell: CellData, _contentEl: HTMLElement) {
+        this.rowAutosizeGeneration++;
         cellEl.classList.add('editing');
         cellEl.empty();
         const ta = cellEl.createEl('textarea');
@@ -2601,6 +2644,7 @@ export class PlotgridView extends ItemView {
 
         const hadContentBefore = !!(cell.content && cell.content.trim());
         const hadLinkedScene = !!cell.linkedSceneId;
+        const rowIndex = Number(cellEl.dataset.row);
 
         let committed = false;
         const commit = () => {
@@ -2608,17 +2652,19 @@ export class PlotgridView extends ItemView {
             committed = true;
             // Restore wrapper focusability
             if (this.wrapperEl) this.wrapperEl.tabIndex = 0;
-            cell.content = ta.value;
+            const liveCell = this.data.cells[cell.id] ?? cell;
+            liveCell.content = ta.value;
             // Mark as manually edited so sync won't overwrite
-            cell.manualContent = true;
+            liveCell.manualContent = true;
             // Auto-Note: if toggled on and new non-empty text entered into an unlinked cell
             const hasNewContent = !!(ta.value && ta.value.trim());
             if (this.plugin?.settings.plotgridAutoNote && hasNewContent && !hadLinkedScene && !hadContentBefore) {
                 // Let autoCreateNoteFromCell handle save + render to avoid race
-                void this.autoCreateNoteFromCell(cell);
+                void this.autoCreateNoteFromCell(liveCell);
             } else {
                 this.scheduleSave();
                 this.renderGrid();
+                if (Number.isInteger(rowIndex)) void this.autosizeRowToContent(rowIndex);
             }
         };
 
@@ -2748,6 +2794,8 @@ export class PlotgridView extends ItemView {
         }
         this.scheduleSave();
         this.renderGrid();
+        const rowIndex = this.data.rows.findIndex(row => this.data.columns.some(col => `${row.id}-${col.id}` === cell.id));
+        if (rowIndex >= 0) void this.autosizeRowToContent(rowIndex);
         new Notice('Auto-Note created from cell');
     }
 
@@ -3234,12 +3282,16 @@ export class PlotgridView extends ItemView {
         activeDocument.body.setCssStyles({ cursor: 'row-resize' });
 
         const onMove = (ev: MouseEvent) => {
-            const delta = ev.clientY - startY;
+            const delta = (ev.clientY - startY) / this.data.zoom;
             const newH = Math.max(40, Math.round(origH + delta));
             this.data.rows[rowIndex].height = newH;
             if (this.canvasEl) {
-                const rowTemplate = [COL_HEADER_HEIGHT + 'px', ...this.data.rows.map((r) => r.height + 'px')].join(' ');
-                this.canvasEl.setCssStyles({ gridTemplateRows: rowTemplate });
+                const trackIndex = this.renderedRowTrackIndices.get(rowIndex);
+                if (trackIndex !== undefined) {
+                    const tracks = getComputedStyle(this.canvasEl).gridTemplateRows.split(/\s+/);
+                    tracks[trackIndex] = newH + 'px';
+                    this.canvasEl.setCssStyles({ gridTemplateRows: tracks.join(' ') });
+                }
             }
         };
 
@@ -3385,8 +3437,6 @@ export class PlotgridView extends ItemView {
             const liveCell = getCell();
             liveCell.content = textArea.value;
             liveCell.manualContent = true;
-            cell.content = textArea.value;
-            cell.manualContent = true;
             if (this.selectedRow !== null && this.selectedCol !== null) {
                 const gridCellEl = this.getCellElement(this.selectedRow, this.selectedCol);
                 if (gridCellEl) {
@@ -3415,6 +3465,8 @@ export class PlotgridView extends ItemView {
                 void this.autoCreateNoteFromCell(liveCell);
             } else {
                 this.scheduleSave();
+                this.renderGrid();
+                void this.autosizeRowToContent(rowIndex);
             }
         });
 

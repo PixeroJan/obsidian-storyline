@@ -6,6 +6,15 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.75
+
+### Bug Fixes
+
+- **Plot Grid cell editing and rendering** — Cell edits now resolve the current cell data consistently, inspector edits re-render correctly, and multi-line content is positioned from the top instead of being visually clipped.
+- **Plot Grid row sizing** — Edited rows grow only when their content needs more space. Manual row resizing now respects zoom, divider rows, and the actual rendered grid tracks.
+- **Plot Grid linked scene cards** — Scene lookup now tolerates normalized path differences so synced cells reliably resolve their linked scene cards.
+- **Plot Grid alignment control** — The alignment dropdown now reserves enough width and arrow space so its labels remain readable.
+
 ## Version 1.10.74 
 
 ### Bug Fixes
