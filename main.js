@@ -607,2011 +607,2011 @@ Click to assign/remove plotline`)}showTagAssignMenu(e,n){let i=new St.Menu,a=thi
 `);this.proseCache={readability:this.computeReadability(s),wordFreq:this.computeWordFrequency(s),allWordFreq:this.computeAllWordFrequency(s)},a.remove(),this.renderProseResults(e,this.proseCache)})}renderProseResults(e,n){var b,S;let{readability:i,wordFreq:a}=n,o=e.createDiv("stats-subsection");o.createEl("h5",{cls:"stats-subsection-title",text:"Readability"});let s=o.createDiv("stats-sprint-row"),c=(S=(b=this.plugin.sceneManager)==null?void 0:b.getEffectiveLocale())!=null?S:"en",l=_f(c);if(this.createStatCard(s,"graduation-cap","FK Grade",l?String(i.fleschKincaidGrade):"N/A"),this.createStatCard(s,"book","Reading Ease",l?String(i.fleschReadingEase):"N/A"),this.createStatCard(s,"align-left","Avg Sentence",`${i.avgSentenceLength} words`),this.createStatCard(s,"type","Avg Word",`${i.avgWordLength} chars`),l){let E=i.fleschReadingEase,y=E>=80?"Very easy to read \u2014 suitable for a wide audience.":E>=60?"Standard fiction level \u2014 clear and accessible.":E>=40?"Moderately difficult \u2014 literary fiction range.":"Difficult \u2014 dense or academic prose.";o.createEl("p",{cls:"stats-hint",text:y})}else o.createEl("p",{cls:"stats-hint",text:"Flesch readability scores are tuned for english prose; only sentence/word averages are shown for the current project language."});let d=a.reduce((E,[,y])=>E+y,0),u=n.allWordFreq.reduce((E,[,y])=>E+y,0),p=e.createDiv("stats-subsection"),h=p.createDiv("stats-word-freq-header");h.createEl("h5",{cls:"stats-subsection-title",text:"Most used words"});let m=h.createEl("label",{cls:"sl-toggle-wrap stats-word-freq-toggle"}),g=m.createEl("input",{type:"checkbox"});g.checked=!0,m.createSpan({cls:"stats-word-freq-toggle-label",text:"Exclude common words"});let f=p.createDiv("stats-word-freq-list"),_=E=>{f.empty();let y=E?a:n.allWordFreq,w=E?d:u,C=y.slice(0,20),x=C.length>0?C[0][1]:1;for(let[T,A]of C){let D=f.createDiv("stats-row stats-word-freq-row");D.createSpan({cls:"stats-word-freq-word",text:T}),D.createSpan({cls:"stats-word-freq-count",text:`${A.toLocaleString()} (${(A/w*100).toFixed(2)}%)`}),D.createDiv("stats-bar").createDiv("stats-bar-fill").setCssStyles({width:`${A/x*100}%`})}E||f.createEl("p",{cls:"stats-hint",text:"Showing all words including common words and character names."})};_(!0),g.addEventListener("change",()=>{_(g.checked)});let v=a.filter(([,E])=>E/d>.005);if(v.length>0){let E=e.createDiv("stats-subsection");E.createEl("h5",{cls:"stats-subsection-title stats-overused-title",text:`Overused Words (${v.length})`}),E.createEl("p",{cls:"stats-hint",text:"Words appearing in more than 0.5% of total text (excluding common words)."});let y=E.createDiv("stats-overused-tags");for(let[w,C]of v)y.createSpan({cls:"stats-overused-tag",text:`${w} (${(C/d*100).toFixed(1)}%)`})}}computeReadability(e){var f,_;let n=(_=(f=this.plugin.sceneManager)==null?void 0:f.getEffectiveLocale())!=null?_:"en",i=e.replace(/^---[\s\S]*?---/gm,"").replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g,"$3$1").replace(/[#*_~`>\[\]()!]/g,"").replace(/\n+/g," ").trim(),a=ik(i,n),o=Sn(i,n),s=Math.max(a.length,1),c=Math.max(o.length,1),l=0,d=0,u=_f(n),p=Dl(n);for(let v of o)u&&(l+=this.countSyllables(v)),p?d+=v.length:d+=v.replace(/[^a-zA-Z\u00c0-\u017f\u0400-\u04FF]/g,"").length;let h=Math.round(c/s*10)/10,m=Math.round(d/c*10)/10;if(!u)return{fleschKincaidGrade:0,fleschReadingEase:0,avgSentenceLength:h,avgWordLength:m};let g=l/c;return{fleschKincaidGrade:Math.max(0,Math.round((.39*(c/s)+11.8*g-15.59)*10)/10),fleschReadingEase:Math.max(0,Math.min(100,Math.round(206.835-1.015*(c/s)-84.6*g))),avgSentenceLength:h,avgWordLength:m}}countSyllables(e){let n=e.toLowerCase().replace(/[^a-z]/g,"");if(n.length<=2)return 1;let i=n.replace(/e$/,"").match(/[aeiouy]+/g);return Math.max(1,i?i.length:1)}computeWordFrequency(e){var c,l;let n=(l=(c=this.plugin.sceneManager)==null?void 0:c.getEffectiveLocale())!=null?l:"en",i=e.replace(/^---[\s\S]*?---/gm,"").replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g,"$3$1").replace(/[#*_~`>\[\]()!]/g,"").toLowerCase(),a=Du(n),o=Sn(i,n).map(d=>kl(d,n)).filter(d=>qs(d,n,a)),s={};for(let d of o)s[d]=(s[d]||0)+1;return Object.entries(s).sort(([,d],[,u])=>u-d)}computeAllWordFrequency(e){var s,c;let n=(c=(s=this.plugin.sceneManager)==null?void 0:s.getEffectiveLocale())!=null?c:"en",i=e.replace(/^---[\s\S]*?---/gm,"").replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g,"$3$1").replace(/[#*_~`>\[\]()!]/g,"").toLowerCase(),a=Sn(i,n).map(l=>kl(l,n)).filter(l=>l.length>0),o={};for(let l of a)o[l]=(o[l]||0)+1;return Object.entries(o).sort(([,l],[,d])=>d-l)}renderEchoFinderPlaceholder(e,n){let i=n.filter(s=>s.body&&s.body.trim().length>0);if(i.length===0){e.createEl("p",{cls:"stats-empty",text:"No scene body text available for echo analysis."});return}if(this.echoCache){this.renderEchoResults(e,this.echoCache);return}let a=e.createDiv("stats-spinner-wrap"),o=a.createSpan({cls:"stats-spinner"});Mr.setIcon(o,"loader"),a.createSpan({text:" Finding echoes\u2026"}),window.requestAnimationFrame(()=>{this.echoCache=this.computeEchoes(i),a.remove(),this.renderEchoResults(e,this.echoCache)})}computeEchoes(e){var d,u;let n=(u=(d=this.plugin.sceneManager)==null?void 0:d.getEffectiveLocale())!=null?u:"en",i=Du(n),a=[],o=[],s={},c=0;for(let p of e){let h=this.extractWords(p.body);for(let m of h)qs(m,n,i)&&(s[m]=(s[m]||0)+1,c++)}let l={};for(let[p,h]of Object.entries(s))l[p]=h/c;for(let p of e){let h=p.body,m=h.replace(/([.!?])\s+/g,"$1").split("").filter(y=>y.trim().length>0),g=this.extractWords(h),f={},_=g.filter(y=>qs(y,n,i)).length;for(let y of g)qs(y,n,i)&&(f[y]=(f[y]||0)+1);let v=m.map(y=>this.extractWords(y).filter(w=>qs(w,n,i))),b={};for(let y=0;y<v.length;y++){let w=new Set;for(let C=Math.max(0,y-2);C<y;C++)for(let x of v[C])w.add(x);for(let C of v[y])w.has(C)&&(b[C]=(b[C]||0)+1)}let S=Object.entries(b).filter(([,y])=>y>=2).sort(([,y],[,w])=>w-y).map(([y,w])=>({word:y,proximityHits:w,total:f[y]||0}));S.length>0&&a.push({sceneTitle:p.title||"Untitled",filePath:p.filePath,echoes:S.slice(0,10)});let E=[];if(_>50)for(let[y,w]of Object.entries(f)){let C=w/_,x=l[y]||0;w>=3&&x>0&&C>=x*2.5&&E.push({word:y,sceneRate:C,globalRate:x,count:w})}(E.length>0||S.length>0)&&o.push({sceneTitle:p.title||"Untitled",filePath:p.filePath,favourites:E.sort((y,w)=>w.sceneRate/w.globalRate-y.sceneRate/y.globalRate).slice(0,8),echoCount:S.length})}return{echoes:a,perScene:o}}extractWords(e){var a,o;let n=(o=(a=this.plugin.sceneManager)==null?void 0:a.getEffectiveLocale())!=null?o:"en",i=e.replace(/^---[\s\S]*?---/gm,"").replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g,"$3$1").replace(/[#*_~`>\[\]()!]/g,"").toLowerCase();return Sn(i,n).map(s=>kl(s,n)).filter(s=>s.length>0)}renderEchoResults(e,n){let{echoes:i,perScene:a}=n;if(i.length===0){e.createEl("p",{cls:"stats-empty",text:"No significant word echoes detected. Great variety!"});return}let o=e.createDiv("stats-subsection");o.createEl("h5",{cls:"stats-subsection-title",text:`Proximity Echoes (${i.length} scene${i.length!==1?"s":""})`}),o.createEl("p",{cls:"stats-hint",text:"Words repeated within 3 sentences of each other \u2014 often unintentional."});let s=o.createDiv("stats-echo-list");for(let l of i){let d=s.createDiv("stats-echo-scene");d.createEl("a",{text:l.sceneTitle,cls:"stats-scene-link"}).addEventListener("click",()=>{this.app.workspace.openLinkText(l.filePath,"",!0)});let p=d.createDiv("stats-overused-tags");for(let h of l.echoes)p.createSpan({cls:"stats-echo-tag",text:`${h.word} \xD7${h.proximityHits}`,title:`"${h.word}" appears close together ${h.proximityHits} times (${h.total} total in scene)`})}let c=a.filter(l=>l.favourites.length>0);if(c.length>0){let l=e.createDiv("stats-subsection");l.createEl("h5",{cls:"stats-subsection-title stats-overused-title",text:"Scene-specific favourite words"}),l.createEl("p",{cls:"stats-hint",text:"Words used much more in a specific scene than in the rest of the manuscript."});let d=l.createDiv("stats-echo-list");for(let u of c){let p=d.createDiv("stats-echo-scene");p.createEl("a",{text:u.sceneTitle,cls:"stats-scene-link"}).addEventListener("click",()=>{this.app.workspace.openLinkText(u.filePath,"",!0)});let m=p.createDiv("stats-overused-tags");for(let g of u.favourites){let f=(g.sceneRate/g.globalRate).toFixed(1);m.createSpan({cls:"stats-overused-tag",text:`${g.word} (${f}\xD7)`,title:`"${g.word}" appears ${g.count} times \u2014 ${f}\xD7 the manuscript average`})}}}}renderPacingCoach(e,n){let i=this.sceneManager.queryService.getFilteredScenes(void 0,{field:"sequence",direction:"asc"});if(i.length<3)return;let a=e.createDiv("stats-subsection");a.createEl("h5",{cls:"stats-subsection-title",text:"Pacing coach"}),a.createEl("p",{cls:"stats-hint",text:"Scene length (bars) with conflict presence (dots). Long scenes without conflict may slow pacing."});let o=Math.max(...i.map(_=>this.getSceneCount(_)),1),s=a.createDiv("pacing-coach-chart");for(let _ of i){let v=this.getSceneCount(_),b=!!(_.conflict&&_.conflict.trim().length>0),S=v/o*100,E=s.createDiv("pacing-coach-col"),y=E.createDiv("pacing-coach-bar");y.setCssStyles({height:`${Math.max(2,S)}%`}),!b&&v>0&&y.addClass("pacing-no-conflict");let w=E.createDiv("pacing-coach-dot");b&&w.addClass("pacing-has-conflict");let C=_.act!==void 0?` (${et(_.act)})`:"";y.setAttribute("title",`${_.title||"Untitled"}${C}
 ${v.toLocaleString()} ${this.getSceneCountLabel().toLowerCase()}${b?`
 \u2713 Has conflict`:`
-\u2717 No conflict`}`)}let c=a.createDiv("pacing-coach-legend"),l=c.createSpan({cls:"pacing-coach-legend-item"});l.createSpan({cls:"pacing-coach-legend-swatch pacing-coach-bar-swatch"}),l.createSpan({text:" With conflict"});let d=c.createSpan({cls:"pacing-coach-legend-item"});d.createSpan({cls:"pacing-coach-legend-swatch pacing-coach-noconflict-swatch"}),d.createSpan({text:" No conflict"});let u=i.filter(_=>_.conflict&&_.conflict.trim().length>0),p=u.length>0?Math.round(u.reduce((_,v)=>_+this.getSceneCount(v),0)/u.length):0,h=i.filter(_=>!_.conflict||_.conflict.trim().length===0),m=h.length>0?Math.round(h.reduce((_,v)=>_+this.getSceneCount(v),0)/h.length):0,g=a.createDiv("stats-sprint-row");this.createStatCard(g,"swords","With conflict",`${u.length} scenes (avg ${p.toLocaleString()} words)`),this.createStatCard(g,"minus-circle","No conflict",`${h.length} scenes (avg ${m.toLocaleString()} words)`);let f=h.filter(_=>this.getSceneCount(_)>p*1.5&&this.getSceneCount(_)>500).sort((_,v)=>this.getSceneCount(v)-this.getSceneCount(_));if(f.length>0){let _=a.createDiv("stats-subsection");_.createEl("p",{cls:"stats-hint stats-overused-title",text:`${f.length} long scene${f.length!==1?"s":""} without conflict \u2014 potential pacing issues:`});let v=_.createEl("ul",{cls:"stats-list"});for(let b of f.slice(0,8)){let S=v.createEl("li");S.createEl("a",{text:b.title||"Untitled",cls:"stats-scene-link"}).addEventListener("click",()=>{this.app.workspace.openLinkText(b.filePath,"",!0)}),S.createSpan({text:` \u2014 ${this.getSceneCount(b).toLocaleString()} ${this.getSceneCountLabel().toLowerCase()}, no conflict`})}}}renderWarnings(e,n){if(this.plugin.settings.enablePlotHoleDetection&&n.length>0){let i=Np.validate(n);if(i.length===0){let a=e.createDiv("stats-ok"),o=a.createSpan();Mr.setIcon(o,"check-circle"),a.createSpan({text:" No issues detected"})}else{let a=new Map;for(let d of i){let u=a.get(d.category)||[];u.push(d),a.set(d.category,u)}let o=i.filter(d=>d.severity==="error").length,s=i.filter(d=>d.severity==="warning").length,c=i.filter(d=>d.severity==="info").length,l=e.createDiv("stats-warning-summary");o>0&&l.createSpan({cls:"stats-severity-error",text:`${o} error${o>1?"s":""}`}),s>0&&l.createSpan({cls:"stats-severity-warning",text:`${s} warning${s>1?"s":""}`}),c>0&&l.createSpan({cls:"stats-severity-info",text:`${c} info`});for(let[d,u]of a){let p=e.createDiv("stats-warning-category");p.createEl("h5",{text:d});let h=p.createEl("ul",{cls:"stats-list stats-warning-list"});for(let m of u){let g=h.createEl("li",{cls:`stats-severity-${m.severity}`}),f=g.createSpan({cls:"stats-warning-icon"});switch(m.severity){case"error":Mr.setIcon(f,"x-circle");break;case"warning":Mr.setIcon(f,"alert-triangle");break;case"info":Mr.setIcon(f,"info");break}g.createSpan({text:` ${m.message}`})}}}}else n.length===0?e.createEl("p",{text:"No scenes to analyze."}):e.createEl("p",{cls:"stats-ok",text:"Plot hole detection is disabled. Enable it in settings \u2014 advanced."})}getSceneCountLabel(){return this.plugin.settings.countUnit==="chars"?"Characters":"Words"}getSceneCountNoun(){return this.plugin.settings.countUnit==="chars"?"character":"word"}getSceneCount(e){return this.plugin.settings.countUnit==="chars"?e.charcount||0:e.wordcount||0}getTotalSceneCount(e){return this.plugin.settings.countUnit==="chars"?e.totalChars:e.totalWords}createStatCard(e,n,i,a){let o=e.createDiv("stats-sprint-card"),s=o.createSpan({cls:"stats-sprint-card-icon"});Mr.setIcon(s,n),o.createDiv({cls:"stats-sprint-card-value",text:a}),o.createDiv({cls:"stats-sprint-card-label",text:i})}renderProgressRing(e,n,i,a,o,s=92){let c=e.createDiv("stats-ring");c.createDiv({cls:"stats-ring-label",text:n});let l=a>0?a:1,d=i/l,u=Math.round(d*100),p=i>=a&&a>0,h=10,m=(s-h)/2,g=s/2,f=2*Math.PI*m,_=Math.max(0,Math.min(1,d)),v=f*_,b=p?"var(--sl-success, #4CAF50)":o,S="http://www.w3.org/2000/svg",E=activeDocument.createElementNS(S,"svg");E.setAttribute("width",String(s)),E.setAttribute("height",String(s)),E.setAttribute("viewBox",`0 0 ${s} ${s}`),E.classList.add("stats-ring-svg");let y=activeDocument.createElementNS(S,"circle");y.setAttribute("cx",String(g)),y.setAttribute("cy",String(g)),y.setAttribute("r",String(m)),y.setAttribute("fill","none"),y.setAttribute("stroke","var(--background-modifier-border, #444)"),y.setAttribute("stroke-width",String(h)),E.appendChild(y);let w=activeDocument.createElementNS(S,"circle");w.setAttribute("cx",String(g)),w.setAttribute("cy",String(g)),w.setAttribute("r",String(m)),w.setAttribute("fill","none"),w.setAttribute("stroke",b),w.setAttribute("stroke-width",String(h)),w.setAttribute("stroke-linecap","round"),w.setAttribute("stroke-dasharray",`${v} ${f}`),w.setAttribute("transform",`rotate(-90 ${g} ${g})`),E.appendChild(w);let C=activeDocument.createElementNS(S,"text");C.setAttribute("x",String(g)),C.setAttribute("y",String(g)),C.setAttribute("text-anchor","middle"),C.setAttribute("dominant-baseline","central"),C.setAttribute("class","stats-ring-pct"),C.textContent=`${u}%`,E.appendChild(C),c.appendChild(E),c.createDiv({cls:"stats-ring-sub",text:`${i.toLocaleString()} / ${a.toLocaleString()}`})}median(e){if(e.length===0)return 0;let n=[...e].sort((a,o)=>a-o),i=Math.floor(n.length/2);return n.length%2!==0?n[i]:Math.round((n[i-1]+n[i])/2)}refresh(){this.proseCache=null,this.echoCache=null,this.rootContainer&&this.renderView(this.rootContainer)}};var ct=require("obsidian"),Se=Mt(require("obsidian"));rn();Ua();var Op=[{title:"Overview",icon:"globe",fields:[{key:"name",label:"Name",placeholder:"Name of the world or setting"},{key:"nickname",label:"Nickname / Alias",placeholder:"Alternative names (comma-separated)",multiline:!0},{key:"description",label:"Description",placeholder:"General overview of this world",multiline:!0}]},{title:"Geography",icon:"mountain",fields:[{key:"geography",label:"Geography",placeholder:"Environmental conditions, weather, climate, terrain",multiline:!0}]},{title:"Culture",icon:"landmark",fields:[{key:"culture",label:"Culture",placeholder:"Norms, values, traditions, social structures",multiline:!0}]},{title:"Politics",icon:"crown",fields:[{key:"politics",label:"Politics",placeholder:"Systems of power and control, governance",multiline:!0}]},{title:"Magic / Technology",icon:"wand-2",fields:[{key:"magicTechnology",label:"Magic / Technology",placeholder:"Rules and limitations that govern how things work",multiline:!0}]},{title:"Beliefs",icon:"book-open",fields:[{key:"beliefs",label:"Beliefs",placeholder:"Myths, spiritual, religious, and philosophical beliefs",multiline:!0}]},{title:"Economy",icon:"coins",fields:[{key:"economy",label:"Economy",placeholder:"Trade, currency, resources, wealth distribution",multiline:!0}]},{title:"History",icon:"scroll-text",fields:[{key:"history",label:"History",placeholder:"Key historical events, eras, conflicts",multiline:!0}]}],Lp=[{title:"Overview",icon:"map-pin",fields:[{key:"name",label:"Name",placeholder:"Name of this location"},{key:"nickname",label:"Nickname / Alias",placeholder:"Alternative names (comma-separated)",multiline:!0},{key:"locationType",label:"Type",placeholder:"City, building, wilderness, room\u2026"},{key:"description",label:"Description",placeholder:"Sights, sounds, smells \u2014 what does it feel like?",multiline:!0}]},{title:"Atmosphere",icon:"cloud",fields:[{key:"atmosphere",label:"Atmosphere / Mood",placeholder:"The feeling this place evokes",multiline:!0}]},{title:"Story Significance",icon:"bookmark",fields:[{key:"significance",label:"Significance",placeholder:"Why this place matters to the story",multiline:!0}]},{title:"People",icon:"users",fields:[{key:"inhabitants",label:"Inhabitants",placeholder:"Key inhabitants or characters often present",multiline:!0}]},{title:"Connections",icon:"link",fields:[{key:"connectedLocations",label:"Connected Locations",placeholder:"Nearby or linked locations"},{key:"mapNotes",label:"Map Notes",placeholder:"Coordinates, spatial relationships, layout notes",multiline:!0}]},{title:"Linking & Matching",icon:"link",fields:[{key:"entryType",label:"Type",placeholder:"Sub-type (e.g. Stronghold, Landmark, Region\u2026)"},{key:"caseSensitive",label:"Case-sensitive matching",placeholder:"Off \u2014 match regardless of case",toggle:!0},{key:"excludeTerms",label:"Exclude terms",placeholder:"Comma-separated phrases that should NOT link here",multiline:!0}]}],e_=["City","Town","Village","Neighborhood","Building","Room","Wilderness","Forest","Mountain","River","Lake","Sea","Island","Harbour","Road","Vehicle","Region","Country","Other"],iN=["name","image","gallery","nickname","description","geography","culture","politics","magicTechnology","beliefs","economy","history","books","booksById","sortOrder","entryType","caseSensitive","excludeTerms"],aN=["name","image","gallery","nickname","locationType","world","parent","description","atmosphere","significance","inhabitants","connectedLocations","mapNotes","books","booksById","sortOrder","entryType","caseSensitive","excludeTerms"];Ka();var Mp=class Mp extends ct.ItemView{constructor(e,n,i){super(e);this.selectedItem=null;this.rootContainer=null;this.collapsedSections=new Set;this.collapsedTreeNodes=new Set;this.autoSaveTimer=null;this.pendingSaveDraft=null;this.undoSnapshot=null;this._lastSaveTime=0;this.originalItemName=null;this.originalItemType=null;this.searchText="";this.sortBy="name";this.groupingMode="none";this.activeVisualGroupId="";this.bookFilterActive=!1;this._portaledDropdowns=[];this.plugin=n,this.sceneManager=i,this.locationManager=n.locationManager}clearPortaledDropdowns(){for(let e of this._portaledDropdowns)try{e.remove()}catch(n){}this._portaledDropdowns=[]}getViewType(){return hn}getDisplayText(){var n,i,a;let e=(a=(i=(n=this.plugin)==null?void 0:n.sceneManager)==null?void 0:i.activeProject)==null?void 0:a.title;return e?`StoryLine - ${e}`:"StoryLine"}getIcon(){return"map-pin"}async onOpen(){this.plugin.storyLeaf=this.leaf;let e=this.containerEl.children[1];e.empty(),e.addClass("story-line-location-container"),Mn(e),this.rootContainer=e,await this.sceneManager.initialize(),await this.plugin.reloadEntities();let n=this.getLocationVisualGroups();n.length>0&&(this.groupingMode="named",this.activeVisualGroupId=n[0].id),this.renderView(e)}async onClose(){await this.flushPendingSave(),activeDocument.querySelectorAll(".gallery-lightbox-window").forEach(e=>e.remove()),this.clearPortaledDropdowns()}renderView(e){this.clearPortaledDropdowns(),e.empty();let n=e.createDiv("story-line-toolbar");n.createDiv("story-line-title-row").createEl("h3",{cls:"story-line-view-title",text:"StoryLine"}),En(n,hn,this.plugin,this.leaf);let a=n.createDiv("story-line-toolbar-controls");xp(e,{activeId:"locations-pseudo",leaf:this.leaf,plugin:this.plugin});let o=a.createEl("button",{cls:"clickable-icon"});Se.setIcon(o,"map-plus"),fe(o,"New World"),o.addEventListener("click",()=>this.promptNewWorld());let s=a.createEl("button",{cls:"clickable-icon"});if(Se.setIcon(s,"map-pin-plus-inside"),fe(s,"New Location"),s.addEventListener("click",()=>this.promptNewLocation()),!this.selectedItem){let l=a.createEl("button",{cls:"clickable-icon"});Se.setIcon(l,"folder-tree"),fe(l,"Manage visual groups"),l.addEventListener("click",()=>this.openLocationVisualGroupManager())}let c=e.createDiv("story-line-location-content");this.selectedItem?this.renderDetail(c):this.renderOverview(c)}renderOverview(e){var x;e.empty(),e.createEl("h3",{text:"Worlds & locations"});let n=e.createDiv("codex-search-row"),i=n.createEl("input",{cls:"codex-search-input",attr:{type:"text",placeholder:"Search locations\u2026"}});i.value=this.searchText;let a=((x=activeDocument.activeElement)==null?void 0:x.closest(".story-line-location-container"))!=null;i.addEventListener("input",()=>{this.searchText=i.value,this.renderOverview(e)}),a&&window.setTimeout(()=>{i.focus(),i.selectionStart=i.selectionEnd=i.value.length},0),n.createSpan({cls:"codex-sort-label",text:"Sort by"});let o=n.createEl("select",{cls:"codex-sort-select"});for(let T of[{value:"name",label:"Name"},{value:"modified",label:"Last edited"},{value:"created",label:"Date created"},{value:"type",label:"Type"},{value:"manual",label:"Manual"}]){let A=o.createEl("option",{text:T.label,value:T.value});this.sortBy===T.value&&(A.selected=!0)}o.addEventListener("change",()=>{this.sortBy=o.value,this.renderOverview(e)});let s=this.getLocationVisualGroups();if(s.length>0){n.createSpan({cls:"codex-sort-label",text:"Group by"});let T=n.createEl("select",{cls:"codex-sort-select"});T.createEl("option",{text:"None",value:"none"});for(let A of s){let D=T.createEl("option",{text:A.name,value:A.id});this.groupingMode==="named"&&this.activeVisualGroupId===A.id&&(D.selected=!0)}this.groupingMode==="none"&&(T.value="none"),T.addEventListener("change",()=>{this.groupingMode=T.value==="none"?"none":"named",this.activeVisualGroupId=T.value==="none"?"":T.value,this.renderOverview(e)})}let c=this.plugin.sceneManager.getCurrentBookTitle(),l=this.plugin.sceneManager.getCurrentBookId();if(!!this.plugin.sceneManager.getSeriesFolder()&&c){let T=n.createEl("button",{cls:`codex-book-filter${this.bookFilterActive?" active":""}`,text:this.bookFilterActive?`Showing: ${c}`:"All books"});fe(T,this.bookFilterActive?"Click to show all series locations":`Click to hide entries not in \u201C${c}\u201D`),T.addEventListener("click",()=>{this.bookFilterActive=!this.bookFilterActive,this.renderOverview(e)})}let u=this.searchText.toLowerCase(),p=this.locationManager.getAllWorlds(),h=this.locationManager.getOrphanLocations(),m=this.sceneManager.getAllScenes().filter(T=>!T.inactive),g=u?p.filter(T=>T.name.toLowerCase().includes(u)?!0:this.locationManager.getLocationsForWorld(T.name).some(D=>D.name.toLowerCase().includes(u))):[...p],f=u?h.filter(T=>T.name.toLowerCase().includes(u)):[...h];if(this.bookFilterActive&&c){let T=c.toLowerCase(),A=D=>l&&D.booksById&&D.booksById.length>0?D.booksById.includes(l):!D.books||D.books.length===0?!0:D.books.some(L=>L.toLowerCase()===T);g=g.filter(D=>this.locationManager.getLocationsForWorld(D.name).some(A)),f=f.filter(A)}let _=T=>{this.sortBy==="manual"?T.sort((A,D)=>{var k,R;let L=(k=A.sortOrder)!=null?k:Number.MAX_SAFE_INTEGER,O=(R=D.sortOrder)!=null?R:Number.MAX_SAFE_INTEGER;return L!==O?L-O:A.name.toLowerCase().localeCompare(D.name.toLowerCase())}):this.sortBy==="modified"?T.sort((A,D)=>{var L,O;return((L=D.modified)!=null?L:"").localeCompare((O=A.modified)!=null?O:"")}):this.sortBy==="created"?T.sort((A,D)=>{var L,O;return((L=D.created)!=null?L:"").localeCompare((O=A.created)!=null?O:"")}):this.sortBy==="type"?T.sort((A,D)=>{let L=A.locationType||"",O=D.locationType||"";return L!==O?L.localeCompare(O):A.name.toLowerCase().localeCompare(D.name.toLowerCase())}):T.sort((A,D)=>A.name.toLowerCase().localeCompare(D.name.toLowerCase()))};if(_(g),_(f),g.length===0&&f.length===0&&!u&&!(this.groupingMode==="named"&&s.length>0)){let T=e.createDiv("location-empty-state"),A=T.createDiv("location-empty-icon");Se.setIcon(A,"map"),T.createEl("h4",{text:"No worlds or locations yet"}),T.createEl("p",{text:'Click "+ world" to create a worldbuilding profile, or "+ location" to add a specific place.'});return}let v=e.createDiv("location-tree"),b=g.map(T=>T.filePath),S=f.filter(T=>!T.parent||!f.some(A=>A.name.toLowerCase()===T.parent.toLowerCase())),E=(T,A)=>{let D=A?g.filter(O=>A.entryPaths.includes(O.filePath)):g.filter(O=>!s.some(k=>k.entryPaths.includes(O.filePath))),L=A?S.filter(O=>A.entryPaths.includes(O.filePath)):S.filter(O=>!s.some(k=>k.entryPaths.includes(O.filePath)));A&&(D.sort((O,k)=>A.entryPaths.indexOf(O.filePath)-A.entryPaths.indexOf(k.filePath)),L.sort((O,k)=>A.entryPaths.indexOf(O.filePath)-A.entryPaths.indexOf(k.filePath)));for(let O of D)this.renderWorldNode(T,O,m,b,s);if(L.length>0){D.length>0&&T.createDiv("location-orphan-divider").createSpan({text:"Standalone Locations"});for(let O of L)this.renderLocationNode(T,O,m,0,[],s)}};if(this.groupingMode==="named"){for(let A of s){let D=v.createDiv("codex-visual-group"),L=D.createDiv({cls:"codex-entry-group-heading",text:A.name});tc(D,L,A,s,()=>this.plugin.saveSettings(),()=>{this.rootContainer&&this.renderOverview(this.rootContainer)}),this.attachLocationGroupDropTarget(D,A,s),E(D.createDiv("codex-visual-group-items"),A)}if(g.some(A=>!s.some(D=>D.entryPaths.includes(A.filePath)))||S.some(A=>!s.some(D=>D.entryPaths.includes(A.filePath)))){let A=v.createDiv("codex-visual-group");A.createDiv({cls:"codex-entry-group-heading",text:"Ungrouped"}),this.attachLocationGroupDropTarget(A,void 0,s),E(A.createDiv("codex-visual-group-items"))}}else E(v);let y=[...this.locationManager.getAllLocations().map(T=>T.name.toLowerCase()),...p.map(T=>T.name.toLowerCase())],C=this.sceneManager.queryService.getUniqueValues("location").filter(T=>!y.includes(T.toLowerCase()));if(u&&(C=C.filter(T=>T.toLowerCase().includes(u))),C.length>0){v.createDiv("location-orphan-divider").createSpan({text:"Locations from scenes (no profile yet)"});for(let A of C)this.renderUnlinkedLocation(v,A,m)}}renderWorldNode(e,n,i,a=[],o=[]){let s=e.createDiv("location-tree-node location-world-node"),c=this.collapsedTreeNodes.has(n.filePath),l=s.createDiv("location-tree-header");l.setAttribute("draggable","true"),l.addEventListener("dragstart",h=>{var m,g;(m=h.dataTransfer)==null||m.setData("application/x-storyline-world",n.filePath),(g=h.dataTransfer)==null||g.setData("application/x-storyline-location-group",n.filePath),h.dataTransfer&&(h.dataTransfer.effectAllowed="move")}),l.addEventListener("dragover",h=>{var f,_,v,b;let m=(_=(f=h.dataTransfer)==null?void 0:f.types)==null?void 0:_.includes("application/x-storyline-world"),g=(b=(v=h.dataTransfer)==null?void 0:v.types)==null?void 0:b.includes("application/x-storyline-location");!m&&!g||(h.preventDefault(),l.addClass("location-tree-drop-target"))}),l.addEventListener("dragleave",()=>l.removeClass("location-tree-drop-target")),l.addEventListener("drop",h=>{var _,v,b;h.preventDefault(),l.removeClass("location-tree-drop-target");let m=(_=h.dataTransfer)==null?void 0:_.getData("application/x-storyline-location-group");if(m&&m!==n.filePath&&this.groupingMode==="named"&&o.length>0){this.reorderVisualLocationGroup(m,n.filePath,o);return}let g=(v=h.dataTransfer)==null?void 0:v.getData("application/x-storyline-world");if(g&&g!==n.filePath){this.reorderWorlds(g,n.filePath,a);return}let f=(b=h.dataTransfer)==null?void 0:b.getData("application/x-storyline-location");f&&this.reparentLocation(f,{world:n.name,parent:void 0})});let d=l.createSpan("location-tree-chevron"),u=this.locationManager.getLocationsForWorld(n.name);u.length>0?(Se.setIcon(d,c?"chevron-right":"chevron-down"),d.addEventListener("click",h=>{h.stopPropagation(),this.collapsedTreeNodes.has(n.filePath)?this.collapsedTreeNodes.delete(n.filePath):this.collapsedTreeNodes.add(n.filePath),this.renderView(this.rootContainer)})):d.setCssStyles({width:"14px"});let p=l.createSpan("location-tree-icon");if(n.image)try{let h=Pt(this.app,n.image),m=p.createEl("img",{attr:{src:h,alt:n.name},cls:"location-tree-thumb"});m.onerror=()=>{m.remove(),Se.setIcon(p,"globe")}}catch(h){Se.setIcon(p,"globe")}else Se.setIcon(p,"globe");if(l.createSpan({cls:"location-tree-name",text:n.name}),this.renderLocationGroupSelect(l,n,o),l.addEventListener("click",()=>{this.selectedItem=n.filePath,this.renderView(this.rootContainer)}),l.addEventListener("contextmenu",h=>{h.preventDefault(),this.showItemContextMenu(n,h)}),!c&&u.length>0){let h=s.createDiv("location-tree-children"),m=this.locationManager.getAllLocations(),g=u.filter(_=>!_.parent||!m.some(v=>v.name.toLowerCase()===_.parent.toLowerCase()));this.sortLocations(g);let f=g.map(_=>_.name);for(let _ of g)this.renderLocationNode(h,_,i,1,f,o)}}renderLocationNode(e,n,i,a,o=[],s=[]){let c=e.createDiv("location-tree-node"),l=this.locationManager.getChildLocations(n.name);this.sortLocations(l);let d=this.collapsedTreeNodes.has(n.filePath),u=c.createDiv("location-tree-header");u.setCssStyles({paddingLeft:`${a*20}px`}),u.setAttribute("draggable","true"),u.addEventListener("dragstart",f=>{var _,v,b;(_=f.dataTransfer)==null||_.setData("application/x-storyline-location",n.name),(v=f.dataTransfer)==null||v.setData("application/x-storyline-location-group",n.filePath),(b=f.dataTransfer)==null||b.setData("text/plain",n.name),f.dataTransfer&&(f.dataTransfer.effectAllowed="move")}),u.addEventListener("dragover",f=>{var v,b;(b=(v=f.dataTransfer)==null?void 0:v.types)!=null&&b.includes("application/x-storyline-location")&&(f.preventDefault(),u.addClass("location-tree-drop-target"))}),u.addEventListener("dragleave",()=>u.removeClass("location-tree-drop-target")),u.addEventListener("drop",f=>{var b,S,E,y,w,C;f.preventDefault(),u.removeClass("location-tree-drop-target");let _=(b=f.dataTransfer)==null?void 0:b.getData("application/x-storyline-location-group");if(_&&_!==n.filePath&&this.groupingMode==="named"&&s.length>0){this.reorderVisualLocationGroup(_,n.filePath,s);return}let v=(S=f.dataTransfer)==null?void 0:S.getData("application/x-storyline-location");if(v&&v!==n.name){let x=this.locationManager.getAllLocations().find(A=>A.name===v);x&&((E=x.world)!=null?E:"").toLowerCase()===((y=n.world)!=null?y:"").toLowerCase()&&((w=x.parent)!=null?w:"").toLowerCase()===((C=n.parent)!=null?C:"").toLowerCase()?this.reorderLocations(v,n.name,o):this.reparentLocation(v,{world:n.world,parent:n.name})}});let p=u.createSpan("location-tree-chevron");l.length>0?(Se.setIcon(p,d?"chevron-right":"chevron-down"),p.addEventListener("click",f=>{f.stopPropagation(),this.collapsedTreeNodes.has(n.filePath)?this.collapsedTreeNodes.delete(n.filePath):this.collapsedTreeNodes.add(n.filePath),this.renderView(this.rootContainer)})):p.setCssStyles({width:"14px"});let h=u.createSpan("location-tree-icon");if(n.image)try{let f=Pt(this.app,n.image),_=h.createEl("img",{attr:{src:f,alt:n.name},cls:"location-tree-thumb"});_.onerror=()=>{_.remove(),Se.setIcon(h,"map-pin")}}catch(f){Se.setIcon(h,"map-pin")}else Se.setIcon(h,"map-pin");u.createSpan({cls:"location-tree-name",text:n.name}),this.renderLocationGroupSelect(u,n,s);let m=n.name.toLowerCase(),g=i.filter(f=>{var _;return((_=f.location)==null?void 0:_.toLowerCase())===m}).length;if(g>0&&u.createSpan({cls:"location-tree-count",text:`${g} sc`}),n.locationType&&u.createSpan({cls:"location-type-badge",text:n.locationType}),u.addEventListener("click",()=>{this.selectedItem=n.filePath,this.renderView(this.rootContainer)}),u.addEventListener("contextmenu",f=>{f.preventDefault(),this.showItemContextMenu(n,f)}),!d&&l.length>0){let f=c.createDiv("location-tree-children"),_=l.map(v=>v.name);for(let v of l)this.renderLocationNode(f,v,i,a+1,_,s)}}getLocationVisualGroups(){return Vl(this.plugin.settings,"location")}async reorderVisualLocationGroup(e,n,i){for(let o of i)o.entryPaths=o.entryPaths.filter(s=>s!==e);let a=i.find(o=>o.entryPaths.includes(n));if(a){let o=a.entryPaths.indexOf(n);a.entryPaths.splice(Math.max(0,o),0,e)}await this.plugin.saveSettings(),this.rootContainer&&this.renderView(this.rootContainer)}attachLocationGroupDropTarget(e,n,i){e.addEventListener("dragover",a=>{var o;(o=a.dataTransfer)!=null&&o.types.includes("application/x-storyline-location-group")&&(a.preventDefault(),e.addClass("codex-visual-group-drop-target"))}),e.addEventListener("dragleave",a=>{e.contains(a.relatedTarget)||e.removeClass("codex-visual-group-drop-target")}),e.addEventListener("drop",a=>{var s;a.preventDefault(),e.removeClass("codex-visual-group-drop-target");let o=(s=a.dataTransfer)==null?void 0:s.getData("application/x-storyline-location-group");if(o){for(let c of i)c.entryPaths=c.entryPaths.filter(l=>l!==o);n&&n.entryPaths.push(o),this.plugin.saveSettings(),this.rootContainer&&this.renderView(this.rootContainer)}})}renderLocationGroupSelect(e,n,i){if(i.length===0)return;let a=e.createEl("select",{cls:"codex-entry-group-select location-tree-group-select",attr:{"aria-label":`Visual group for ${n.name}`}});a.createEl("option",{text:"No group",value:""});let o=i.find(s=>s.entryPaths.includes(n.filePath));for(let s of i){let c=a.createEl("option",{text:s.name,value:s.id});c.selected=s.id===(o==null?void 0:o.id)}a.addEventListener("click",s=>s.stopPropagation()),a.addEventListener("mousedown",s=>s.stopPropagation()),a.addEventListener("change",()=>{for(let c of i)c.entryPaths=c.entryPaths.filter(l=>l!==n.filePath);let s=i.find(c=>c.id===a.value);s&&s.entryPaths.push(n.filePath),this.plugin.saveSettings(),this.rootContainer&&this.renderView(this.rootContainer)})}openLocationVisualGroupManager(){Ap(this.app,this.plugin.settings,"location","locations",()=>this.plugin.saveSettings(),()=>{let e=this.getLocationVisualGroups();e.length>0&&(this.groupingMode="named",this.activeVisualGroupId=e[e.length-1].id),this.rootContainer&&this.renderView(this.rootContainer)})}sortLocations(e){this.sortBy==="manual"&&e.sort((n,i)=>{var s,c;let a=(s=n.sortOrder)!=null?s:Number.MAX_SAFE_INTEGER,o=(c=i.sortOrder)!=null?c:Number.MAX_SAFE_INTEGER;return a!==o?a-o:n.name.toLowerCase().localeCompare(i.name.toLowerCase())})}renderUnlinkedLocation(e,n,i){let o=e.createDiv("location-tree-node location-unlinked-node").createDiv("location-tree-header");o.createSpan({cls:"location-tree-chevron"}).setCssStyles({width:"14px"});let s=o.createSpan("location-tree-icon");Se.setIcon(s,"map-pin"),o.createSpan({cls:"location-tree-name",text:n});let c=n.toLowerCase(),l=i.filter(u=>{var p;return((p=u.location)==null?void 0:p.toLowerCase())===c}).length;l>0&&o.createSpan({cls:"location-tree-count",text:`${l} sc`}),o.createEl("button",{cls:"location-create-profile-btn",text:"Create"}).addEventListener("click",async u=>{u.stopPropagation(),await this.createLocationFromName(n)})}async reparentLocation(e,n){let i=this.locationManager.getAllLocations().find(o=>o.name===e);if(!i)return;if(n.parent){let o=i,s=new Set;for(;o&&!s.has(o.filePath);){if(s.add(o.filePath),o.name===n.parent)return;o=o.parent?this.locationManager.getAllLocations().find(c=>c.name===o.parent):void 0}}let a={...i,world:n.world,parent:n.parent};await this.locationManager.saveLocation(a),this.plugin.refreshOpenViews()}async reorderLocations(e,n,i=[]){var g,f,_,v;let a=this.locationManager.getAllLocations(),o=a.find(b=>b.name===e),s=a.find(b=>b.name===n);if(!o||!s||!(((g=o.world)!=null?g:"").toLowerCase()===((f=s.world)!=null?f:"").toLowerCase()&&((_=o.parent)!=null?_:"").toLowerCase()===((v=s.parent)!=null?v:"").toLowerCase()))return;let l=a.filter(b=>{var S,E,y,w;return((S=b.world)!=null?S:"").toLowerCase()===((E=s.world)!=null?E:"").toLowerCase()&&((y=b.parent)!=null?y:"").toLowerCase()===((w=s.parent)!=null?w:"").toLowerCase()}),d=new Map(l.map(b=>[b.name,b])),u=i.length>0?[...i.map(b=>d.get(b)).filter(b=>!!b),...l.filter(b=>!i.includes(b.name))]:l.sort((b,S)=>{var w,C;let E=(w=b.sortOrder)!=null?w:Number.MAX_SAFE_INTEGER,y=(C=S.sortOrder)!=null?C:Number.MAX_SAFE_INTEGER;return E!==y?E-y:b.name.toLowerCase().localeCompare(S.name.toLowerCase())}),p=u.findIndex(b=>b.name===e),h=u.findIndex(b=>b.name===n);if(p<0||h<0||p===h)return;let[m]=u.splice(p,1);u.splice(h,0,m),await Promise.all(u.map((b,S)=>b.sortOrder===S?Promise.resolve():this.locationManager.saveLocation({...b,sortOrder:S}))),this.sortBy="manual",await this.plugin.refreshOpenViews()}async reorderWorlds(e,n,i=[]){let a=this.locationManager.getAllWorlds(),o=new Map(a.map(u=>[u.filePath,u])),s=i.length>0?[...i.map(u=>o.get(u)).filter(u=>!!u),...a.filter(u=>!i.includes(u.filePath))]:a.sort((u,p)=>{var g,f;let h=(g=u.sortOrder)!=null?g:Number.MAX_SAFE_INTEGER,m=(f=p.sortOrder)!=null?f:Number.MAX_SAFE_INTEGER;return h!==m?h-m:u.name.toLowerCase().localeCompare(p.name.toLowerCase())}),c=s.findIndex(u=>u.filePath===e),l=s.findIndex(u=>u.filePath===n);if(c<0||l<0||c===l)return;let[d]=s.splice(c,1);s.splice(l,0,d),await Promise.all(s.map((u,p)=>u.sortOrder===p?Promise.resolve():this.locationManager.saveWorld({...u,sortOrder:p}))),this.sortBy="manual",await this.plugin.refreshOpenViews()}showItemContextMenu(e,n){var u,p;let i=new Se.Menu,a=this.plugin.sceneManager,o=a.getSeriesFolder(),s=o?`${o}/Codex/Locations`:null,c=a.getProjectLocalLocationFolder(),l=a.getCurrentBookTitle(),d=a.getCurrentBookId();if(i.addItem(h=>h.setTitle(e.name).setDisabled(!0)),i.addSeparator(),o&&s&&c&&(e.filePath.startsWith(s+"/")?i.addItem(m=>m.setTitle("Demote to project (book-only)").setIcon("arrow-down-from-line").onClick(()=>this.moveItemTo(e,c,"demoted"))):i.addItem(m=>m.setTitle("Promote to series (shared)").setIcon("arrow-up-from-line").onClick(()=>this.moveItemTo(e,s,"promoted"))),i.addSeparator()),o&&l){let h=l.toLowerCase(),m=!e.books||e.books.length===0,g=d&&e.booksById&&e.booksById.length>0?e.booksById.includes(d):m||((p=(u=e.books)==null?void 0:u.some(f=>f.toLowerCase()===h))!=null?p:!1);m?i.addItem(f=>f.setTitle(`Restrict to "${l}" only`).setIcon("book-marked").onClick(()=>this.setItemBooks(e,[l]))):g?i.addItem(f=>f.setTitle(`Remove from "${l}"`).setIcon("book-x").onClick(()=>this.setItemBooks(e,(e.books||[]).filter(_=>_.toLowerCase()!==h)))):i.addItem(f=>f.setTitle(`Add to "${l}"`).setIcon("book-plus").onClick(()=>this.setItemBooks(e,[...e.books||[],l]))),i.addItem(f=>f.setTitle("Share across all books").setIcon("books").setDisabled(m).onClick(()=>this.setItemBooks(e,[])))}i.showAtMouseEvent(n)}async moveItemTo(e,n,i){try{await this.locationManager.moveItem(e,n),new ct.Notice(`"${e.name}" ${i}`),await this.plugin.refreshOpenViews()}catch(a){new ct.Notice(`Could not move: ${a.message}`)}}async setItemBooks(e,n){try{let i=this.sceneManager.getProjects(),a=n.map(s=>{var c;return(c=i.find(l=>{var u;let d=(u=l.filePath.substring(0,l.filePath.lastIndexOf("/")).split("/").pop())!=null?u:"";return l.title.toLowerCase()===s.toLowerCase()||d.toLowerCase()===s.toLowerCase()}))==null?void 0:c.bookId}).filter(s=>!!s),o={...e,books:n.length?n:void 0,booksById:a.length?a:void 0};o.type==="world"?await this.locationManager.saveWorld(o):await this.locationManager.saveLocation(o),await this.plugin.refreshOpenViews()}catch(i){new ct.Notice(`Could not update book membership: ${i.message}`)}}renderDetail(e){var C;e.empty();let n=this.locationManager.getItem(this.selectedItem);if(!n){this.selectedItem=null,this.renderOverview(e);return}let i=n.type==="world",a={...n,custom:{...n.custom||{}},universalFields:{...n.universalFields||{}}};this.undoSnapshot={...n,custom:{...n.custom||{}}},this.originalItemName=n.name,this.originalItemType=n.type;let o=e.createDiv("location-detail-header"),s=o.createSpan({cls:"codex-nav-back-link"}),c=s.createSpan();Se.setIcon(c,"circle-arrow-left"),s.createSpan({text:" All Locations"}),s.addEventListener("click",()=>{this.selectedItem=null,this.renderView(this.rootContainer)});let l=o.createDiv("location-detail-header-right"),d=l.createEl("button",{cls:"codex-detail-action-btn",attr:{"aria-label":"Open file"}}),u=d.createSpan();Se.setIcon(u,"file"),fe(d,"Open file"),d.addEventListener("click",()=>this.openFile(n));let p=l.createEl("button",{cls:"codex-detail-action-btn codex-detail-delete-btn",attr:{"aria-label":"Delete"}}),h=p.createSpan();Se.setIcon(h,"trash"),fe(p,"Delete"),p.addEventListener("click",()=>this.confirmDelete(n));let m=e.createDiv("location-detail-type");Se.setIcon(m,i?"globe":"map-pin"),m.createSpan({text:` ${i?"World":"Location"}`});let g=e.createDiv("location-detail-portrait"),f=()=>{if(g.empty(),a.image)try{let T=Pt(this.app,a.image),A=g.createEl("img",{attr:{src:T,alt:a.name}});A.classList.add("location-detail-portrait-img"),A.onerror=()=>{A.remove();let D=g.createDiv("location-detail-portrait-placeholder");Se.setIcon(D,"image")}}catch(T){let A=g.createDiv("location-detail-portrait-placeholder");Se.setIcon(A,"image")}else{let T=g.createDiv("location-detail-portrait-placeholder");Se.setIcon(T,"image"),T.createSpan({text:"Click to add image"})}let x=g.createDiv("location-portrait-change-label");x.textContent=a.image?"Change image":""};f(),g.addEventListener("click",()=>{this.pickImage(a.image).then(async x=>{x!==void 0&&(a.image=x||void 0,a.type==="world"?await this.locationManager.saveWorld(a):await this.locationManager.saveLocation(a),f())})});let _=e.createDiv("location-detail-layout"),v=_.createDiv("location-detail-form"),b=_.createDiv("location-detail-side"),S=i?Op:Lp,E=this.buildCustomSectionsHost(a,S.length);Pr(v,E,0);let y=(C=this.plugin.settings.hiddenCategories.location)!=null?C:[],w=[];for(let x=0;x<S.length;x++){if(y.includes(S[x].title)){w.push(S[x]),Pr(v,E,x+1);continue}this.renderCategory(v,S[x],a),Pr(v,E,x+1)}i||this.renderLocationHierarchy(v,a),this.renderCustomFields(v,a),ec(v,E),w.length>0&&this.renderHiddenCategoriesToggle(v,w,a),this.renderGallery(b,a),i?this.renderWorldSidePanel(b,a):this.renderLocationSidePanel(b,a),this.renderReferencesPanel(b,n.name)}renderCategory(e,n,i){var E;let a=e.createDiv("location-section"),o=this.collapsedSections.has(n.title),s=a.createDiv("location-section-header"),c=s.createSpan("location-section-chevron");Se.setIcon(c,o?"chevron-right":"chevron-down");let l=s.createSpan("location-section-icon");Se.setIcon(l,n.icon),s.createSpan({text:n.title});let d=s.createSpan({cls:"character-section-hide-cat-btn",attr:{title:"Hide this category","aria-label":"Hide this category",role:"button"}});Se.setIcon(d,"eye-off"),d.addEventListener("click",async y=>{y.stopPropagation();let w=this.plugin.settings;w.hiddenCategories.location||(w.hiddenCategories.location=[]);let C=w.hiddenCategories.location;C.includes(n.title)||C.push(n.title),await this.plugin.saveSettings(),this.rootContainer&&this.renderDetail(this.rootContainer)});let u=s.createEl("button",{cls:"character-section-add-field-btn",attr:{title:"Add universal field to this section","aria-label":"Add universal field"}});Se.setIcon(u,"plus"),u.addEventListener("click",y=>{y.stopPropagation();let x=(i.type==="world"?Op:Lp).map(L=>L.title),T=this.plugin.fieldTemplates.getBySection(n.title,"location").map(L=>({id:L.id,label:L.label})),A=n.fields.filter(L=>{var O;return!((O=this.plugin.settings.hiddenFields.location)!=null?O:[]).includes(L.key)}).map(L=>L.key);new Rn(this.app,n.title,null,async(L,O)=>{L.category="location",await this.plugin.fieldTemplates.add(L),O!==void 0&&await this.plugin.fieldTemplates.moveAfter(n.title,"location",A,L.id,O),this.rootContainer&&this.renderDetail(this.rootContainer)},void 0,x,T).open()});let p=a.createDiv("location-section-body");o&&p.setCssStyles({display:"none"}),s.addEventListener("click",y=>{y.target.closest(".character-section-add-field-btn")||y.target.closest(".character-section-hide-cat-btn")||(this.collapsedSections.has(n.title)?(this.collapsedSections.delete(n.title),p.setCssStyles({display:""}),Se.setIcon(c,"chevron-down")):(this.collapsedSections.add(n.title),p.setCssStyles({display:"none"}),Se.setIcon(c,"chevron-right")))});let h=(E=this.plugin.settings.hiddenFields.location)!=null?E:[],m=n.fields.filter(y=>!h.includes(y.key)),g=n.fields.filter(y=>h.includes(y.key)),f=this.plugin.fieldTemplates.getBySection(n.title,"location"),_=new Map(m.map(y=>[y.key,y])),v=new Map(f.map(y=>[y.id,y])),b=m.map(y=>y.key),S=this.plugin.fieldTemplates.getMergedOrder(n.title,"location",b);for(let y of S)if(y.kind==="builtin"){let w=_.get(y.key);w&&this.renderField(p,w,i,n.title,b)}else{let w=v.get(y.key);w&&this.renderUniversalField(p,w,i,b)}if(g.length>0){let y=p.createDiv("hidden-fields-toggle");y.createEl("a",{text:`Show ${g.length} hidden field${g.length>1?"s":""}`,cls:"hidden-fields-toggle-link"});let w=p.createDiv("hidden-fields-container");w.setCssStyles({display:"none"});for(let x of g)this.renderField(w,x,i);let C=!1;y.addEventListener("click",()=>{C=!C,w.setCssStyles({display:C?"":"none"}),y.querySelector("a").textContent=C?`Hide ${g.length} hidden field${g.length>1?"s":""}`:`Show ${g.length} hidden field${g.length>1?"s":""}`})}}renderHiddenCategoriesToggle(e,n,i){let a=e.createDiv("hidden-fields-toggle"),o=n.length;a.createEl("a",{text:`Show ${o} hidden categor${o>1?"ies":"y"}`,cls:"hidden-fields-toggle-link"});let s=e.createDiv("hidden-categories-container");s.setCssStyles({display:"none"});for(let l of n)this.renderHiddenCategory(s,l,i);let c=!1;a.addEventListener("click",()=>{c=!c,s.setCssStyles({display:c?"":"none"}),a.querySelector("a").textContent=c?`Hide ${o} hidden categor${o>1?"ies":"y"}`:`Show ${o} hidden categor${o>1?"ies":"y"}`})}renderHiddenCategory(e,n,i){var b;let a=e.createDiv("location-section is-category-hidden"),o=this.collapsedSections.has(n.title),s=a.createDiv("location-section-header"),c=s.createSpan("location-section-chevron");Se.setIcon(c,o?"chevron-right":"chevron-down");let l=s.createSpan("location-section-icon");Se.setIcon(l,n.icon),s.createSpan({text:n.title});let d=s.createSpan({cls:"character-section-hide-cat-btn",attr:{title:"Show this category","aria-label":"Show this category",role:"button"}});Se.setIcon(d,"eye"),d.addEventListener("click",async S=>{var C;S.stopPropagation();let y=(C=this.plugin.settings.hiddenCategories.location)!=null?C:[],w=y.indexOf(n.title);w>=0&&y.splice(w,1),await this.plugin.saveSettings(),this.rootContainer&&this.renderDetail(this.rootContainer)});let u=a.createDiv("location-section-body");o&&u.setCssStyles({display:"none"}),s.addEventListener("click",S=>{S.target.closest(".character-section-hide-cat-btn")||(this.collapsedSections.has(n.title)?(this.collapsedSections.delete(n.title),u.setCssStyles({display:""}),Se.setIcon(c,"chevron-down")):(this.collapsedSections.add(n.title),u.setCssStyles({display:"none"}),Se.setIcon(c,"chevron-right")))});let p=(b=this.plugin.settings.hiddenFields.location)!=null?b:[],h=n.fields.filter(S=>!p.includes(S.key)),m=this.plugin.fieldTemplates.getBySection(n.title,"location"),g=new Map(h.map(S=>[S.key,S])),f=new Map(m.map(S=>[S.id,S])),_=h.map(S=>S.key),v=this.plugin.fieldTemplates.getMergedOrder(n.title,"location",_);for(let S of v)if(S.kind==="builtin"){let E=g.get(S.key);E&&this.renderField(u,E,i,n.title,_)}else{let E=f.get(S.key);E&&this.renderUniversalField(u,E,i,_)}}renderField(e,n,i,a,o){var d,u;let s=e.createDiv("location-field-row"),c=s.createEl("label",{cls:"location-field-label",text:n.label});if(a&&o&&this.addBuiltInMoveChevrons(c,a,"location",o,n.key),n.key!=="name"){let h=((d=this.plugin.settings.hiddenFields.location)!=null?d:[]).includes(n.key),m=c.createSpan({cls:"field-hide-btn",attr:{"aria-label":h?"Show this field":"Hide this field"}});Se.setIcon(m,h?"eye":"eye-off"),m.addEventListener("click",async g=>{g.stopPropagation();let f=this.plugin.settings;f.hiddenFields.location||(f.hiddenFields.location=[]);let _=f.hiddenFields.location,v=_.indexOf(n.key);v>=0?_.splice(v,1):_.push(n.key),await this.plugin.saveSettings(),this.rootContainer&&this.renderDetail(this.rootContainer)})}let l=ln(i[n.key]);if(n.toggle){let h=s.createDiv({cls:"codex-field-toggle-wrap"}).createEl("input",{type:"checkbox"});h.checked=i[n.key]===!0||l==="true",h.addEventListener("change",()=>{i[n.key]=h.checked,this.scheduleSave(i)});return}if(n.key==="locationType"){let p=s.createEl("select",{cls:"location-field-input dropdown"});p.createEl("option",{text:n.placeholder,value:""});for(let f of e_){let _=p.createEl("option",{text:f,value:f.toLowerCase()});String(l).toLowerCase()===f.toLowerCase()&&(_.selected=!0)}let h=(u=this.plugin.settings.customLocationTypes)!=null?u:[];if(h.length>0){let f=p.createEl("option",{text:"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",value:""});f.disabled=!0;for(let _ of h){let v=p.createEl("option",{text:_,value:_.toLowerCase()});String(l).toLowerCase()===_.toLowerCase()&&(v.selected=!0)}}let m=[...e_.map(f=>f.toLowerCase()),...h.map(f=>f.toLowerCase())];if(l&&!m.includes(String(l).toLowerCase())){let f=p.createEl("option",{text:String(l),value:String(l)});f.selected=!0}let g="__add_custom_type__";p.createEl("option",{text:"+ add custom type???",value:g}),p.addEventListener("change",async()=>{var f;if(p.value===g){let _=await this.promptCustomLocationType();if(_){let v=(f=this.plugin.settings.customLocationTypes)!=null?f:[];v.some(b=>b.toLowerCase()===_.toLowerCase())||(v.push(_),this.plugin.settings.customLocationTypes=v,await this.plugin.saveSettings()),i[n.key]=_.toLowerCase(),await this.flushSave(),this.rootContainer&&this.renderDetail(this.rootContainer)}else p.value=String(l).toLowerCase();return}i[n.key]=p.value,this.scheduleSave(i)})}else if(n.multiline){let p=s.createEl("textarea",{cls:"location-field-textarea",attr:{placeholder:n.placeholder,rows:"3"}});p.value=l,p.addEventListener("input",()=>{i[n.key]=p.value,this.scheduleSave(i)})}else{let p=s.createEl("input",{cls:"location-field-input",type:"text",attr:{placeholder:n.placeholder}});p.value=l,p.addEventListener("input",()=>{i[n.key]=p.value,this.scheduleSave(i)}),n.key==="name"&&p.addEventListener("blur",()=>{this.checkLocationRename(i,p)})}}addBuiltInMoveChevrons(e,n,i,a,o){let s=e.createSpan({cls:"field-move-btn",attr:{title:"Move field up","aria-label":"Move field up"}});Se.setIcon(s,"chevron-up"),s.addEventListener("click",async l=>{l.stopPropagation(),await this.plugin.fieldTemplates.moveEntryUp(n,i,a,"builtin",o),this.rootContainer&&this.renderDetail(this.rootContainer)});let c=e.createSpan({cls:"field-move-btn",attr:{title:"Move field down","aria-label":"Move field down"}});Se.setIcon(c,"chevron-down"),c.addEventListener("click",async l=>{l.stopPropagation(),await this.plugin.fieldTemplates.moveEntryDown(n,i,a,"builtin",o),this.rootContainer&&this.renderDetail(this.rootContainer)})}renderUniversalField(e,n,i,a){i.universalFields||(i.universalFields={});let o=i.universalFields[n.id],s=typeof o=="string"?o:"",c=e.createDiv("location-field-row codex-universal-field-row"),l=c.createDiv("codex-universal-label-wrap");l.createEl("label",{cls:"location-field-label",text:n.label});let d=l.createSpan({cls:"codex-universal-edit-btn",attr:{title:"Edit or remove this universal field","aria-label":"Edit field"}});Se.setIcon(d,"pencil"),d.addEventListener("click",()=>{let g=(i.type==="world"?Op:Lp).map(v=>v.title),f=this.plugin.fieldTemplates.getBySection(n.section,n.category).map(v=>({id:v.id,label:v.label}));new Rn(this.app,n.section,n,async(v,b)=>{v.category="location",await this.plugin.fieldTemplates.update(n.id,v),b!==void 0&&await this.plugin.fieldTemplates.moveAfter(n.section,n.category,a!=null?a:[],n.id,b),this.rootContainer&&this.renderDetail(this.rootContainer)},async()=>{await this.plugin.fieldTemplates.remove(n.id),this.rootContainer&&this.renderDetail(this.rootContainer)},g,f).open()});let u=l.createSpan({cls:"codex-universal-move-btn",attr:{title:"Move field up","aria-label":"Move field up"}});Se.setIcon(u,"chevron-up"),u.addEventListener("click",async h=>{h.stopPropagation(),await this.plugin.fieldTemplates.moveEntryUp(n.section,n.category,a!=null?a:[],"universal",n.id),this.rootContainer&&this.renderDetail(this.rootContainer)});let p=l.createSpan({cls:"codex-universal-move-btn",attr:{title:"Move field down","aria-label":"Move field down"}});if(Se.setIcon(p,"chevron-down"),p.addEventListener("click",async h=>{h.stopPropagation(),await this.plugin.fieldTemplates.moveEntryDown(n.section,n.category,a!=null?a:[],"universal",n.id),this.rootContainer&&this.renderDetail(this.rootContainer)}),n.type==="multi-select"){let h=i.universalFields[n.id],m=Array.isArray(h)?[...h]:typeof h=="string"&&h?[h]:[],g=[...n.options];if(n.folderSource){let w=this.app.vault.getAbstractFileByPath(n.folderSource);if(w&&"children"in w)for(let C of w.children)C instanceof Se.TFile&&C.extension==="md"&&(g.includes(C.basename)||g.push(C.basename))}g.sort((w,C)=>w.localeCompare(C));let f=c.createDiv("universal-multi-select"),_=f.createDiv("universal-multi-pills"),b=f.createDiv("universal-multi-input-row").createEl("input",{cls:"universal-multi-input",type:"text",attr:{placeholder:n.placeholder||"Type to add\u2026"}}),S=activeDocument.body.createDiv("universal-multi-dropdown");S.setCssStyles({display:"none"}),this._portaledDropdowns.push(S);let E=()=>{_.empty();for(let w of m){let C=_.createSpan({cls:"universal-multi-pill"});C.createSpan({text:w}),C.createSpan({cls:"universal-multi-pill-x",text:"\xD7"}).addEventListener("click",()=>{let T=m.indexOf(w);T>=0&&m.splice(T,1),i.universalFields[n.id]=[...m],this.scheduleSave(i),E()})}};E();let y=w=>{S.empty();let C=w.toLowerCase(),x=g.filter(T=>!m.includes(T)&&T.toLowerCase().includes(C));if(x.length===0){S.setCssStyles({display:"none"});return}S.setCssStyles({display:""});for(let T of x)S.createDiv({cls:"universal-multi-dropdown-item",text:T}).addEventListener("mousedown",D=>{D.preventDefault(),m.push(T),i.universalFields[n.id]=[...m],this.scheduleSave(i),E(),b.value="",y("")})};b.addEventListener("focus",()=>y(b.value)),b.addEventListener("input",()=>y(b.value)),b.addEventListener("blur",()=>{window.setTimeout(()=>{S.setCssStyles({display:"none"})},200)}),b.addEventListener("keydown",w=>{if(w.key==="Enter"&&b.value.trim()){w.preventDefault();let C=b.value.trim();m.includes(C)||(m.push(C),i.universalFields[n.id]=[...m],this.scheduleSave(i),E()),b.value="",y("")}})}else if(n.type==="dropdown"){let h=c.createEl("select",{cls:"location-field-input dropdown"});h.createEl("option",{text:n.placeholder||"Select\u2026",value:""});let m=[...n.options];if(n.folderSource){let g=this.app.vault.getAbstractFileByPath(n.folderSource);if(g&&"children"in g)for(let f of g.children)f instanceof Se.TFile&&f.extension==="md"&&(m.includes(f.basename)||m.push(f.basename));m.sort((f,_)=>f.localeCompare(_))}for(let g of m){let f=h.createEl("option",{text:g,value:g});s===g&&(f.selected=!0)}if(s&&!m.includes(s)){let g=h.createEl("option",{text:s,value:s});g.selected=!0}h.addEventListener("change",()=>{i.universalFields[n.id]=h.value,this.scheduleSave(i)})}else if(n.type==="textarea"){let h=c.createEl("textarea",{cls:"location-field-textarea",attr:{placeholder:n.placeholder,rows:"3"}});h.value=s,h.addEventListener("input",()=>{i.universalFields[n.id]=h.value,this.scheduleSave(i)})}else if(n.type==="checkbox"){let h=o===!0||o==="true"||o==="yes",g=c.createDiv("location-field-checkbox-wrap").createEl("input",{cls:"location-field-checkbox",type:"checkbox"});g.checked=h,g.addEventListener("change",()=>{i.universalFields[n.id]=g.checked,this.scheduleSave(i)})}else{let h=c.createEl("input",{cls:"location-field-input",type:"text",attr:{placeholder:n.placeholder}});h.value=s,h.addEventListener("input",()=>{i.universalFields[n.id]=h.value,this.scheduleSave(i)})}}renderLocationHierarchy(e,n){let i=e.createDiv("location-section"),a=i.createDiv("location-section-header"),o=a.createSpan("location-section-chevron");Se.setIcon(o,"chevron-down");let s=a.createSpan("location-section-icon");Se.setIcon(s,"git-branch"),a.createSpan({text:"Hierarchy"});let c=i.createDiv("location-section-body"),l=c.createDiv("location-field-row");l.createEl("label",{cls:"location-field-label",text:"World"});let d=l.createEl("select",{cls:"location-field-input dropdown"});d.createEl("option",{text:"None (standalone)",value:""});for(let m of this.locationManager.getAllWorlds()){let g=d.createEl("option",{text:m.name,value:m.name});n.world===m.name&&(g.selected=!0)}d.addEventListener("change",()=>{n.world=d.value||void 0,this.scheduleSave(n)});let u=c.createDiv("location-field-row");u.createEl("label",{cls:"location-field-label",text:"Parent location"});let p=u.createEl("select",{cls:"location-field-input dropdown"});p.createEl("option",{text:"None (top-level)",value:""});let h=this.locationManager.getAllLocations().filter(m=>m.filePath!==n.filePath);for(let m of h){let g=p.createEl("option",{text:m.name,value:m.name});n.parent===m.name&&(g.selected=!0)}p.addEventListener("change",()=>{n.parent=p.value||void 0,this.scheduleSave(n)})}renderCustomFields(e,n){let i=e.createDiv("location-section"),a="Custom Fields",o=this.collapsedSections.has(a),s=i.createDiv("location-section-header"),c=s.createSpan("location-section-chevron");Se.setIcon(c,o?"chevron-right":"chevron-down");let l=s.createSpan("location-section-icon");Se.setIcon(l,"plus-circle"),s.createSpan({text:a});let d=i.createDiv("location-section-body");o&&d.setCssStyles({display:"none"}),s.addEventListener("click",()=>{this.collapsedSections.has(a)?(this.collapsedSections.delete(a),d.setCssStyles({display:""}),Se.setIcon(c,"chevron-down")):(this.collapsedSections.add(a),d.setCssStyles({display:"none"}),Se.setIcon(c,"chevron-right"))});let u=()=>{d.empty();let p=n.custom||{};for(let[g,f]of Object.entries(p)){if(wp(g))continue;let _=d.createDiv("location-field-row location-custom-row"),v=_.createEl("input",{cls:"location-field-input location-custom-key",type:"text",attr:{placeholder:"Field name"}});v.value=g;let b=_.createEl("input",{cls:"location-field-input location-custom-value",type:"text",attr:{placeholder:"Value"}});b.value=f;let S=_.createEl("button",{cls:"location-custom-remove",attr:{title:"Remove"}});Se.setIcon(S,"x"),v.addEventListener("change",()=>{delete n.custom[g];let E=v.value.trim();E&&(n.custom[E]=b.value),this.scheduleSave(n)}),b.addEventListener("input",()=>{let E=v.value.trim();E&&(n.custom[E]=b.value,this.scheduleSave(n))}),S.addEventListener("click",()=>{delete n.custom[g],_.remove(),this.scheduleSave(n)})}d.createDiv("location-custom-add-row").createEl("button",{cls:"location-custom-add-btn",text:"+ add field"}).addEventListener("click",()=>{n.custom||(n.custom={});let g=Object.keys(n.custom).length+1,f=`field_${g}`;for(;n.custom[f];)f=`field_${++g}`;n.custom[f]="",u()})};u()}buildCustomSectionsHost(e,n){this.plugin.settings.locationCustomSections||(this.plugin.settings.locationCustomSections=[]);let i=this.plugin.settings.locationCustomSections;return{app:this.app,draft:e,sections:i,builtinSectionCount:n,collapsedSections:this.collapsedSections,collapseKeyPrefix:"location",cssPrefix:"location",scheduleSave:a=>this.scheduleSave(a),persistSections:()=>{this.plugin.saveSettings()},requestRerender:()=>{this.rootContainer&&this.renderView(this.rootContainer)}}}renderWorldSidePanel(e,n){let i=this.locationManager.getLocationsForWorld(n.name),a=this.sceneManager.getAllScenes().filter(u=>!u.inactive),o=e.createDiv("location-side-stats");o.createEl("h4",{text:"World summary"});let s=o.createDiv("location-stat-grid");this.renderStat(s,String(i.length),"Locations");let c=new Set(i.map(u=>u.name.toLowerCase())),l=a.filter(u=>u.location&&c.has(u.location.toLowerCase()));if(this.renderStat(s,String(l.length),"Scenes"),i.length>0){let u=e.createDiv("location-side-list");u.createEl("h4",{text:"Locations in this world"});for(let p of i){let h=u.createDiv("location-side-item"),m=h.createSpan("location-side-item-icon");Se.setIcon(m,"map-pin"),h.createSpan({text:p.name}),p.locationType&&h.createSpan({cls:"location-type-badge-sm",text:p.locationType}),h.addEventListener("click",()=>{this.selectedItem=p.filePath,this.renderView(this.rootContainer)})}}e.createEl("button",{cls:"location-add-to-world-btn",text:`+ Add location to ${n.name}`}).addEventListener("click",()=>this.promptNewLocation(n.name))}renderLocationSidePanel(e,n){var g;let i=this.sceneManager.queryService.getFilteredScenes(void 0,{field:"sequence",direction:"asc"}),a=n.name.toLowerCase(),o=i.filter(f=>{var _;return((_=f.location)==null?void 0:_.toLowerCase())===a}),s=e.createDiv("location-side-stats");if(s.createEl("h4",{text:"Location info"}),n.world){let f=s.createDiv("location-side-world-info"),_=f.createSpan();Se.setIcon(_,"globe"),f.createSpan({text:` ${n.world}`})}if(n.parent){let f=s.createDiv("location-side-parent-info"),_=f.createSpan();Se.setIcon(_,"corner-down-right"),f.createSpan({text:` Inside: ${n.parent}`})}let c=s.createDiv("location-stat-grid");this.renderStat(c,String(o.length),"Scenes");let l=this.locationManager.getChildLocations(n.name);if(l.length>0&&this.renderStat(c,String(l.length),"Sub-locations"),o.length>0){let f=e.createDiv("location-side-scenes");f.createEl("h4",{text:"Scenes here"});for(let _ of o){let v=f.createDiv("location-side-scene-item"),b=$r(_.act,"??"),S=_.sequence!==void 0?String(_.sequence).padStart(2,"0"):"??";v.createSpan({cls:"scene-id",text:`[${b}-${S}]`}),v.createSpan({cls:"scene-title",text:` ${_.title}`});let E=ht(_.status||"idea"),y=v.createSpan({cls:"scene-status-badge",attr:{title:E.label}});Se.setIcon(y,E.icon),v.addEventListener("click",()=>this.openScene(_))}}let d=this.plugin.characterManager,u=(g=this.plugin.settings)==null?void 0:g.characterAliases,p=d?d.buildAliasMap(u):null,h=f=>{if(!p)return f;let _=p.get(f.toLowerCase());if(_)return _;let v=f.split(/\s+/);for(let b of v){let S=p.get(b.toLowerCase());if(S)return S}return f},m=new Map;for(let f of o){if(f.pov){let _=h(f.pov);m.set(_,(m.get(_)||0)+1)}if(f.characters)for(let _ of f.characters){let v=h(_);v!==h(f.pov||"")&&m.set(v,(m.get(v)||0)+1)}}if(m.size>0){let f=e.createDiv("location-side-chars");f.createEl("h4",{text:"Characters here"});let _=Array.from(m.entries()).sort((v,b)=>b[1]-v[1]);for(let[v,b]of _){let S=f.createDiv("location-side-char-item"),E=S.createSpan();Se.setIcon(E,"user"),S.createSpan({text:` ${v}`}),S.createSpan({cls:"location-side-char-count",text:`${b}`})}}}renderReferencesPanel(e,n){let a=this.plugin.linkScanner.buildEntityIndex().get(n.toLowerCase());if(!a||a.length===0)return;let o=e.createDiv("location-references-panel");o.createEl("h3",{text:"Referenced by"});let s={};for(let c of a){let l=c.type==="codex"&&c.codexCategory?c.codexCategory:c.type;s[l]||(s[l]=[]),s[l].push(c)}for(let[c,l]of Object.entries(s)){let d=o.createDiv("reference-group");d.createEl("h4",{text:c.charAt(0).toUpperCase()+c.slice(1)});let u=d.createEl("ul",{cls:"reference-list"});for(let p of l)u.createEl("li").createEl("a",{text:p.name,cls:"reference-link"}).addEventListener("click",g=>{g.preventDefault(),this.app.workspace.openLinkText(p.filePath,"",!1)})}}renderStat(e,n,i){let a=e.createDiv("location-stat-item");a.createDiv({cls:"location-stat-value",text:n}),a.createDiv({cls:"location-stat-label",text:i})}promptCustomLocationType(){return new Promise(e=>{let n=!1,i=new ct.Modal(this.app);i.titleEl.setText("Add custom location type");let a="";new ct.Setting(i.contentEl).setName("Type name").setDesc("E.g. Planet, star system, galaxy, dimension???").addText(o=>{var s;o.setPlaceholder("Planet"),o.onChange(c=>a=c),window.setTimeout(()=>{var c;return(c=o.inputEl)==null?void 0:c.focus()},0),(s=o.inputEl)==null||s.addEventListener("keydown",c=>{if(c.key==="Enter"){c.preventDefault();let l=a.trim();l&&(n=!0,i.close(),e(l))}})}),new ct.Setting(i.contentEl).addButton(o=>{o.setButtonText("Add").setCta().onClick(()=>{let s=a.trim();if(!s){new ct.Notice("Please enter a type name.");return}n=!0,i.close(),e(s)})}).addButton(o=>{o.setButtonText("Cancel").onClick(()=>{n=!0,i.close(),e(null)})}),i.onClose=()=>{n||e(null)},i.open()})}scheduleSave(e){this.autoSaveTimer&&window.clearTimeout(this.autoSaveTimer),this.pendingSaveDraft=e,this.autoSaveTimer=window.setTimeout(async()=>{var n;try{let i=(n=this.plugin.sceneManager)==null?void 0:n.undoManager;i&&this.undoSnapshot&&(i.recordUpdate(e.filePath,this.undoSnapshot,e,`Update ${e.type} "${e.name}"`,"location"),this.undoSnapshot={...e,custom:{...e.custom||{}}}),this._lastSaveTime=Date.now(),e.type==="world"?await this.locationManager.saveWorld(e):await this.locationManager.saveLocation(e),this.pendingSaveDraft=null}catch(i){}},600)}async flushSave(){var e;if(this.autoSaveTimer!==null&&(window.clearTimeout(this.autoSaveTimer),this.autoSaveTimer=null),this.pendingSaveDraft){let n=this.pendingSaveDraft;this.pendingSaveDraft=null;try{let i=(e=this.plugin.sceneManager)==null?void 0:e.undoManager;i&&this.undoSnapshot&&(i.recordUpdate(n.filePath,this.undoSnapshot,n,`Update ${n.type} "${n.name}"`,"location"),this.undoSnapshot={...n,custom:{...n.custom||{}}}),this._lastSaveTime=Date.now(),n.type==="world"?await this.locationManager.saveWorld(n):await this.locationManager.saveLocation(n)}catch(i){}}}checkLocationRename(e,n){var p;let i=this.originalItemName,a=(p=e.name)==null?void 0:p.trim();if(!i||!a||i===a)return;let o=this.plugin.cascadeRename,s=this.originalItemType==="world",c=s?o.previewWorldRename(i,a):o.previewLocationRename(i,a),l=c.sceneCount+c.locationCount+c.characterLocationCount;if(l===0){this.originalItemName=a;return}let d=o.buildSummary(c);new Js(this.app,s?"world":"location",i,a,c,d,async()=>{s?await o.cascadeWorldRename(i,a):await o.cascadeLocationRename(i,a),this.originalItemName=a,new ct.Notice(`Updated ${l} reference${l!==1?"s":""} from "${i}" to "${a}"`)},()=>{e.name=i,n.value=i,this.scheduleSave(e)}).open()}async flushPendingSave(){if(this.autoSaveTimer&&(window.clearTimeout(this.autoSaveTimer),this.autoSaveTimer=null),this.pendingSaveDraft){try{this._lastSaveTime=Date.now();let e=this.pendingSaveDraft;e.type==="world"?await this.locationManager.saveWorld(e):await this.locationManager.saveLocation(e)}catch(e){}this.pendingSaveDraft=null}}promptNewWorld(){let e=new ct.Modal(this.app);e.titleEl.setText("New world");let n="";new ct.Setting(e.contentEl).setName("World name").addText(i=>{i.setPlaceholder("Enter world name\u2026").onChange(a=>n=a),window.setTimeout(()=>i.inputEl.focus(),50)}),new ct.Setting(e.contentEl).addButton(i=>{i.setButtonText("Create").setCta().onClick(async()=>{if(!n.trim()){new ct.Notice("Please enter a name.");return}try{let a=await this.locationManager.createWorld(this.sceneManager.getLocationFolder(),n.trim());this.selectedItem=a.filePath,e.close(),this.renderView(this.rootContainer),new ct.Notice(`World "${n.trim()}" created`)}catch(a){new ct.Notice(String(a))}})}),e.open()}promptNewLocation(e){let n=new ct.Modal(this.app);n.titleEl.setText("New location");let i="",a=e||"";new ct.Setting(n.contentEl).setName("Location name").addText(s=>{s.setPlaceholder("Enter location name\u2026").onChange(c=>i=c),window.setTimeout(()=>s.inputEl.focus(),50)});let o=this.locationManager.getAllWorlds();o.length>0&&new ct.Setting(n.contentEl).setName("World").setDesc("Which world does this location belong to?").addDropdown(s=>{s.addOption("","None (standalone)");for(let c of o)s.addOption(c.name,c.name);a&&s.setValue(a),s.onChange(c=>a=c)}),new ct.Setting(n.contentEl).addButton(s=>{s.setButtonText("Create").setCta().onClick(async()=>{if(!i.trim()){new ct.Notice("Please enter a name.");return}try{let c=await this.locationManager.createLocation(this.sceneManager.getLocationFolder(),i.trim(),a||void 0);this.selectedItem=c.filePath,n.close(),this.renderView(this.rootContainer),new ct.Notice(`Location "${i.trim()}" created`)}catch(c){new ct.Notice(String(c))}})}),n.open()}async createLocationFromName(e){try{let n=await this.locationManager.createLocation(this.sceneManager.getLocationFolder(),e);this.selectedItem=n.filePath,this.renderView(this.rootContainer),new ct.Notice(`Location profile created for "${e}"`)}catch(n){new ct.Notice(String(n))}}confirmDelete(e){let n=new ct.Modal(this.app);n.titleEl.setText(`Delete ${e.type==="world"?"World":"Location"}`),n.contentEl.createEl("p",{text:`Are you sure you want to delete "${e.name}"? The file will be moved to trash.`}),new ct.Setting(n.contentEl).addButton(i=>{i.setButtonText("Delete").setClass("mod-warning").onClick(async()=>{var o;let a=(o=this.plugin.sceneManager)==null?void 0:o.undoManager;if(a){let s=this.app.vault.getAbstractFileByPath(e.filePath);if(s instanceof ct.TFile){let c=await this.app.vault.read(s);a.recordDelete(e.filePath,c,`Delete ${e.type} "${e.name}"`,"location")}}await this.locationManager.deleteItem(e.filePath),this.selectedItem=null,n.close(),this.renderView(this.rootContainer),new ct.Notice(`"${e.name}" deleted`)})}).addButton(i=>i.setButtonText("Cancel").onClick(()=>n.close())),n.open()}async openFile(e){let n=this.app.vault.getAbstractFileByPath(e.filePath);n instanceof ct.TFile&&await this.app.workspace.getLeaf("tab").openFile(n,{state:{mode:"source",source:!1}})}async openScene(e){let n=this.app.vault.getAbstractFileByPath(e.filePath);if(n instanceof ct.TFile){let i=this.app.workspace.getLeavesOfType("markdown").find(o=>{var s,c;return((c=(s=o.getViewState())==null?void 0:s.state)==null?void 0:c.file)===e.filePath});if(i){this.app.workspace.setActiveLeaf(i,{focus:!0});return}await this.app.workspace.getLeaf("tab").openFile(n,{state:{mode:"source",source:!1}})}else new ct.Notice(`Could not find file: ${e.filePath}`)}async navigateToItem(e){if(await this.plugin.reloadEntities(),!this.locationManager.getItem(e)){new ct.Notice("Location not found in the active project.");return}this.selectedItem=e,this.rootContainer&&this.renderView(this.rootContainer)}async refresh(){if(this.selectedItem&&Date.now()-this._lastSaveTime<Mp.SAVE_REFRESH_GRACE_MS){await this.plugin.reloadEntities();return}await this.plugin.reloadEntities(),this.rootContainer&&this.renderView(this.rootContainer)}renderGallery(e,n){var E;let a="__Gallery",o=e.createDiv("character-gallery"),s=(E=n.gallery)!=null?E:[],c=this.collapsedSections.has(a),l=o.createDiv("character-gallery-header"),d=l.createSpan("location-section-chevron");if(Se.setIcon(d,c?"chevron-right":"chevron-down"),l.createEl("h4",{text:"Gallery"}),s.length<10){let y=l.createEl("button",{cls:"character-section-add-field-btn",attr:{title:`Add image (${s.length}/10)`,"aria-label":"Add gallery image"}});Se.setIcon(y,"plus"),y.addEventListener("click",w=>{w.stopPropagation(),this.pickImage().then(async C=>{if(C&&C!==""){s.push({path:C,caption:""}),n.gallery=[...s],n.type==="world"?await this.locationManager.saveWorld(n):await this.locationManager.saveLocation(n),o.empty(),e.removeChild(o),this.renderGallery(e,n);let x=e.querySelector(".location-side-stats");if(x){let T=e.querySelector(".character-gallery");T&&e.insertBefore(T,x)}}})})}let u=o.createDiv("character-gallery-body");c&&u.setCssStyles({display:"none"}),l.addEventListener("click",y=>{y.target.closest(".character-section-add-field-btn")||(this.collapsedSections.has(a)?(this.collapsedSections.delete(a),u.setCssStyles({display:""}),Se.setIcon(d,"chevron-down")):(this.collapsedSections.add(a),u.setCssStyles({display:"none"}),Se.setIcon(d,"chevron-right")))});let p=u.createDiv("character-gallery-viewer"),h=u.createDiv("character-gallery-caption"),m=s.length>0?0:-1,g=()=>{if(p.empty(),h.empty(),m>=0&&m<s.length){let y=s[m],w=Pt(this.app,y.path);if(w){let A=p.createEl("img",{cls:"character-gallery-img",attr:{src:w,alt:y.caption||"Gallery image"}});A.setCssStyles({cursor:"pointer"}),A.addEventListener("click",()=>{let D=o.offsetWidth;this.openGalleryLightbox(s,m,D)}),A.onerror=()=>{A.remove();let D=p.createDiv("character-gallery-placeholder");Se.setIcon(D,"image-off")}}else{let A=p.createDiv("character-gallery-placeholder");Se.setIcon(A,"image-off")}let C=h.createEl("input",{cls:"character-gallery-caption-input",attr:{type:"text",placeholder:"Add caption\u2026",value:y.caption||""}}),x=m;C.addEventListener("input",()=>{s[x].caption=C.value,n.gallery=s.length?[...s]:void 0,this.scheduleSave(n)});let T=h.createEl("button",{cls:"character-gallery-remove-btn",attr:{title:"Remove this image"}});Se.setIcon(T,"x"),T.addEventListener("click",()=>{s.splice(x,1),n.gallery=s.length?[...s]:void 0,this.scheduleSave(n),m=s.length>0?Math.min(x,s.length-1):-1,g(),S()})}else{let y=p.createDiv("character-gallery-empty");y.textContent="No images yet"}},f=u.createDiv("character-gallery-nav"),_=f.createEl("button",{cls:"character-gallery-arrow",attr:{title:"Previous"}});Se.setIcon(_,"chevron-left"),_.addEventListener("click",()=>{s.length!==0&&(m=(m-1+s.length)%s.length,g(),S())});let v=f.createDiv("character-gallery-thumbs"),b=f.createEl("button",{cls:"character-gallery-arrow",attr:{title:"Next"}});Se.setIcon(b,"chevron-right"),b.addEventListener("click",()=>{s.length!==0&&(m=(m+1)%s.length,g(),S())});let S=()=>{v.empty();for(let y=0;y<s.length;y++){let w=v.createDiv({cls:`character-gallery-thumb${y===m?" active":""}`}),C=Pt(this.app,s[y].path);if(C){let T=w.createEl("img",{attr:{src:C}});T.onerror=()=>{T.remove(),Se.setIcon(w,"image-off")}}else Se.setIcon(w,"image-off");let x=y;w.addEventListener("click",()=>{m=x,g(),S()})}};g(),S()}openGalleryLightbox(e,n,i){var P;(P=activeDocument.querySelector(".gallery-lightbox-window"))==null||P.remove();let a=n,o=Math.min(Math.round(i*2),window.innerWidth-40),s=Math.round(o*3/4)+36+28,c=activeDocument.body.createDiv("gallery-lightbox-window");c.setCssStyles({width:`${o}px`,height:`${s}px`});let l=c.createDiv("gallery-lightbox-titlebar"),d=l.createSpan({cls:"gallery-lightbox-title"}),u=l.createEl("button",{cls:"gallery-lightbox-close",attr:{title:"Close"}});Se.setIcon(u,"x"),u.addEventListener("click",()=>{I(),c.remove()});let p=c.createDiv("gallery-lightbox-content-row"),h=p.createEl("button",{cls:"gallery-lightbox-nav-btn",attr:{title:"Previous"}});Se.setIcon(h,"chevron-left"),h.addEventListener("click",()=>{a=(a-1+e.length)%e.length,E()});let m=p.createDiv("gallery-lightbox-content"),g=p.createEl("button",{cls:"gallery-lightbox-nav-btn",attr:{title:"Next"}});Se.setIcon(g,"chevron-right"),g.addEventListener("click",()=>{a=(a+1)%e.length,E()});let f=c.createDiv("gallery-lightbox-caption"),_=c.createDiv("gallery-lightbox-resize-handle"),v=new Map,b=()=>{var N;return(N=v.get(a))!=null?N:1},S=N=>{v.set(a,N)},E=()=>{let N=e[a],F=Pt(this.app,N.path);if(d.textContent=N.caption||`Image ${a+1} of ${e.length}`,m.empty(),F){let H=m.createEl("img",{attr:{src:F,alt:N.caption||"Gallery image"}});H.setCssStyles({transformOrigin:"center center"});let U=b();U!==1&&H.setCssStyles({transform:`scale(${U})`})}f.textContent=N.caption||"",f.setCssStyles({display:N.caption?"":"none"}),h.setCssStyles({display:e.length>1?"":"none"}),g.setCssStyles({display:e.length>1?"":"none"})};E(),m.addEventListener("wheel",N=>{N.preventDefault();let F=N.deltaY>0?-.1:.1,H=Math.max(.5,Math.min(5,b()+F));S(H);let U=m.querySelector("img");U&&U.setCssStyles({transform:`scale(${H})`})},{passive:!1});let y=0,w=1;m.addEventListener("touchstart",N=>{if(N.touches.length===2){let F=N.touches[0].clientX-N.touches[1].clientX,H=N.touches[0].clientY-N.touches[1].clientY;y=Math.hypot(F,H),w=b()}},{passive:!0}),m.addEventListener("touchmove",N=>{if(N.touches.length===2){N.preventDefault();let F=N.touches[0].clientX-N.touches[1].clientX,H=N.touches[0].clientY-N.touches[1].clientY,G=Math.hypot(F,H)/y,z=Math.max(.5,Math.min(5,w*G));S(z);let V=m.querySelector("img");V&&V.setCssStyles({transform:`scale(${z})`})}},{passive:!1});let C=!1,x=0,T=0;l.addEventListener("pointerdown",N=>{if(N.target.closest(".gallery-lightbox-close"))return;C=!0;let F=c.getBoundingClientRect();x=N.clientX-F.left,T=N.clientY-F.top,c.setCssStyles({left:`${F.left}px`,top:`${F.top}px`,transform:"none"}),l.setPointerCapture(N.pointerId),N.preventDefault()}),l.addEventListener("pointermove",N=>{C&&c.setCssStyles({left:`${N.clientX-x}px`,top:`${N.clientY-T}px`})}),l.addEventListener("pointerup",()=>{C=!1}),l.addEventListener("lostpointercapture",()=>{C=!1});let A=!1,D=0,L=0,O=0,k=0;_.addEventListener("pointerdown",N=>{A=!0,D=N.clientX,L=N.clientY,O=c.offsetWidth,k=c.offsetHeight,_.setPointerCapture(N.pointerId),N.preventDefault(),N.stopPropagation()}),_.addEventListener("pointermove",N=>{if(!A)return;let F=Math.max(200,O+(N.clientX-D)),H=Math.max(150,k+(N.clientY-L));c.setCssStyles({width:`${F}px`,height:`${H}px`})}),_.addEventListener("pointerup",()=>{A=!1}),_.addEventListener("lostpointercapture",()=>{A=!1});let R=N=>{N.key==="Escape"&&(I(),c.remove())};activeDocument.addEventListener("keydown",R);let I=()=>{activeDocument.removeEventListener("keydown",R)}}pickImage(e){let n=this.sceneManager.getSceneFolder();return Xr(this.app,n,e)}};Mp.SAVE_REFRESH_GRACE_MS=2e3;var Pp=Mp;var _r=require("obsidian");var oN=`# StoryLine \u2014 Obsidian Plugin for Writers\r
-\r
-By Jan Sandstr\xF6m\r
-\r
-StoryLine transforms your Obsidian vault into a full-featured book planning and writing tool. Organize scenes, build rich character profiles, manage worlds and locations, track plotlines, and monitor your progress \u2014 all without leaving Obsidian. Fully theme-aware with dark and light mode support.\r
-\r
----\r
-\r
-## Table of Contents\r
-\r
-- [Installation](#installation)\r
-- [Getting Started](#getting-started)\r
-- [Views](#views)\r
-  - [Board View](#board-view)\r
-  - [Corkboard Mode](#corkboard-mode)\r
-  - [Plotgrid View](#plotgrid-view)\r
-  - [Timeline View](#timeline-view)\r
-  - [Plotlines View](#plotlines-view)\r
-  - [Manuscript View](#manuscript-view)\r
-  - [Characters View](#characters-view)\r
-  - [Locations View](#locations-view)\r
-  - [Codex Hub](#codex-hub)\r
-  - [Stats View](#stats-view)\r
-  - [Navigator View](#navigator-view)\r
-  - [Scene Details Sidebar](#scene-details-sidebar)\r
-  - [Research Sidebar](#research-sidebar)\r
-- [Scene Cards](#scene-cards)\r
-- [Scene Subtitles](#scene-subtitles)\r
-- [Scene Archive](#scene-archive)\r
-- [Inactive Scenes](#inactive-scenes)\r
-- [Inspector Panel](#inspector-panel)\r
-- [Filtering & Presets](#filtering--presets)\r
-- [Multi-Select & Bulk Edit](#multi-select--bulk-edit)\r
-- [Setup / Payoff Tracking](#setup--payoff-tracking)\r
-- [Plot Hole Detection](#plot-hole-detection)\r
-- [Undo / Redo](#undo--redo)\r
-- [Reading Order vs Chronological Order](#reading-order-vs-chronological-order)\r
-- [Beat Sheet Templates](#beat-sheet-templates)\r
-- [Scene Notes](#scene-notes)\r
-- [Arc Points](#arc-points)\r
-- [Scene Snapshots](#scene-snapshots)\r
-- [View Snapshots](#view-snapshots)\r
-- [Scene Templates](#scene-templates)\r
-- [Custom Scene Fields](#custom-scene-fields)\r
-- [Color Coding & Tag Colors](#color-coding--tag-colors)\r
-- [Scene Colors](#scene-colors)\r
-- [Plotline HSL Sliders](#plotline-hsl-sliders)\r
-- [Sticky Note Themes](#sticky-note-themes)\r
-- [Per-Project Color Overrides](#per-project-color-overrides)\r
-- [Timeline Swimlanes](#timeline-swimlanes)\r
-- [Timeline Modes](#timeline-modes)\r
-- [Pacing Analysis](#pacing-analysis)\r
-- [Writing Sprint](#writing-sprint)\r
-- [Relationship Map](#relationship-map)\r
-- [Story Graph](#story-graph)\r
-- [Link Scanner & Detected Links](#link-scanner--detected-links)\r
-- [Cross-Entity References](#cross-entity-references)\r
-- [Codex Linking](#codex-linking)\r
-- [Linking & Matching](#linking--matching)\r
-- [Hide / Show Built-in Fields](#hide--show-built-in-fields)\r
-- [Reordering Fields & Sections](#reordering-fields--sections)\r
-- [Tag Type Overrides](#tag-type-overrides)\r
-- [Export](#export)\r
-- [Import (Scrivener)](#import-scrivener)\r
-- [Custom Field Templates](#custom-field-templates)\r
-- [Image Galleries](#image-galleries)\r
-- [Additional Source Folders](#additional-source-folders)\r
-- [Keyboard Shortcuts](#keyboard-shortcuts)\r
-- [Settings](#settings)\r
-- [Project Management](#project-management)\r
-- [Series Mode](#series-mode)\r
-- [File Structure](#file-structure)\r
-- [Tips & Workflow](#tips--workflow)\r
-\r
----\r
-\r
-## Installation\r
-\r
-### Manual Install\r
-\r
-1. Copy these three files into your vault at \`.obsidian/plugins/StoryLine/\`:\r
-   - \`main.js\`\r
-   - \`manifest.json\`\r
-   - \`styles.css\`\r
-2. Open Obsidian \u2192 **Settings \u2192 Community Plugins** \u2192 enable **StoryLine**.\r
-3. Restart Obsidian.\r
-\r
-### From Source\r
-\r
-1. Clone or download this repository into \`.obsidian/plugins/StoryLine/\`.\r
-2. Run \`npm install\` and \`npm run build\`.\r
-3. Enable the plugin in Obsidian settings.\r
-\r
----\r
-\r
-## Getting Started\r
-\r
-1. **Create a project** \u2014 Open the command palette (\`Ctrl+P\`) and run **StoryLine: Create New Project**. Give your project a title.\r
-2. StoryLine creates a folder structure for you:\r
-   \`\`\`\r
-   StoryLine/\r
-     My Novel/\r
-       Scenes/\r
-       Codex/\r
-         Characters/\r
-         Locations/\r
-   \`\`\`\r
-3. **Create your first scene** \u2014 Use \`Ctrl+Shift+N\` or click the **+** button in the Board view.\r
-4. **Switch between views** using the tab bar at the top of any StoryLine view.\r
-\r
----\r
-\r
-## Language Support\r
-\r
-StoryLine analyses your prose for word counts, reading time, dialogue %, stop-words, readability and PDF line-wrapping. From v1.10.12 these all respect the **project language**.\r
-\r
-### Setting the language\r
-\r
-- **Per project** \u2014 open the project file and add a \`language:\` key to its frontmatter:\r
-  \`\`\`yaml\r
-  ---\r
-  type: storyline-project\r
-  title: My Swedish Novel\r
-  language: sv\r
-  ---\r
-  \`\`\`\r
-- **Default for new projects** \u2014 Settings \u2192 **StoryLine** \u2192 **Default project language**. Choose \`auto\` to detect from existing content.\r
-\r
-### Supported codes\r
-\r
-\`en\` English \xB7 \`sv\` Swedish \xB7 \`nl\` Dutch \xB7 \`da\` Danish \xB7 \`no\` Norwegian \xB7 \`fi\` Finnish \xB7 \`pl\` Polish \xB7 \`es\` Spanish \xB7 \`fr\` French \xB7 \`de\` German \xB7 \`it\` Italian \xB7 \`pt\` Portuguese \xB7 \`ru\` Russian \xB7 \`zh\` Chinese \xB7 \`ja\` Japanese \xB7 \`ko\` Korean \xB7 \`th\` Thai \xB7 \`ar\` Arabic \xB7 \`he\` Hebrew \xB7 \`hi\` Hindi. Use full BCP-47 tags (\`pt-BR\`, \`zh-Hant\`, \u2026) and StoryLine will pick the closest script profile.\r
-\r
-### What changes per language\r
-\r
-- **Word counts** use \`Intl.Segmenter\` for Chinese / Japanese / Korean / Thai (where spaces aren't word boundaries) and locale-aware splitting elsewhere.\r
-- **Reading time** uses words-per-minute for Latin/Cyrillic scripts and characters-per-minute for CJK/Thai.\r
-- **Dialogue detection** recognises locale quote marks: \`\xAB \xBB\`, \`\u201E "\`, \`\u300C \u300D\`, \`\u300E \u300F\`, \`\u300A \u300B\`.\r
-- **Stop-words & word-frequency** use language-appropriate lists.\r
-- **Flesch readability** is shown only for English (it's tuned for English syllable structure); other languages show **N/A** but still report sentence and word averages.\r
-- **PDF export** keeps CJK characters together without inserting spaces.\r
-\r
----\r
-\r
-## Views\r
-\r
-StoryLine provides seven interconnected views plus a sidebar navigator. Switch between them using the tab bar or keyboard shortcuts.\r
-\r
-### Board View\r
-\r
-The main workspace \u2014 a Kanban-style board that displays your scenes as cards.\r
-\r
-- **Group by:** Act, Chapter, Status, or POV (use the dropdown in the toolbar).\r
-- **Status order** \u2014 when grouped by Status, columns follow the default progression: Idea, Outlined, Draft, Written, Revised, Final. Custom statuses follow in their configured order.\r
-- **Drag and drop** cards between columns to reassign act, chapter, status, or POV.\r
-- **Color-coded cards** based on status, POV, emotion, act, or tag (configurable in settings).\r
-- **Quick actions:** right-click any card for a context menu with edit, duplicate, delete, and open options.\r
-- **Add acts/chapters** using the Structure and Chapters buttons in the toolbar.\r
-- **Insert Chapter** \u2014 when grouping by Chapter, a **+ New Chapter** button appears in the toolbar to append a new chapter. To insert a chapter between existing ones, right-click a chapter column header and choose **Insert Chapter Before** or **Insert Chapter After**; existing chapters (and their scenes, labels, and descriptions) are renumbered automatically to make room.\r
-- **Resequence** \u2014 click the resequence button to auto-number all scenes based on their current board order.\r
-- **Search** \u2014 type in the search bar to filter scenes by title, content, characters, or tags.\r
-- **Beat Sheet Templates** \u2014 apply a beat sheet template (Save the Cat, 3-Act, Hero's Journey, Seven-Point, Story Circle, Romancing the Beat, 27 Chapter Method) from the Structure modal.\r
-- **Act labels** \u2014 custom labels on act dividers (e.g., beat names); inline-editable.\r
-\r
-### Corkboard Mode\r
-\r
-Toggle between the standard Kanban column layout and a freeform **corkboard** canvas using the toggle button in the Board toolbar.\r
-\r
-- **Sticky notes** \u2014 create color-coded sticky notes to brainstorm and capture your first ideas. Notes support markdown formatting. Sticky notes are stored in a separate \`Notes/\` folder inside your project so they don't clutter the \`Scenes/\` folder in Obsidian's file explorer.\r
-- **Image sticky notes** \u2014 pin reference art, maps, and charts on the board. Click **+ New Image Note** in the toolbar, or drag an image from the vault file explorer or your desktop onto the canvas. Each image note has an optional caption that supports markdown and \`[[wikilinks]]\` \u2014 links in captions are included in relationship scanning. Right-click an image note to set, change, or remove the image. Click the image to open a fullscreen lightbox.\r
-- **Convert to scene** \u2014 when an idea is ready, convert a sticky note into a full scene with one click. The file is moved from \`Notes/\` to \`Scenes/\` automatically.\r
-- **Freeform positioning** \u2014 drag scene cards and sticky notes anywhere on the spatial canvas.\r
-- **Positions saved per project** \u2014 your corkboard layout is stored in \`System/board.json\` and syncs across devices.\r
-\r
-### Plotgrid View\r
-\r
-A spreadsheet-like grid for detailed scene planning.\r
-\r
-- Rows and columns represent your story structure.\r
-- Click any cell to edit its content, link a scene, set colors, or adjust metadata.\r
-- **Zoom in/out** for overview or detail.\r
-- Drag scenes onto cells to link them.\r
-- Supports custom row/column headers for acts, chapters, plotlines, etc.\r
-- **Fit row heights to content** \u2014 click the scan icon in the toolbar to resize visible row heights so linked scene cards, notes, and entity tags are easier to see without changing column widths.\r
-- **Act & chapter dividers** \u2014 colored bands appear when the act or chapter changes, showing labels from your project structure.\r
-- **Status color-coding** \u2014 scene rows show a colored left border matching their current status.\r
-- **Click to open** \u2014 click a row header to open the linked scene file. Click a column header to open the character or location file.\r
-- **Shared filters** \u2014 the same filter bar used in Board and Timeline views is now available in the Plotgrid. Filter by status, act, chapter, POV, characters, locations, tags, or search text. Presets are shared across views.\r
-- **Tabbed cell inspector** \u2014 when a cell has a linked scene, the inspector shows two tabs:\r
-  - **Cell tab** \u2014 cell content, detected characters/locations/tags, and a linked scene link.\r
-  - **Scene tab** \u2014 the full scene editor (status, POV, characters, location, tags, conflict, synopsis, etc.) so you can edit scene details without leaving the grid.\r
-- **Auto-Note** \u2014 When the Auto-Note toggle is on (enabled by default), typing text into an empty, unlinked cell automatically creates a corkboard note and links it back to the cell. The note is saved as an *idea* with a \`plotgridOrigin\` label built from the row and column names, so you can always trace it back to where it started. Toggle Auto-Note on or off with the sticky-note icon in the Plotgrid toolbar \u2014 the icon turns accent-colored when active.\r
-- **Codex entity tags** \u2014 Each cell automatically displays small color-coded pills at the bottom showing characters (blue), locations (green), and codex entries (purple) detected in the cell text and/or the linked scene's prose. Entity detection uses the same LinkScanner engine \u2014 no manual tagging needed.\r
-- **Sync from Scenes** \u2014 Click the sync button in the toolbar to auto-populate the grid. Choose a column source: Characters, Plotlines (tags), Locations, or any Codex category enabled for the Inspector. Rows are created from scenes (sorted by act \u2192 chapter \u2192 sequence) and cells are filled where data exists. Manual edits are preserved in merge mode. Click a Codex column header to open the linked entry file.\r
-- **Linked scene cards** \u2014 The Sync from Scenes modal includes **Show linked scene cards in synced cells** (enabled by default). Turn it off to hide linked scene previews, POV pills, and entity pills derived from linked scenes while keeping the scene links and manual cell text. The preference is saved immediately and applies across projects.\r
-- **Drag with confirmation** \u2014 Dragging a cell onto another cell that already has content asks for confirmation before overwriting. Cell-to-cell moves can be undone with \`Ctrl+Z\`.\r
-\r
-### Timeline View\r
-\r
-Visualize your scenes on a chronological timeline.\r
-\r
-- Scenes are positioned by \`storyDate\` and \`storyTime\` metadata.\r
-- Useful for tracking parallel storylines and temporal flow.\r
-- Click a scene to edit its time properties.\r
-- Supports multiple timelines for complex narratives.\r
-- Add acts and chapters from the toolbar.\r
-- **Order Toggle** \u2014 switch between **Reading Order** (scene sequence) and **Chronological Order** (in-story timeline). See [Reading Order vs Chronological Order](#reading-order-vs-chronological-order).\r
-- **Dual-order badges** \u2014 each scene card shows both its reading-order number and chronological-order number.\r
-- **Beat Sheet Templates** \u2014 apply a story structure template from the Structure modal.\r
-- **Act labels** \u2014 custom beat/act labels are displayed on timeline dividers and are inline-editable.\r
-- **Swimlane mode** \u2014 see [Timeline Swimlanes](#timeline-swimlanes).\r
-- **Multi-select** \u2014 ctrl/cmd-click to select multiple scenes. Right-click a selected scene for bulk actions.\r
-- **Shift dates** \u2014 when two or more scenes are selected, right-click \u2192 **"Shift dates (N scenes)\u2026"** opens a modal to adjust their dates/times in bulk. Two modes: **"Start on a new date"** (set a new date/time for the earliest scene; the delta is applied to all others, preserving gaps) or **"Move by a set amount"** (shift all by a signed number of days/weeks/hours/minutes). A live preview shows each scene's current \u2192 new date/time. Only \`storyDate\` and \`storyTime\` are written; sequence and order are untouched.\r
-\r
-### Plotlines View\r
-\r
-Track your story's plotlines (tags) across the narrative. Two view modes are available \u2014 toggle between them with the buttons in the toolbar.\r
-\r
-#### Subway Map (default)\r
-- Transit-style SVG visualization with one flat lane per plotline.\r
-- Scenes appear as labeled station nodes along each plotline's track.\r
-- **Gradient connectors** link shared scenes across plotlines, colored by the source tag.\r
-- **Act dividers** show vertical lines with act labels for structural context.\r
-- **Scene labels & tag pills** display below each node for quick identification.\r
-- **Hover details** show title, subtitle, synopsis, Arc Point status, plotlines, and story date/time when available.\r
-- **Drag to pan** \u2014 click and drag the map to navigate large stories.\r
-- **Per-tag color picker** \u2014 click the palette icon next to any plotline header to assign a custom color. Right-click a header for "Change color" / "Reset color".\r
-\r
-#### List View\r
-- Each plotline (tag) gets its own row showing which scenes it appears in.\r
-- Quickly see which plotlines are active, dormant, or unresolved.\r
-\r
-#### Common Features\r
-- **Rename** or **delete** plotlines across all scenes at once.\r
-- **Descriptions / notes** *(new in 1.10.51)* \u2014 click the **file-text** icon on a plotline header to add a short note reminding you what the plotline is supposed to do. The description is shown under the plotline header in list view, and is carried over when you rename the plotline. Useful for tracking open threads ("the mage in the tower") without resorting to a full plotline for every small detail.\r
-- Visualize plotline density and coverage.\r
-- Scenes default to **reading order** (chapter). Toggle to chronological order from the toolbar.\r
-\r
-### Manuscript View\r
-\r
-A Scrivenings-style continuous document view that presents your entire story as a single scrollable manuscript. Each scene is an embedded Live Preview editor \u2014 you can read and edit everything in place without switching files.\r
-\r
-- **Embedded editing** \u2014 every scene is a fully functional Obsidian Live Preview editor. Click into any scene and start typing.\r
-- **Continuous reading** \u2014 scenes are arranged in reading order (act \u2192 chapter \u2192 sequence) with no frontmatter visible.\r
-- **Act & chapter headings** \u2014 automatic section dividers appear whenever the act or chapter changes.\r
-- **Scene dividers** \u2014 each scene block shows a subtle header with the scene title and a color-coded status badge (idea, draft, written, etc.).\r
-- **Clickable titles** \u2014 click any scene title to open that scene file in a new tab.\r
-- **Plain Text toggle** \u2014 hides wiki-link styling, tag \`#\` prefixes, and external-link URLs so the text reads like clean prose. Defaults to ON for first-time users; the toolbar remembers your last choice (ON or OFF) across view switches and Obsidian restarts.\r
-- **Lock Links toggle** \u2014 makes internal links and tags non-editable. The cursor skips over link and tag text, preventing accidental changes while you write around them. Default: ON.\r
-- **Filter support** \u2014 use the same filter bar as other views to narrow down which scenes appear.\r
-- **Word count footer** \u2014 total scene count and aggregate word count displayed at the bottom.\r
-- **Lazy loading** \u2014 editors are mounted on demand as you scroll, keeping memory usage low even for large projects.\r
-- **Navigator integration** \u2014 clicking a scene in the Navigator scrolls the manuscript to that scene instead of opening a new file.\r
-- **Inspector tracking** \u2014 the Scene Details sidebar automatically follows whichever scene is currently visible in the manuscript.\r
-- **Focus Mode** \u2014 click the glasses icon in the filter bar to enter Focus Mode. Surrounding UI (sidebars, ribbon, title bar, tab headers) is dimmed, darkened, and optionally blurred so you can concentrate on your text. The filter bar, scene headers, dividers, and footer are hidden. Adjust the effect in **Settings \u2192 Focus Mode Settings**: Dim amount (toolbar opacity), Darken (environment brightness), and Blur (environment blur). Click the glasses icon again to exit.\r
-- **Find & replace across the whole book** \u2014 right-click inside a scene in the Manuscript view and choose **Find & replace in manuscript** (added to Obsidian's native editor context menu, so all the usual editor menu items remain available) to open a search panel that scans every scene in the current filter/sort scope (not just the scenes currently scrolled into view). Use the chevron buttons or Enter / Shift+Enter to jump between matches; navigating to a match in an unmounted scene auto-mounts its editor and scrolls it into view. Toggle case-sensitive, whole-word, or regular-expression matching with the Aa / whole-word / .* buttons. Enter replacement text and click the replace icon (single match) or check icon (all matches). Replacements in unmounted scenes are written directly to disk. *(Issue #195)*\r
-\r
-Access the Manuscript view from the **Manuscript** tab (**book-open-text** icon) in the view switcher, located between Plotlines and Codex.\r
-\r
-### Characters View\r
-\r
-A dedicated character management system with rich profiles. Characters are accessed through the **Codex** hub.\r
-\r
-#### Overview Grid\r
-- All characters displayed as **compact cards** with role badge, snippet, and completeness bar.\r
-- **Portrait images** \u2014 each card shows a circular portrait (64\xD764 px). Click the placeholder icon to add an image.\r
-- Cards are color-coded by role (protagonist, antagonist, supporting, minor, mentor, love interest).\r
-- **Unlinked characters** \u2014 characters mentioned in scenes but without a profile are listed separately with a one-click "Create" button.\r
-- Click any card to open the full character detail editor.\r
-- **Visual groups** \u2014 use the group button to create named, display-only groups such as \`Friends\`. Drag character cards into bordered groups, reorder cards within a group, and drag a group header onto another group header to reorder the groups. Groups are saved per project and do not move character files or change frontmatter.\r
-- **Relationship Map** \u2014 see [Relationship Map](#relationship-map).\r
-\r
-#### Character Detail Editor\r
-- **Collapsible sections** organized into seven categories:\r
-  - **Basic Information** \u2014 name, age, role, occupation, nickname, residency, locations. *(Since 1.9.6 a character can hold more than one role at once \u2014 type comma-separated values such as \`protagonist, narrator\` and one badge per role is rendered.)*\r
-  - **Physical Characteristics** \u2014 appearance, distinguishing features.\r
-  - **Personality** \u2014 traits, strengths, weaknesses, fears, motivations.\r
-  - **Backstory** \u2014 background, key events, secrets.\r
-  - **Relationships** \u2014 allies, enemies, romantic, mentors, other connections.\r
-  - **Character Arc** \u2014 starting state, desired arc, ending state.\r
-  - **Custom Fields** \u2014 add your own key/value pairs for anything else.\r
-- **Portrait area** \u2014 circular portrait (96\xD796 px) at the top of the editor. Click to add or change the image. Hover shows "Add image" / "Change image" label.\r
-- **Image gallery** \u2014 add up to 10 reference images with captions. Browse them in a carousel below the portrait, or open any image in a floating lightbox you can resize and drag around. See [Image Galleries](#image-galleries).\r
-- **Image picker** \u2014 choose to import an image from your computer (saved into \`<Project>/Images/\`), pick an existing vault image, or remove the current image.\r
-- All fields show grey **placeholder text** that disappears when you type.\r
-- **Auto-save** \u2014 changes are saved automatically after a short delay (no manual save needed).\r
-- **Show in StoryLine** \u2014 when editing a character\u2019s markdown file in a regular Obsidian tab, right-click and choose **Show in StoryLine** (or use the command palette) to jump back to the character\u2019s detail panel. This also works for location and codex entry files.\r
-- **Side panel** shows:\r
-  - Scene count, word count, and POV scene count.\r
-  - Intensity curve graph for scenes featuring this character.\r
-  - Gap detection warnings.\r
-  - Full list of scenes the character appears in, with status badges.\r
-  - **Referenced By** \u2014 other characters, locations, codex entries, and scenes that mention this character (see [Cross-Entity References](#cross-entity-references)).\r
-  - **Linked Aliases** \u2014 when you use the **Link to\u2026** action on an unlinked character name (in the overview grid's "Unlinked" tab), that alias is mapped to a canonical character profile so scenes aggregate correctly. The side panel now lists every alias linked to the current character, each with an **Unlink** button that removes the mapping and restores the alias as a standalone entry. *(Issue #213)*\r
-- **Hide/show fields** \u2014 hover over any field label to reveal an eye icon. Click to hide unused fields. See [Hide / Show Built-in Fields](#hide--show-built-in-fields).\r
-\r
-### Locations View\r
-\r
-A hierarchical worldbuilding and location management system. Locations are accessed through the **Codex** hub.\r
-\r
-#### Two-Level Structure\r
-- **Worlds** \u2014 top-level containers for worldbuilding (geography, culture, politics, magic/technology, beliefs, economy, history).\r
-- **Locations** \u2014 specific places that can optionally belong to a world. Locations can also have a **parent location**, enabling unlimited nesting (e.g., a building \u2192 its rooms).\r
-\r
-#### Overview Tree\r
-- Worlds appear as **collapsible top-level nodes** with a globe icon and location count.\r
-- **Image thumbnails** \u2014 small (20\xD720 px) thumbnails appear next to each node when an image is set.\r
-- Locations nest underneath their world, with further child locations indented below their parent.\r
-- **Standalone locations** (not linked to any world) appear in a separate section.\r
-- **Unlinked locations** \u2014 places referenced in scenes but without a profile show a "Create" button.\r
-- **Visual groups** \u2014 use the group button to create named, display-only groups. Drag worlds or standalone locations into bordered groups, reorder entries within a group, and drag group headers to reorder the groups. Groups are saved per project and do not change the location hierarchy or move files.\r
-- Click any node to open its detail editor.\r
-- **Drag-and-drop reparenting** *(new in 1.10.51)* \u2014 drag any location node and drop it onto another location (to make that its parent) or onto a world (to move it into that world as a top-level location). Cycles are prevented automatically. This is a fast way to reorganise your hierarchy without opening each location's Hierarchy section.\r
-\r
-#### Detail Editor\r
-- **World profiles** have eight collapsible sections: Overview, Geography & Environment, Culture & Society, Politics & Power, Magic & Technology, Beliefs & Mythology, Economy & Trade, History & Lore.\r
-- **Location profiles** have five sections: Overview, Atmosphere & Description, Story Significance, Connected Locations, and a Hierarchy section with World and Parent dropdowns.\r
-- **Nicknames / Aliases** \u2014 Both worlds and locations now support a **Nickname / Alias** field (comma-separated). The Link Scanner uses these to match alternative names in your prose, so writing "The Citadel" will link to a location whose nickname includes it.\r
-- **Portrait area** \u2014 rectangular portrait (120\xD780 px) at the top of the detail editor. Click to add or change the image.\r
-- **Image gallery** \u2014 add up to 10 images with captions. Browse via carousel or open in a floating lightbox. See [Image Galleries](#image-galleries).\r
-- **Image picker** \u2014 import from computer (saved into \`<Project>/Images/\` with automatic dedup), choose from vault, or remove.\r
-- **Custom fields** for any additional notes.\r
-- **Custom location types** \u2014 the **Type** dropdown on a Location includes built-in options (City, Town, Wilderness, \u2026) plus any types you've added. Pick **+ Add custom type\u2026** at the bottom of the list to add a new one on the fly (e.g. **Planet**, **Star System**, **Galactic Region**, **Galaxy**, **Dimension**) \u2014 useful for sci-fi, fantasy, and tabletop campaigns. You can also manage the list under **Settings \u2192 Custom Location Types**.\r
-- **Auto-save** with focus-loss protection (editing won't be interrupted).\r
-- **Side panel** shows:\r
-  - Location/world stats (scene count, sub-location count).\r
-  - List of scenes set at the location.\r
-  - Characters who appear at the location (with frequency count).\r
-  - For worlds: all locations in that world with one-click navigation.\r
-  - **Referenced By** \u2014 other entities and scenes that mention this location (see [Cross-Entity References](#cross-entity-references)).\r
-- **Hide/show fields** \u2014 hover over any field label to reveal an eye icon. Click to hide unused fields. See [Hide / Show Built-in Fields](#hide--show-built-in-fields).\r
-\r
-### Codex Hub\r
-\r
-The Codex is a unified hub that brings Characters, Locations, and custom categories together in one place.\r
-\r
-- **Tab navigation** \u2014 Switch between Characters, Locations, and any custom categories using the tab bar at the top of the Codex.\r
-- **Custom categories** \u2014 Add your own categories (for example: Props, Factions, Magic Systems, Creatures) from the Codex toolbar. Each category gets its own folder inside \`Codex/\`, its own search, and individual detail pages with editable fields.\r
-- **Inspector toggle** \u2014 In the Manage Categories modal, each category has an **Inspector** checkbox. When enabled, that category appears as a tag-pill section in the Scene Inspector sidebar, letting you link Codex entries to scenes just like Characters and Locations. Linked entries are stored in the scene\u2019s \`codexLinks\` frontmatter field.\r
-- **Search** \u2014 A search bar at the top of the hub filters across all entries, including Characters and Locations.\r
-- **Visual groups** \u2014 use the group button to create named, display-only groups for the active Codex category. Drag entries into bordered groups, reorder entries within a group, and drag group headers to reorder the groups. Groups are saved per project and do not move files or change frontmatter. Empty groups remain available as drop targets.\r
-- **Back navigation** \u2014 From any detail page, click the back arrow to return to the Codex hub.\r
-- **Change detection** \u2014 When a codex entry's content has been modified since it was last reviewed, an amber warning banner appears on the detail page listing all scenes that reference the entry. Click any scene name to open it. Click **"Mark as reviewed"** to clear the warning and update the stored digest. Digests are stored per-project in \`System/codex-digests.json\`.\r
-- **Backward compatible** \u2014 Existing projects that have Characters and Locations folders at the top level (outside Codex/) continue to work without any changes.\r
-\r
-#### Linking & Matching\r
-\r
-Every Codex category (Items, Creatures, Lore, Organizations, Culture, Systems, and custom categories) includes a shared **Linking & Matching** section at the bottom of each entry's detail page. Characters and Locations also have this section (without the Aliases field, since they already have a Nickname field in Basic Information / Overview).\r
-\r
-| Field | Description |\r
-|-------|-------------|\r
-| **Type** | A free-form sub-type label (e.g. "Sword", "Potion", "Legend") shown as a badge next to the entry name in the list. |\r
-| **Aliases** | Comma- or newline-separated alternative names that should also link to this entry when found in scene text. *(Codex entries only \u2014 Characters and Locations use the Nickname field.)* |\r
-| **Case-sensitive matching** | An on/off toggle. When on, the entry's name and aliases only match text with the exact same capitalisation (e.g. "Dust" matches "Dust" but not "dust"). Off by default. |\r
-| **Exclude terms** | Comma- or newline-separated phrases that suppress a match when they appear **at the same location** in the text (e.g. listing "Lady Margaret" on a "Lady" entry prevents that specific mention from linking). Exclude terms are checked *per match*, not across the whole scene \u2014 so a legitimate mention elsewhere in the same scene still tags the entity. |\r
-\r
-These rules are applied by the Link Scanner when it scans scene bodies for plain-text mentions, so you have fine-grained control over which words get linked \u2014 useful for complex name-play in speculative fiction.\r
-\r
-> **Tip:** The scanner automatically treats the first word of a character's name as an alias (e.g. "Anna" for "Anna Svensson"), but skips this for titles (Lady, Lord, Sir, \u2026) and descriptive phrases ("Lady of Dreams", "Keeper of the Keys") to avoid false positives.\r
-\r
-### Stats View\r
-\r
-A statistics dashboard organized into eight collapsible sections. Click any section header to expand or collapse it.\r
-\r
-#### 1. Overview (open by default)\r
-- **Word count progress** \u2014 actual vs. project goal with a progress bar.\r
-- **Estimated reading time** \u2014 calculated from total words.\r
-- **Pace projection** \u2014 words per day needed to hit your goal, with an estimated completion date.\r
-\r
-#### 2. Writing Sprint (open by default)\r
-- **Session stats** \u2014 words written this session, duration, words per minute.\r
-- **Streak** \u2014 consecutive days with writing activity.\r
-- **Daily goal** \u2014 today's words vs. your daily target, with a progress bar.\r
-- **Progress rings** \u2014 three circular rings show progress toward your **Daily**, **Weekly** (Mon \u2192 today), and **Monthly** (day 1 \u2192 today) word goals. Each ring turns green when its goal is reached; the percentage label is uncapped, so you'll see "127%" if you blow past a target. Configure goals under Settings \u2192 Writing Goals.\r
-- **7-day sparkline** \u2014 miniature bar chart showing your last seven days of writing.\r
-\r
-#### 3. Writing History (collapsible)\r
-- **Daily bar chart** \u2014 words written per day, with a range selector: 7d, 30d, 90d, or All.\r
-- Hover any bar to see the exact date and word count.\r
-\r
-#### 4. Progress Breakdown (collapsible)\r
-- **By status** \u2014 word counts for each status stage (idea \u2192 final).\r
-- **By chapter** \u2014 word count per chapter, with outlier highlighting for unusually short or long chapters.\r
-- **Act balance** \u2014 stacked bars showing how evenly your acts are distributed.\r
-\r
-#### 5. Characters & World (collapsed by default)\r
-- **POV distribution** \u2014 who gets the most page time.\r
-- **Character scene coverage** \u2014 heatmap of how often each character appears.\r
-- **Character \xD7 Chapter Heatmap** \u2014 a grid showing character appearances per chapter with color-coded intensity. Helps spot under-represented characters and distribution gaps.\r
-- **Location frequency** \u2014 bar chart of how often each location is used.\r
-\r
-#### 6. Pacing & Tension (collapsed by default)\r
-- **Average scene length by act** \u2014 bar chart.\r
-- **Word count distribution** \u2014 histogram of scene lengths.\r
-- **Scene length outliers** \u2014 flags unusually short or long scenes.\r
-- **Dialogue vs. narrative ratio** \u2014 per-scene breakdown.\r
-- **Tension curve** \u2014 visual graph of your story's emotional arc based on scene intensity values.\r
-\r
-#### 5b. Setup & Payoff Map (collapsed by default)\r
-- **Setup \u2192 Payoff chains** \u2014 visualizes explicit links between scenes using \`setup_scenes\` and \`payoff_scenes\` frontmatter.\r
-- **Dangling payoffs** \u2014 flags scenes whose setup references are never paid off.\r
-- **Click to open** \u2014 click any scene name to open it in a new tab.\r
-\r
-#### 6b. Pacing Coach (inside Pacing & Tension)\r
-- **Scene length with conflict presence** \u2014 bar chart where each bar is a scene and dots indicate whether \`conflict\` is defined. Long bars without conflict are highlighted.\r
-- **Summary stats** \u2014 average word count with/without conflict, total scene counts.\r
-- **Flagged scenes** \u2014 specific long scenes lacking conflict are listed as potential pacing issues.\r
-\r
-#### 7. Prose Analysis (collapsed, lazy-loaded)\r
-- **Readability scores** \u2014 Flesch-Kincaid Grade Level and Flesch Reading Ease.\r
-- **Average sentence and word length.**\r
-- **Word frequency** \u2014 top 20 most-used words (excluding common stop words), shown as a bar chart.\r
-- **Overused words** \u2014 flags words that appear disproportionately often.\r
-- This section loads on demand when expanded to avoid slowing down the dashboard.\r
-\r
-#### 7b. Echo Finder (collapsed, lazy-loaded)\r
-- **Repeated phrases** \u2014 scans all scene prose for duplicated multi-word sequences that may indicate unintentional repetition.\r
-- Lazy-loaded on expand to avoid slowing down the dashboard.\r
-\r
-#### 8. Warnings (open by default)\r
-- **Plot hole detection** \u2014 automated warnings grouped by category (see [Plot Hole Detection](#plot-hole-detection)).\r
-\r
-### Navigator View\r
-\r
-A compact sidebar panel for quick scene navigation without leaving your current view.\r
-\r
-#### Toolbar\r
-- **Search** \u2014 type to filter scenes by title.\r
-- **Sort** \u2014 multiple modes: Reading order (by act, default), **By chapter** *(since 1.10.14, groups scenes under collapsible chapter headers, acts hidden)*, Chronological, Status, Recently Modified, Word Count, and Title (A\u2013Z).\r
-- **Scene Details** \u2014 a button that opens the Scene Details Sidebar in the right panel (see below).\r
-\r
-#### Plotline Filter\r
-- Collapsible section listing all plotline tags in the project.\r
-- Each plotline shows a **color dot** (matching your color scheme) and a **scene count**.\r
-- Click a plotline to filter scenes to only those tagged with it. Click again to clear.\r
-\r
-#### Scene List\r
-- Scenes grouped by **act** with collapsible act headers.\r
-- Each row shows: sequence number, title, status badge, and word count.\r
-- **Pinned scenes** appear at the top in a dedicated section for quick access.\r
-- Click a scene to select it in the main view. Right-click for a context menu: pin/unpin and change status.\r
-\r
-#### Progress Bar\r
-- A bottom bar showing overall word count progress toward your project goal.\r
-\r
-#### Auto-Open\r
-- The Navigator opens automatically when a project loads (configurable via **Settings \u2192 Auto-open Navigator**).\r
-- You can also open it manually via the command palette: **Open StoryLine Navigator**.\r
-\r
-### Scene Details Sidebar\r
-\r
-A standalone sidebar panel that shows the full Inspector for the currently active scene file. Use it to view and edit scene metadata side-by-side with your writing.\r
-\r
-#### How It Works\r
-\r
-1. Open the Scene Details Sidebar from the **Scene Details** button in the Navigator, or via the command palette (**Open Scene Details Sidebar**).\r
-2. The panel automatically detects the active file in the editor.\r
-3. If the active file is a scene (has \`type: scene\` in frontmatter), the full Inspector is displayed \u2014 title, status, POV, characters, location, tags, conflict, notes, setup/payoff links, and more.\r
-4. When you switch to a different file, the panel updates automatically.\r
-5. If the active file is not a scene, an empty state message is shown.\r
-\r
-#### Features\r
-\r
-- **Info tab** *(since 1.10.14)* \u2014 a lightweight planning panel showing synopsis, status, POV, location, word count and notes at a glance. Use it when you want a quick overview without scrolling through the full Inspector.\r
-- **Auto-update** \u2014 follows the active editor file. Switch between scene files and the sidebar updates instantly.\r
-- **Full Inspector** \u2014 all the same fields and editing capabilities as the main Inspector panel.\r
-- **Refresh on save** \u2014 when you modify a scene file in the editor, the sidebar refreshes to reflect changes (with a short delay to avoid conflicts).\r
-- **Non-intrusive** \u2014 lives in the right sidebar and doesn\u2019t interfere with your main views.\r
-\r
-### Research Sidebar\r
-\r
-A right-sidebar panel for collecting and browsing research material alongside your writing. Research posts are stored as Markdown files in the \`Research/\` folder inside your project.\r
-\r
-#### Post Types\r
-\r
-| Type | Purpose |\r
-|------|---------|\r
-| **Note** | Free-form research notes |\r
-| **Web Clip** | Content clipped from the web, with source URL |\r
-| **Image** | Image-based reference material |\r
-| **Question** | Open questions that need answering, with resolved/unresolved tracking |\r
-\r
-#### Features\r
-\r
-- **Search** - type in the search box to filter posts by title, body text, and tags.\r
-- **Tag filter** - click any tag chip to filter results to that tag. Click again to clear. Your selection is remembered between sessions.\r
-- **Type filter** - filter by post type (Note, Web Clip, Image, Question) or show all. Your selection is remembered between sessions.\r
-- **Auto-suggest** - click the sparkle button to switch to auto-suggest mode. The panel surfaces research posts relevant to the active scene's characters, location, and tags.\r
-- **Open question badge** - shows a red badge with the count of unresolved questions.\r
-- **Inline detail** - click a card to expand it and read the full content, source URL, and action buttons.\r
-- **Create** - click the + button to create a new research post with title, type, tags, optional source URL, and content.\r
-- **Image posts** - when creating or editing an Image-type post, use the built-in image picker to import or choose a vault image. Image previews appear inline on expanded cards.\r
-- **Open / Resolve / Delete** - expanded cards include buttons to open the file in the editor, toggle question resolved status, or delete the post.\r
-\r
-#### How to Open\r
-\r
-Use the command palette: **Open Research Sidebar**.\r
-\r
----\r
-\r
-## Scene Cards\r
-\r
-Each scene is a Markdown file with YAML frontmatter. StoryLine manages these fields:\r
-\r
-| Field | Description | Example |\r
-|-------|-------------|---------|\r
-| \`title\` | Scene title | \`"The Chase"\` |\r
-| \`act\` | Act number | \`2\` |\r
-| \`chapter\` | Chapter number | \`7\` |\r
-| \`sequence\` | Reading order (as written) | \`14\` |\r
-| \`chronologicalOrder\` | In-story chronological order | \`8\` |\r
-| \`pov\` | Point of view character | \`"[[Anna]]"\` |\r
-| \`characters\` | Characters present (wikilinks) | \`["[[Anna]]", "[[Erik]]"]\` |\r
-| \`location\` | Setting (wikilink) | \`"[[Castle]]"\` |\r
-| \`status\` | Completion status | \`draft\` |\r
-| \`storyDate\` | Date in the story | \`"2026-02-17"\` or \`"Day 3"\` |\r
-| \`storyTime\` | Time in the story | \`"14:00"\` or \`"morning"\` |\r
-| \`conflict\` | Main conflict | \`"Anna must escape"\` |\r
-| \`emotion\` | Emotional tone | \`"tense"\` |\r
-| \`intensity\` | Arc intensity (-10 to +10) | \`7\` |\r
-| \`wordcount\` | Actual word count (auto) | \`1200\` |\r
-| \`target_wordcount\` | Target word count | \`800\` |\r
-| \`tags\` | Plotlines and themes | \`["romance", "betrayal"]\` |\r
-| \`notes\` | Editorial / author notes | \`"Needs more tension"\` || \`timeline_mode\` | Non-linear narrative technique | \`"flashback"\` |\r
-| \`timeline_strand\` | Parallel/frame strand group | \`"1985"\` |\r
-| \`subtitle\` | Optional subtitle below the title | \`"Three years later"\` |\r
-| \`color\` | Custom scene card background color (hex) | \`"#FF6B6B"\` |\r
-| \`codexLinks\` | Linked Codex entries per category | \`{ items: ["Sword"], factions: ["Rebels"] }\` |\r
-| \`setup_scenes\` | Scenes this sets up (by title or \`[[wikilink]]\`) | \`["Scene 10"]\` or \`["[[Scene 10]]"]\` |\r
-| \`payoff_scenes\` | Scenes that pay off this one (by title or \`[[wikilink]]\`) | \`["Scene 10"]\` or \`["[[Scene 10]]"]\` |\r
-\r
-**Status progression:** \`idea\` \u2192 \`outlined\` \u2192 \`draft\` \u2192 \`written\` \u2192 \`revised\` \u2192 \`final\`. Custom statuses can be added in Settings. Enable **Counts as written** on a custom status if it should be included in character writing-progress bars.\r
-\r
-**References as wikilinks** *(since 1.9.6)* \u2014 \`pov\`, \`location\`, \`characters\`, \`setup_scenes\` and \`payoff_scenes\` are written as Obsidian \`[[wikilinks]]\` by default so they auto-update when you rename a character or scene. Plain-text values still work \u2014 readers accept either form. Toggle the writer at **Settings \u2192 Write scene references as wikilinks**.\r
-\r
-**Wordcount exclusions** *(since 1.9.6)* \u2014 Two toggles under **Settings \u2192 Scene Cards** control what \`MetadataParser.countWords\` actually counts:\r
-\r
-- **Exclude \`%%comments%%\` from wordcount** *(default on)* \u2014 Obsidian comment blocks are stripped before counting, so author notes and TODOs do not inflate scene/manuscript totals.\r
-- **Also ignore checkbox lines** *(default off)* \u2014 When enabled, lines starting with \`- [ ]\` or \`- [x]\` are also stripped, useful for outline-style scenes that mix prose with task lists.\r
-\r
-These settings flow through scene cards, the inspector, the Writing Tracker, and exports.\r
-\r
-**Count unit: words or characters** *(since 1.10.31)* \u2014 A **Count unit for scene lengths** dropdown under **Settings \u2192 Scene Cards** lets you choose whether scene cards, the Timeline, and the Inspector show scene length in **Words** (default) or **Characters**. The character count is stored in a new \`charcount\` frontmatter field and applies the same exclusions as the word count. Handy for prose writers who track length in characters (e.g. Russian, Chinese, Japanese).\r
-\r
-**Default scene frontmatter** *(since 1.9.6)* \u2014 Universal Field Templates have an optional **Default value** that is auto-applied to newly created scenes (multi-select fields accept comma-separated defaults). In addition, **Settings \u2192 Default scene frontmatter** accepts a free-form YAML block whose keys are merged into every newly created scene's frontmatter. StoryLine-owned keys (\`type\`, \`title\`, \`act\`, \`chapter\`, \`sequence\`, \`status\`, \`wordcount\`, \u2026) always win on conflict, so the default snippet can never overwrite the engine's own metadata.\r
-\r
-**Scene card preview text** *(since 1.10.14)* \u2014 Beneath each scene card title you can show a short preview line. Choose what to display at **Settings \u2192 Scene Cards \u2192 Scene card preview text**: **None**, **Synopsis**, **First lines of draft**, or **Conflict**. The card stays compact and the preview is clipped to ~4 lines.\r
-\r
-**Hide frontmatter on StoryLine notes** *(since 1.10.14)* \u2014 Toggle **Settings \u2192 Editor \u2192 Hide frontmatter** to hide the properties block on notes inside your StoryLine root folder. Other vault notes are unaffected. All scene metadata remains editable from the Inspector.\r
-\r
-Write your scene content below the frontmatter as normal Markdown.\r
-\r
----\r
-\r
-## Scene Subtitles\r
-\r
-Scenes can have an optional **subtitle** field \u2014 a short phrase displayed below the title. Use it for things like:\r
-\r
-- *"Three years later"*\r
-- *"Meanwhile, in Paris"*\r
-- *"Interlude: Letters from the front"*\r
-\r
-Subtitles appear on scene cards (Board view) and in the Manuscript view header. Edit them in the Inspector panel just below the title input.\r
-\r
-Set the \`subtitle\` field in frontmatter, or type it directly in the Inspector. Leave it blank to hide.\r
-\r
----\r
-\r
-## Scene Archive\r
-\r
-Archive a scene to remove it from all views without deleting it. Archived scenes are moved to the \`Archive/\` folder inside your project.\r
-\r
-- **Archive** \u2014 right-click any scene in the Board or Navigator and choose **Archive Scene**. The file moves to \`Archive/\` and disappears from the index.\r
-- **Restore** \u2014 click the **archive** icon in the Board view toolbar. This opens a modal listing all archived scenes, each with a **Restore** button that moves the file back to \`Scenes/\` and re-indexes it.\r
-- **Forking** \u2014 when you fork a project, archived scenes are copied to the new project's \`Archive/\` folder.\r
-\r
-Archived scenes stay as regular \`.md\` files and can be reviewed or edited at any time through Obsidian's file explorer.\r
-\r
----\r
-\r
-## Inactive Scenes\r
-\r
-Mark a scene inactive when you want to park it without moving it to the Archive. Inactive scenes stay in the project and keep their metadata, notes, links, and position, but they are hidden from Manuscript, exports, Navigator, and aggregate stats by default.\r
-\r
-- **Mark inactive** \u2014 open the scene in the Inspector and enable **Inactive scene**, or right-click a scene in the Board and choose **Mark Inactive**.\r
-- **Show parked scenes** \u2014 use the **Active / All / Inactive** control in the shared filter bar to switch between normal scenes, every scene, or inactive scenes only.\r
-- **Export inactive scenes** \u2014 exports exclude inactive scenes unless you enable **Include inactive scenes** in the export dialog.\r
-\r
-Inactive status is stored as \`inactive: true\` in scene frontmatter. Use Archive when you want to move a scene out of the active project folder entirely; use inactive when the scene still belongs in your planning space.\r
-\r
----\r
-\r
-## Inspector Panel\r
-\r
-Click any scene card to open the **Inspector Panel** on the right side. It provides:\r
-\r
-- **Metadata editing** \u2014 title, act, chapter, sequence, status, POV, location, conflict, emotion, intensity. Act and chapter are free-text fields: use plain numbers (\`1\`, \`2\`, \`10\`), hierarchical decimals (\`1.1\`, \`1.2\`, \`2.1\`), or text labels (\`Prologue\`, \`Interlude A\`). Sorting throughout the plugin is numeric-aware. Avoid Windows-illegal characters (\`< > : " / \\ | ? *\`) \u2014 the Inspector will warn you if you type one.\r
-- **Prologue & Epilogue** *(new in 1.10.18)* \u2014 Set act to **0** for Prologue or **99** for Epilogue. Quick-select buttons appear below the Act input. All views display "Prologue" and "Epilogue" instead of "Act 0" / "Act 99".\r
-- **Characters** \u2014 add/remove characters with autocomplete and tag-pill inputs.\r
-- **Codex sections** \u2014 any Codex category enabled for the Inspector (via Codex \u2192 Manage Categories) appears as a tag-pill input below the Location field. Add or remove linked Codex entries with autocomplete from your category\u2019s entries.\r
-- **Tags** \u2014 manage plotline tags with autocomplete, color-coded tag badges when tag colors are configured.\r
-- **Notes** \u2014 editorial notes for author comments and reminders. StoryLine stores scene notes in a separate notes file named \`Scene Title - Notes.md\` and links it from the scene frontmatter with \`notesFile\`. Type \`[[\` to get an inline wikilink autocomplete *(new in 1.9.9)* \u2014 pick a note with **\u2191/\u2193 + Enter** (or click) to drop a \`[[Note Name]]\` link straight into your comment.\r
-- **Custom Fields** \u2014 values for any [Custom Scene Fields](#custom-scene-fields) you've defined for the project. Click the **+** button on the section header to create a new field on the fly, or the pencil button next to a field to edit / delete it.\r
-- **Snapshots** \u2014 save and restore point-in-time versions of the scene.\r
-- **Word count** \u2014 current vs. target with progress indicator.\r
-- **Setup/Payoff links** \u2014 see and manage which scenes set up or pay off this scene.\r
-- **Time & Order** \u2014 story date, story time, chronological order, timeline mode, and timeline strand (see [Reading Order vs Chronological Order](#reading-order-vs-chronological-order) and [Timeline Modes](#timeline-modes)).\r
-- **Open scene** \u2014 click to open the full Markdown file in reading view (frontmatter stays hidden).\r
-\r
----\r
-\r
-## Filtering & Presets\r
-\r
-All views support filtering by:\r
-\r
-- **Active state** \u2014 show active scenes, all scenes, or inactive scenes only\r
-- **Status** (idea, outlined, draft, written, revised, final)\r
-- **Characters** \u2014 filter by character presence\r
-- **Locations** \u2014 filter by location\r
-- **Tags** \u2014 filter by plotline/theme tags\r
-- **Custom Scene Fields** \u2014 every dropdown / multi-select [custom field](#custom-scene-fields) automatically gets its own chip group in the filter panel.\r
-- **Search text** \u2014 free-text search across titles and content\r
-\r
-### Filter Chips\r
-\r
-Active filters appear as clickable chips at the top. Click a chip to remove that filter.\r
-\r
-### Saved Presets\r
-\r
-Save your current filter combination as a **preset** for quick reuse:\r
-\r
-1. Set your desired filters.\r
-2. Click **Save Preset** and give it a name.\r
-3. Access saved presets from the preset dropdown.\r
-4. Delete presets you no longer need.\r
-\r
----\r
-\r
-## Multi-Select & Bulk Edit\r
-\r
-In the **Board View**, hold \`Ctrl\` (or \`Cmd\` on Mac) and click multiple scene cards to select them. A **bulk action bar** appears with:\r
-\r
-- **Set Status** \u2014 change status for all selected scenes.\r
-- **Move to Act** \u2014 reassign act for all selected scenes.\r
-- **Add Tag** \u2014 add a tag to all selected scenes.\r
-- **Delete** \u2014 trash all selected scenes (with confirmation).\r
-- **Clear** \u2014 deselect all.\r
-\r
----\r
-\r
-## Setup / Payoff Tracking\r
-\r
-Link scenes that set up (foreshadow) and pay off (resolve) each other:\r
-\r
-1. Open a scene in the **Inspector Panel**.\r
-2. Scroll to the **Setup / Payoff** section.\r
-3. Type a scene title in the **Sets up** or **Set up by** input to search and select. Existing links appear as removable pills.\r
-4. Links are bidirectional \u2014 if Scene A "sets up" Scene B, Scene B shows Scene A under "Set up by".\r
-\r
-Links are stored by **scene title** (or as \`[[wikilinks]]\` to the scene). The reader is tolerant of other forms too \u2014 plain file paths (\`"MyProject/Scenes/Scene 10.md"\`) and filenames with a \`.md\` extension are normalised to the scene title automatically, so links written that way still resolve. The recommended form is a plain title or a \`[[wikilink]]\`.\r
-\r
-The Stats View and Plot Hole Detection will warn about:\r
-- Setups without payoffs.\r
-- Payoffs without setups.\r
-- Setups that appear *after* their payoff (ordering issues).\r
-\r
----\r
-\r
-## Plot Hole Detection\r
-\r
-StoryLine's **Validator** engine automatically scans your story for potential issues. Enable it in Settings (\`enablePlotHoleDetection\`). Warnings appear in the **Stats View**, grouped into six categories:\r
-\r
-### 1. Timeline\r
-- Duplicate sequence numbers.\r
-- Large sequence gaps (>5 missing numbers) \u2014 skipped for \`timeskip\`, \`dream\`, and \`mythic\` modes.\r
-- Story dates out of chronological order \u2014 skipped for \`flashback\`, \`flash_forward\`, \`dream\`, \`mythic\`, and \`circular\` modes.\r
-- Parallel/frame strand scenes are validated independently within each strand group.\r
-\r
-### 2. Characters\r
-- Scenes missing a POV character.\r
-- Characters that only appear once (potential orphans).\r
-- Characters that disappear for more than 40% of the story.\r
-\r
-### 3. Plotlines\r
-- Tags/plotlines that appear in early acts but vanish before the end.\r
-- Plotlines missing from middle acts.\r
-- Scenes with no tags at all.\r
-\r
-### 4. Setup / Payoff\r
-- Setups that reference non-existent scenes.\r
-- Missing reverse links (one-directional connections).\r
-- Setup scenes that appear *after* their payoff scene.\r
-\r
-### 5. Structure\r
-- Untitled scenes.\r
-- Scenes without an act assignment.\r
-- Severe act imbalance (one act 3\xD7 larger than another).\r
-- Scenes with no conflict defined.\r
-\r
-### 6. Continuity & Pacing\r
-- Sharp intensity drops (\u22656 points between consecutive scenes) \u2014 skipped when \`dream\` or \`mythic\` scenes are involved.\r
-- Monotonous emotion streaks (5+ consecutive scenes with the same emotion) \u2014 streaks reset at \`dream\`/\`mythic\` boundaries.\r
-\r
-Each warning has a **severity level**:\r
-- **Error** \u2014 likely a real problem.\r
-- **Warning** \u2014 worth investigating.\r
-- \u2139\uFE0F **Info** \u2014 minor suggestion.\r
-\r
----\r
-\r
-## Undo / Redo\r
-\r
-StoryLine tracks changes to scenes (create, update, delete) and lets you undo/redo:\r
-\r
-- **Undo:** \`Ctrl+Z\` (or command palette: *Undo Last Scene Change*)\r
-- **Redo:** \`Ctrl+Shift+Z\` / \`Ctrl+Y\` (or command palette: *Redo Last Scene Change*)\r
-\r
-When a StoryLine view is active and you're not typing in a text field, \`Ctrl+Z\` and \`Ctrl+Y\` automatically route to StoryLine's undo/redo instead of Obsidian's editor undo.\r
-\r
-The undo stack stores up to 50 actions and persists within the current session.\r
-\r
----\r
-\r
-## Reading Order vs Chronological Order\r
-\r
-For non-linear narratives (flashbacks, time jumps, in medias res), StoryLine supports two separate ordering fields:\r
-\r
-- **Reading Order** (\`sequence\`) \u2014 the order scenes appear when the reader reads the book, page by page.\r
-- **Chronological Order** (\`chronologicalOrder\`) \u2014 the order events happen within the story's timeline.\r
-\r
-### How to Use\r
-\r
-1. **Set story dates** \u2014 fill in the \`storyDate\` and \`storyTime\` fields on each scene. When you switch the Timeline to Chronological Order, scenes are automatically sorted by these fields.\r
-2. **Set chronological order manually** \u2014 if you prefer, set \`chronologicalOrder\` in the Inspector's **Time & Order** section, or directly in the scene's YAML frontmatter. Scenes without a story date fall back to this number.\r
-3. **Switch order in Timeline View** \u2014 use the order dropdown in the toolbar to toggle between "Reading Order" and "Chronological Order".\r
-4. **Dual-order badges** appear on scene cards showing both numbers (e.g., \`R:5 / C:2\` means reading order 5, chronological order 2).\r
-5. **Drag-and-drop** in the Timeline respects the currently active order mode.\r
-\r
-### Export\r
-\r
-Both \`sequence\` and \`chronologicalOrder\` are included in all export formats (Markdown, JSON, CSV, PDF).\r
-\r
-#### Scene separators\r
-\r
-When exporting a manuscript you can insert a separator between scenes. Choose from:\r
-\r
-- **Blank Line** \u2014 default; no extra separator is added (heading structure provides separation).\r
-- **\`* * *\`** \u2014 centered three-asterisk scene break.\r
-- **Custom Separator** \u2014 any UTF-8 text (e.g. \`~ ~ ~\`, \`\u2014\`, or a word).\r
-\r
-The setting is in **Settings \u2192 Export & Import \u2192 Scene separator**, and can also be overridden per-export in the Export modal. Separators are skipped at act and chapter boundaries, where a heading already provides visual separation. Markdown exports emit plain text (no HTML), keeping the \`.md\` file portable for Scribe and other markdown consumers; HTML/PDF/Word exports render the separator centered with vertical spacing.\r
-\r
----\r
-\r
-## Beat Sheet Templates\r
-\r
-Apply proven story structure templates to quickly scaffold your acts:\r
-\r
-### Built-in Templates\r
-\r
-| Template | Beats | Description |\r
-|----------|-------|-------------|\r
-| **Save the Cat!** | 15 beats | Blake Snyder's popular screenplay structure (Opening Image, Theme Stated, Set-Up, Catalyst, Debate, Break into Two, B Story, Fun & Games, Midpoint, Bad Guys Close In, All Is Lost, Dark Night of the Soul, Break into Three, Finale, Final Image) |\r
-| **Three-Act Structure** | 10 beats | Classic three-act framework (Hook, Inciting Incident, First Plot Point, Rising Action, Midpoint, Complications, Crisis, Climax, Falling Action, Resolution) |\r
-| **Hero's Journey** | 12 stages | Joseph Campbell's monomyth (Ordinary World, Call to Adventure, Refusal of the Call, Meeting the Mentor, Crossing the Threshold, Tests Allies Enemies, Approach to the Inmost Cave, The Ordeal, Reward, The Road Back, Resurrection, Return with the Elixir) |\r
-| **Seven-Point Story Structure** | 7 beats | Dan Wells' structure (Hook, Plot Turn 1, Pinch Point 1, Midpoint, Pinch Point 2, Plot Turn 2, Resolution) |\r
-| **Story Circle** | 8 beats | Dan Harmon's story circle (You, Need, Go, Search, Find, Take, Return, Change) |\r
-| **Romancing the Beat** | 20 beats | Gwen Hayes' four-phase romance structure (Phase 1 Setup: Introduce Hero 1, Introduce Hero 2, Meet Cute, No Way #1, Adhesion; Phase 2 Falling in Love: No Way #2, The Inkling, Deepening Desire, Maybe This Could Work, Midpoint of Love; Phase 3 Retreating from Love: Inkling of Doubt, Deepening Doubt, Retreat, Shields Up, Break Up; Phase 4 Fighting for Love: Dark Night of the Soul, Wake Up, Grand Gesture, Whole-Hearted, Epilogue) |\r
-| **27 Chapter Method** | 27 beats | Kat O'Keeffe's fractal 3\xD73\xD73 structure \u2014 3 Acts \u2192 9 Parts \u2192 27 Chapters, each following a setup\u2013conflict\u2013resolution pattern |\r
-\r
-### How to Use\r
-\r
-1. Open the **Structure** modal from the Board or Timeline toolbar (the columns icon).\r
-2. Select a **Beat Sheet Template** and click **Apply** \u2014 StoryLine creates the acts and assigns beat labels automatically.\r
-3. **Create placeholder scenes** \u2014 toggle "Create placeholder scenes from beats" before applying to auto-create one scene per beat with the correct act, chapter, and synopsis.\r
-4. **Custom Structure** \u2014 use the Custom Structure builder at the bottom of the modal to define your own number of acts, chapters per act, and scenes per chapter.\r
-5. **Save a custom beat sheet** \u2014 enter a Template name in the Custom Structure builder and click **Save as beat sheet**. The saved template appears in the Saved custom beat sheets section and is available from any project.\r
-6. **Apply or delete saved templates** from the Saved custom beat sheets section. Applying uses the same merge behavior as built-in templates and can optionally create placeholder scenes.\r
-7. **Act labels** appear on column headers (Board View) and timeline dividers (Timeline View).\r
-8. **Edit labels inline** by clicking the label text on any act divider.\r
-9. To **add chapters**, use the "Add chapters" section in the same modal. Enter a range (e.g. "1-10") and click Add.\r
-10. **Seeing chapters**: After adding chapters, switch to Board View \u2192 **Kanban** mode \u2192 set "Group by" to **Chapter**. Chapters will appear as columns.\r
-\r
-Beat names are stored as \`actLabels\` on the project and persist across sessions.\r
-\r
-### Scene Ordering Terminology\r
-\r
-| Term | YAML field | Meaning |\r
-|------|-----------|---------|\r
-| **Reading order** | \`chapter\` | The order scenes appear in the book as the reader reads them. Chapter 1 comes before Chapter 2, etc. |\r
-| **Chronological order** | \`sequence\` (or \`chronologicalOrder\` if set) | The order events happen in story time. For non-linear narratives (flashbacks, parallel timelines), this may differ from reading order. |\r
-| **Scene #** | \`sequence\` | A unique number identifying each scene, used for file naming and default sorting. |\r
-\r
-In the Navigator, Timeline, and Plotlines views you can toggle between **Reading order** and **Chronological order** to see your scenes arranged either way.\r
-\r
----\r
-\r
-## Scene Notes\r
-\r
-Each scene can have an external **notes file** for editorial comments, reminders, and revision notes:\r
-\r
-- Edit notes in the **Inspector Panel** under the Notes section.\r
-- StoryLine creates the notes file when you first edit notes for a scene. New notes files are named \`Scene Title - Notes.md\` and saved in the project's scene notes folder.\r
-- The scene stores a \`notesFile\` link in frontmatter so StoryLine can reopen the same notes file later. Older inline \`notes\` frontmatter is still read as a fallback.\r
-- Notes are separate from the scene body \u2014 they're for author-facing comments that won't appear in the manuscript.\r
-- Notes are included in **outline exports** (Markdown, JSON, CSV) so you can share them with editors.\r
-- Type \`[[\` *(new in 1.9.9)* to get inline wikilink autocomplete \u2014 link to characters, locations, research notes, or anything else in your vault directly from the comments field.\r
-\r
-- **Live Markdown editor** *(new in 1.10.18)* \u2014 The Notes tab in the Scene Details sidebar now renders as a full Obsidian Live Preview editor. Write with markdown formatting, wikilinks, and tags \u2014 just like a regular note file. Edits are saved automatically.\r
-- **Refresh-safe editing** \u2014 Refreshing scene metadata while the same scene remains selected no longer rebuilds the embedded Notes editor, so its scroll position and selection are preserved.\r
-\r
----\r
-\r
-## Arc Points\r
-\r
-Arc Points *(introduced in 1.10.18, [issue #128](https://github.com/PixeroJan/obsidian-storyline/issues/128))* mark **arc milestones** \u2014 planned narrative beats on a character's arc journey, such as "Mira discovers she is dying" or "Jonas burns the archive". They let you plan at *arc granularity* alongside scene granularity, without conflating the two.\r
-\r
-An Arc Point is a regular scene file with one extra frontmatter boolean: \`arcAnchor: true\`. This is independent of \`status\` \u2014 it describes what the node *means narratively* (an arc milestone), not where it is in the production pipeline. A common workflow is to create Arc Points as lightweight **stub scenes** (\`status: stub\`) for beats you intend to write later \u2014 possibly in a future book \u2014 then let them grow into fully-written scenes over time. The Arc Point flag stays on when a stub becomes a real scene, because the scene *is* the arc beat; removing it would be semantically wrong. \`status\` continues to evolve from \`stub\` \u2192 \`draft\` \u2192 \`done\` on its own track.\r
-\r
-> **Why use stub scenes instead of just notes?** Because Arc Points render on the Subway map and Board alongside real scenes, giving you a visual arc landscape across your story (and, with the \`_Plotline\` naming convention, across a series). Without the flag, stub scenes are indistinguishable from real scenes and create noise in word counts, the Validator, and the Timeline. The Arc Point flag + the **All / Scenes / Arc Points** filter let you switch between the two lenses in one click.\r
-\r
-> **Tip:** The Arc Point flag is a single boolean \u2014 it doesn't record *which* arc a milestone belongs to or *what kind* of beat it is (inciting incident, midpoint, climax, etc.). To track that, pair Arc Points with [plotlines](#plotlines-view) (e.g. a \`_Mira\` plotline for Mira's character arc) and/or a [custom scene field](#custom-scene-fields) for the beat type. The \`_\`-prefix naming convention is a common way to group arc-milestone plotlines separately from story-thread plotlines.\r
-\r
-### How to mark a scene as an Arc Point\r
-\r
-Open the Scene Details sidebar and check the **Arc Point** checkbox on the Details tab. The scene's frontmatter gets \`arcAnchor: true\`.\r
-\r
-### Where Arc Points appear\r
-\r
-- **Board cards** \u2014 an orange "\u25C6 Arc Point" badge is shown below the title.\r
-- **StoryLine subway map** \u2014 Arc Points render as filled diamonds (\u25C6) instead of hollow circles, making them stand out at a glance.\r
-- **Tooltip** \u2014 hovering a subway-map node includes Arc Point status along with the scene's available subtitle, synopsis, plotlines, and story date/time.\r
-\r
-### Filtering\r
-\r
-Both the Board and StoryLine views have an **All / Scenes / Arc Points** toggle in the toolbar:\r
-\r
-- **All** \u2014 show everything (default).\r
-- **Scenes** \u2014 show only regular scenes (no Arc Points).\r
-- **Arc Points** \u2014 show only Arc Points.\r
-\r
-Arc Points are included in word counts, stats, and exports just like any other scene. If you prefer to exclude Arc Point scenes from aggregate word counts (Stats view, Manuscript footer), enable **Settings \u2192 Scene Cards \u2192 Exclude Arc Points from word count**. This is on by default. Individual scene cards still show their own word count regardless of this setting.\r
-\r
----\r
-\r
-## Convert Note to Scene *(new in 1.9.9)*\r
-\r
-Any markdown file in your vault \u2014 a character study, a research note, a stub note that Obsidian created from a broken \`[[wikilink]]\`, or an idea you wrote in a different app and pasted in \u2014 can be promoted to a full StoryLine scene in one click.\r
-\r
-Two ways to do it:\r
-\r
-- **Command palette** \u2014 open the note, run **"Convert note to scene"**.\r
-- **File explorer** \u2014 right-click any \`.md\` file and pick **"StoryLine: Convert to scene"**.\r
-\r
-StoryLine will:\r
-\r
-1. Add the required scene frontmatter (\`type: scene\`, default \`status: idea\`, today's \`created\` date).\r
-2. Assign the next available sequence number (so the new scene appears at the end of the running order).\r
-3. Move the file into your project's \`Scenes/\` folder \u2014 or \`Scenes/Act N/\` if the note already declares an act.\r
-4. Refresh every open view so the scene shows up immediately on the Board, Manuscript, Plot Grid, etc.\r
-\r
-Files that are already indexed as scenes are skipped, so the operation is safe to run on anything.\r
-\r
----\r
-\r
-## Scene Snapshots\r
-\r
-Save point-in-time snapshots of a scene for version tracking:\r
-\r
-- **Save Snapshot** \u2014 captures the current state of a scene (frontmatter + body).\r
-- **View Snapshots** \u2014 browse previous snapshots with timestamps.\r
-- **Restore** \u2014 revert a scene to any previous snapshot.\r
-- **Rename continuity** \u2014 renaming or moving a scene also renames its snapshot files, keeping the snapshot history attached to that scene.\r
-\r
-Useful for experimenting with rewrites without losing your earlier work.\r
-\r
----\r
-\r
-## View Snapshots\r
-\r
-Save and restore point-in-time snapshots of your entire project's **view layout** \u2014 corkboard positions, Plot Grid state, and scene ordering \u2014 without affecting scene content.\r
-\r
-### What a snapshot captures\r
-- **Corkboard layout** \u2014 card x/y positions and individual card heights.\r
-- **Plot Grid state** \u2014 rows, columns, cells, zoom level, styling, and linked scenes.\r
-- **Scene layout metadata** \u2014 act, chapter, status, POV, and sequence numbers.\r
-\r
-### How to use\r
-1. Click the **clock** icon in the Board or Plotgrid toolbar, or run **Manage View Snapshots** from the command palette.\r
-2. Click **+** to create a new snapshot. It becomes the active snapshot immediately.\r
-3. Rearrange your corkboard, edit the Plot Grid, or reorder scenes \u2014 changes are **auto-saved** back to the active snapshot after a 2-second pause.\r
-4. To compare different layouts, load a different snapshot from the list.\r
-5. Rename or delete snapshots from the same modal.\r
-\r
-### Key details\r
-- **Free-editing mode** \u2014 when no snapshot is active, changes are saved normally without snapshot tracking.\r
-- **Per-project** \u2014 each project has its own snapshot history, stored in \`System/Snapshots/\`.\r
-- **Layout only** \u2014 snapshots do not capture scene prose or frontmatter content. Use **Scene Snapshots** for that.\r
-\r
----\r
-\r
-## Scene Templates\r
-\r
-Create reusable templates for common scene types:\r
-\r
-### Built-in Templates\r
-- Starter templates for common scene patterns.\r
-\r
-### Custom Templates\r
-1. Set up a scene with your desired default values (status, act, tags, conflict patterns, etc.).\r
-2. Right-click the scene card and select **Save as Template** from the context menu.\r
-3. Alternatively, create templates manually in **Settings \u2192 Scene Templates \u2192 Add Template**.\r
-4. When creating new scenes, choose a template to pre-fill fields.\r
-\r
-Templates are stored in settings and available across all projects.\r
-\r
-### Default PoV character *(new in 1.10.51)*\r
-\r
-If your story never changes point of view, set **Settings \u2192 Scene Cards \u2192 Default PoV character** to your protagonist. Every newly-created scene will then have that character pre-filled as its PoV, saving you a pick on every new scene. Leave it blank to choose the PoV manually each time. This works alongside [Default scene frontmatter](#settings) and [custom field defaults](#custom-field-templates) \u2014 StoryLine's own \`pov\` key wins on conflict.\r
-\r
-### Sort suggestions by frequency *(new in 1.10.51)*\r
-\r
-Enable **Settings \u2192 Scene Cards \u2192 Sort suggestions by frequency** to make the character and location autocomplete suggestions in the Scene Inspector appear in order of how often each one is already used across your scenes (most-used first, then alphabetically). Off by default (alphabetical only). Handy for large projects where your main character should sit at the top of the list instead of being buried in the middle.\r
-\r
----\r
-\r
-## Custom Scene Fields\r
-\r
-Define your own metadata fields on every scene \u2014 Story Grid functions, John Truby aspects, beat-sheet labels, genre conventions, "Five Commandments" tags, anything your method needs. This avoids overloading the title or subtitle with structural information.\r
-\r
-### Creating a field\r
-\r
-Two ways:\r
-\r
-1. **Settings \u2192 Custom Scene Fields \u2192 Add Scene Field.**\r
-2. **Inspector \u2192 Custom Fields section \u2192 click the + button** (creates the field and immediately lets you fill in a value).\r
-\r
-You'll be prompted for:\r
-\r
-- **Label** \u2014 what shows in the Inspector and on cards (e.g. \`SG Function\`, \`JT Aspect\`, \`Obligatory Scene\`).\r
-- **Type** \u2014 \`text\`, \`textarea\`, \`dropdown\`, or \`multi-select\`.\r
-- **Options** \u2014 for dropdown / multi-select: the choices the user can pick (e.g. \`Inciting Incident, Turning Point, Crisis, Climax, Resolution\`).\r
-- **Placeholder / hint text** (optional).\r
-- **Top-level YAML key** *(optional, since 1.9.6)* \u2014 when set, the field's value is also written as a real top-level YAML key (in addition to \`universalFields:\`) so it appears in Obsidian's Properties panel, Bases, Dataview and the graph. Auto-suggested from the label; reserved StoryLine keys (\`type\`, \`pov\`, \`act\`, \`chapter\`, \`tags\`, \u2026) are blocked. Leave blank to keep the field inside \`universalFields:\` only. The global toggle lives at **Settings \u2192 Mirror custom fields to top-level YAML**.\r
-\r
-Fields can be edited or deleted anytime from either location (pencil / trash icons).\r
-\r
-### Where the values appear\r
-\r
-- **Inspector** \u2014 every scene gets a "Custom Fields" section listing all defined scene fields, with the appropriate input control (text box, textarea, dropdown, multi-select pills).\r
-- **Board \u2192 Group by** \u2014 \`dropdown\` and \`multi-select\` fields appear as grouping options in the Kanban board. Multi-select scenes appear in every matching column. Empty values land in \`(empty)\`.\r
-- **Filter panel** \u2014 \`dropdown\` and \`multi-select\` fields each get their own chip group; toggling chips filters scenes by value.\r
-- **Scene cards** \u2014 up to three populated dropdown / multi-select values appear as small badges below the card. Hovering any scene card shows a full summary of every populated custom field, regardless of type.\r
-\r
-### Where it's stored\r
-\r
-- **Values** live in the scene's frontmatter under \`universalFields:\`, keyed by template id. Safe to read or edit by hand.\r
-- **Templates** live in \`<project>/System/field-templates.json\` along with character custom fields, so they sync with the rest of the project.\r
-\r
-### Tips\r
-\r
-- Combine with a dedicated plotline tag (e.g. \`love-genre\`) to also get colour-coded visibility for genre conventions on the timeline / Kanban.\r
-- Keep dropdown options short \u2014 long values are ellipsised on the card badges (the full value is still visible in the hover tooltip and Inspector).\r
-- Multi-select is the right choice for fields where a single scene can play multiple structural roles (e.g. a scene that is both a *Turning Point* and an *Obligatory Scene*).\r
-\r
----\r
-\r
-## Color Coding & Tag Colors\r
-\r
-StoryLine color-codes scene cards across all views. Choose a mode in **Settings \u2192 Color Coding**:\r
-\r
-| Mode | Behavior |\r
-|------|----------|\r
-| **Status** | Colors based on scene status (idea, draft, final, etc.) |\r
-| **POV** | Each POV character gets a unique color |\r
-| **Emotion** | Colors mapped to emotional tones |\r
-| **Act** | Each act gets a distinct color |\r
-| **Tag** | Cards colored by their first tag's assigned color |\r
-\r
-### Color Schemes\r
-\r
-StoryLine ships with **16 built-in color schemes** plus a fully custom option:\r
-\r
-| Group | Schemes |\r
-|-------|----------|\r
-| **Catppuccin** | Latte, Frapp\xE9, Macchiato, Mocha |\r
-| **Moods** | Spring, Morning, Summer, Dusk, Midnight, Autumn, Ocean, Forest, Sunset, Arctic, Vintage, Neon |\r
-| **Custom** | Define your own palette in settings |\r
-\r
-Each scheme provides 14 colors that are automatically assigned to tags. Select a scheme in **Settings \u2192 Color Coding** \u2014 schemes are displayed as compact cards grouped by family, with a color preview strip and a mood hint.\r
-\r
-### Per-Tag Color Overrides\r
-\r
-Override individual tag colors without changing the whole scheme:\r
-\r
-- **From the Plotlines view** \u2014 click the palette icon next to any plotline header, or right-click and choose "Change color" / "Reset color".\r
-- **From Settings** \u2014 in the Color Coding section, each tag appears as a compact chip with a color swatch. Click the swatch to pick a custom color; click the \xD7 to reset.\r
-\r
-Overrides persist across sessions and take priority over the active scheme.\r
-\r
-All color coding is **theme-aware** \u2014 colors automatically adapt to your current Obsidian theme (dark or light mode).\r
-\r
----\r
-\r
-## Scene Colors\r
-\r
-Assign a custom background color to individual scene cards, independent of the color-coding system.\r
-\r
-- **Set color** \u2014 right-click any scene card in Board, Timeline, or Navigator view and choose **Set color**. A color picker opens where you can select any color.\r
-- **Background tint** \u2014 the color is applied as a subtle background wash (18% blend), so the card text remains readable. On hover, the tint intensifies slightly (26%).\r
-- **Independent from color-coding** \u2014 the scene color tints the card background, while the left-edge stripe continues to show the active color-coding mode (status, POV, emotion, etc.).\r
-- **Clear color** \u2014 right-click the card and choose **Clear color** to remove the custom background.\r
-- **Stored in frontmatter** \u2014 the color is saved as a hex value in the \`color\` field (e.g., \`color: "#FF6B6B"\`).\r
-\r
----\r
-\r
-## Plotline HSL Sliders\r
-\r
-Fine-tune your plotline color palette without switching schemes. In **Settings \u2192 Plotline Color Scheme**, three sliders let you adjust the entire palette at once:\r
-\r
-| Slider | Range | Effect |\r
-|--------|-------|--------|\r
-| **Hue Shift** | \u2212180 \u2026 +180 | Rotates all palette colors around the color wheel |\r
-| **Saturation** | \u2212100 \u2026 +100 | Makes colors more vivid (positive) or muted (negative) |\r
-| **Lightness** | \u2212100 \u2026 +100 | Makes colors lighter (positive) or darker (negative) |\r
-\r
-Changes apply in real time with a live swatch preview. The adjustments stack on top of the active color scheme and per-tag overrides.\r
-\r
----\r
-\r
-## Sticky Note Themes\r
-\r
-Corkboard sticky notes have their own independent color system. Choose a theme in **Settings \u2192 Sticky Note Colors**:\r
-\r
-| Theme | Description |\r
-|-------|-------------|\r
-| **Classic** | Warm yellows, pinks, greens, and blues |\r
-| **Pastel** | Soft, low-saturation tones |\r
-| **Earth** | Warm browns, olive, terracotta, and sage |\r
-| **Jewel** | Rich, saturated gemstone colors |\r
-| **Neon** | Bright, high-energy fluorescent tones |\r
-| **Mono** | Greyscale neutrals |\r
-\r
-Each theme provides 14 colors. Like plotline colors, sticky notes also have **HSL sliders** (hue shift, saturation, lightness) for fine-tuning and **per-note color overrides** \u2014 right-click a sticky note to assign a specific color.\r
-\r
-### Font Color\r
-\r
-By default, sticky-note text color is derived automatically by darkening the note's background. On similarly-toned backgrounds (e.g. pale yellow text on a pale yellow note) this can be hard to read. You can set an explicit font color in **Settings \u2192 Sticky Note Colors \u2192 Font Color**, with **two independent buckets** so a single global setting stays readable across both bright and dark notes:\r
-\r
-- **On light notes** \u2014 text color used on bright note backgrounds (defaults to black).\r
-- **On dark notes** \u2014 text color used on dark note backgrounds (defaults to white).\r
-\r
-The plugin uses the WCAG relative-luminance formula to decide which bucket applies to each note, so a bright yellow note and a dark violet note automatically get the right text color without any per-note configuration. Leave a bucket on "Auto" to keep the background-derived behavior for that brightness.\r
-\r
-Both buckets are also reachable from the corkboard note's right-click context menu:\r
-\r
-- **Font Color: Light Notes\u2026** \u2014 opens a color picker for the light-background bucket.\r
-- **Font Color: Dark Notes\u2026** \u2014 opens a color picker for the dark-background bucket.\r
-- **Font Color: Reset to Auto** \u2014 clears both buckets back to the default (only appears when a custom color is set).\r
-\r
----\r
-\r
-## Per-Project Color Overrides\r
-\r
-By default, color scheme, HSL adjustments, and sticky note theme are global settings shared across all projects. You can optionally save them per project so each book has its own look.\r
-\r
-### Enabling\r
-\r
-1. Open **Settings \u2192 Plotline Color Scheme**.\r
-2. Toggle **Use project-specific colors** (visible only when a project is loaded).\r
-3. Any changes you make to the color scheme, HSL sliders, or sticky note theme will now be saved into the active project's \`System/plotlines.json\` file.\r
-\r
-### Behavior\r
-\r
-- **Toggle ON** \u2014 color settings are stored in the project and override the global defaults whenever that project is active.\r
-- **Toggle OFF** \u2014 removes per-project overrides and restores the global color settings.\r
-- **Switching projects** \u2014 when you open a project with per-project colors, those colors load automatically. When you open a project without them, the global defaults are restored.\r
-\r
-This is useful when you want a dark moody palette for a thriller and bright pastels for a romance, without manually switching schemes every time you change projects.\r
-\r
----\r
-\r
-## Timeline Swimlanes\r
-\r
-The Timeline View supports a **Swimlane Mode** that organizes scenes into vertical columns:\r
-\r
-### Enabling Swimlanes\r
-\r
-1. Open the **Timeline View**.\r
-2. Click the **Swimlanes** toggle button in the toolbar.\r
-3. Choose a grouping from the **Group By** dropdown:\r
-\r
-| Group By | Behavior |\r
-|----------|----------|\r
-| **POV** | One swimlane column per POV character |\r
-| **Character** | One swimlane per character listed on a scene |\r
-| **Location** | One swimlane per location |\r
-| **Plotline** | One swimlane per plotline/tag |\r
-\r
-### How It Works\r
-\r
-- Scenes are placed in a **CSS grid** layout with swimlane columns. For multi-value groups like Character and Plotline, a scene appears in every lane it belongs to.\r
-- Each column has a **header** showing the group name and scene count.\r
-- Scenes without a value for the grouping field appear in an "Ungrouped" column.\r
-- Swimlanes combine with the reading/chronological order toggle \u2014 scenes are sorted within each column by the active order.\r
-\r
-This is especially useful for visualizing parallel storylines, tracking character arcs across locations, or analyzing plotline distribution.\r
-\r
----\r
-\r
-## Timeline Modes\r
-\r
-For stories with non-linear narratives, each scene can declare a **timeline mode** that describes its temporal relationship to the main narrative. This prevents false plot-hole warnings and provides visual indicators throughout the UI.\r
-\r
-### Available Modes\r
-\r
-| Mode | YAML Value | Description |\r
-|------|-----------|-------------|\r
-| Linear | \`linear\` | Default \u2014 scene follows the normal timeline |\r
-| Flashback | \`flashback\` | Scene depicts past events |\r
-| Flash Forward | \`flash_forward\` | Scene depicts future events |\r
-| Parallel | \`parallel\` | Scene runs on a separate parallel timeline |\r
-| Frame | \`frame\` | Scene is part of a framing narrative |\r
-| Simultaneous | \`simultaneous\` | Scene happens at the same time as the previous |\r
-| Time Skip | \`timeskip\` | Scene jumps forward, skipping elapsed time |\r
-| Dream | \`dream\` | Dream sequence, vision, or hallucination |\r
-| Mythic | \`mythic\` | Myth, legend, story-within-a-story |\r
-| Circular | \`circular\` | Scene echoes or returns to an earlier moment |\r
-\r
-### Setting Timeline Mode\r
-\r
-1. **Inspector** \u2014 open the scene's **Time & Order** modal and select a mode from the dropdown.\r
-2. **YAML frontmatter** \u2014 set \`timeline_mode: flashback\` (or any value above) directly in the file.\r
-3. **Timeline strand** \u2014 for \`parallel\` and \`frame\` modes, set \`timeline_strand\` to group related scenes (e.g., \`timeline_strand: "1985"\`).\r
-\r
-### How Modes Affect Validation\r
-\r
-- **Date order checks** are skipped for flashback, flash_forward, dream, mythic, and circular scenes.\r
-- **Gap checks** are skipped for timeskip, dream, and mythic scenes.\r
-- **Intensity drop warnings** are skipped when dream or mythic scenes are involved.\r
-- **Emotion streak detection** resets at dream/mythic boundaries.\r
-- **Parallel/frame strands** are validated independently \u2014 each strand group must have internally consistent dates.\r
-- **Simultaneous scenes** are allowed to share the same date as adjacent scenes.\r
-\r
-### Visual Indicators\r
-\r
-- **Color-coded badges** appear on scene cards (Board View), timeline entries, swimlane cards, and the Inspector.\r
-- Each mode has a distinct color (e.g., flashback = purple, parallel = blue, dream = violet, mythic = gold).\r
-- Strand labels are shown alongside mode badges for parallel/frame scenes.\r
-- All 10 modes are included in exports (Markdown, JSON, CSV, PDF).\r
-\r
-### Narrative Techniques Covered\r
-\r
-These 10 modes cover all common non-linear structures:\r
-\r
-| Technique | Recommended Mode |\r
-|-----------|------------------|\r
-| Flashback / analepsis | \`flashback\` |\r
-| Flash-forward / prolepsis | \`flash_forward\` |\r
-| Parallel timelines | \`parallel\` + \`timeline_strand\` |\r
-| Frame story / nested narrative | \`frame\` + \`timeline_strand\` |\r
-| Simultaneous action | \`simultaneous\` |\r
-| Time skip / ellipsis | \`timeskip\` |\r
-| Dream / vision / hallucination | \`dream\` |\r
-| Myth / legend / story-within-story | \`mythic\` |\r
-| Circular narrative | \`circular\` |\r
-| In medias res | \`flashback\` for backstory scenes |\r
-| Retrospective narration | \`frame\` for narrator frame |\r
-| Epistolary non-linearity | \`parallel\` with letter/diary strands |\r
-| Subjective time distortion | \`dream\` |\r
-\r
----\r
-\r
-## Pacing Analysis\r
-\r
-The **Stats View** includes a Pacing Analysis panel with two visualizations:\r
-\r
-### Average Scene Length by Act\r
-- A **bar chart** showing the average word count of scenes in each act.\r
-- Helps identify acts that may be too sparse or too dense.\r
-- Acts use their custom beat labels if a beat sheet template has been applied.\r
-\r
-### Word Count Distribution\r
-- A **histogram** showing how scene word counts are distributed across your project.\r
-- Bin ranges (e.g., 0\u2013500, 500\u20131000, \u2026) are automatically calculated.\r
-- Helps identify if your scenes are consistently sized or if you have outliers.\r
-\r
----\r
-\r
-## Writing Sprint\r
-\r
-StoryLine includes a built-in writing sprint timer in the **Stats View**:\r
-\r
-1. Set your desired sprint duration (click the time to edit).\r
-2. Click **Start** to begin the countdown.\r
-3. Write in your scene files \u2014 the timer shows remaining time, live word count, and words-per-minute.\r
-4. Click **Stop** to end the sprint early, or let the timer run out. Your sprint is recorded with word count, duration, and WPM.\r
-5. Click **Reset** to cancel without recording.\r
-\r
-Completed sprints are saved in a persistent log. The Stats panel shows your sprint history with total sprints, total words, and average WPM.\r
-\r
----\r
-\r
-## Relationship Map\r
-\r
-The **Characters View** includes a visual relationship map:\r
-\r
-- Displays characters as nodes connected by relationship lines.\r
- - Relations can be **Two-way** (the default) or one-way. Uncheck **Two-way relationship** when only the source character's relation should be stored.\r
- - One-way relations are shown with arrows. Two-way relations are shown as undirected connections.\r
-- **Six relationship types**, each with a distinct color and line style:\r
-\r
-| Type | Color | Line Style |\r
-|------|-------|------------|\r
-| Ally | Green | Solid |\r
-| Enemy | Red | Dashed |\r
-| Romantic | Pink | Dotted |\r
-| Family | Orange | Solid |\r
-| Mentor | Purple | Dash-dot |\r
-| Other | Grey | Dashed |\r
-\r
-- Click a character node to navigate to their profile.\r
-- **Toggle relationship types** \u2014 click any item in the colour-coded legend at the top of the map to show or hide that relationship type. Hidden types are dimmed in the legend and their edges are removed from the graph; click again to bring them back. Useful for focusing on one kind of connection (e.g. only family ties) at a time.\r
-- **Zoom** \u2014 scroll the mouse wheel to zoom in/out (cursor-centered).\r
-- **Pan** \u2014 click and drag the background to pan the view.\r
-- Helps visualize complex webs of character relationships at a glance.\r
-\r
-### Character Relationship Fields\r
-\r
-Relationships are populated from the character profile editor:\r
-\r
-The Relationships section in a character profile uses structured relation rows. Choose a relation type, select a target character, and use the **Two-way relationship** checkbox when the reverse relation should also be created. Existing relations without a \`twoWay\` value remain two-way for compatibility.\r
-\r
-The **Relationship history** section records past or temporary relationship periods without changing the current relationship list. Use **+ add period** for each separate period, including on-and-off relationships between the same characters. Each period has its own role, target, two-way setting, and start/end range.\r
-\r
-- **Scene range** uses ordered **From scene** and **To scene** dropdowns. Selected scenes are saved as Obsidian wikilinks; **Custom scene...** is available for scenes that do not exist yet.\r
-- **Date/time range** shows start and end date/time inputs.\r
-- An empty end means the period is still active or has no known end.\r
-- History entries are informational and do not modify current relations or trigger reciprocal synchronization.\r
-\r
-Custom Character Roles are available from the Role dropdown. Choose **Custom role...** to enter one or more roles not included in the built-in list.\r
-\r
-| Field | Description | Stored As |\r
-|-------|-------------|-----------|\r
-| **Allies & Friends** | Trusted companions | \`allies: ["Name", ...]\` |\r
-| **Enemies & Rivals** | Opponents and conflicts | \`enemies: ["Name", ...]\` |\r
-| **Romantic** | Love interests, partners, exes | \`romantic: ["Name", ...]\` |\r
-| **Mentors** | Teachers, guides, role models | \`mentors: ["Name", ...]\` |\r
-| **Other Connections** | Any other notable relationships | \`otherRelations: ["Name", ...]\` |\r
-| **Family** | Parsed from the Family free-text field | \`family: "free text"\` |\r
-\r
----\r
-\r
-## Story Graph\r
-\r
-The **Characters View** includes a **Story Graph** (third tab alongside Overview and Relationship Map).\r
-\r
-The Story Graph is an interactive force-directed SVG visualization showing how scenes, characters, locations, and props are interconnected:\r
-\r
-### Node Types\r
-\r
-| Node | Shape | Color | Source |\r
-|------|-------|-------|--------|\r
-| Scene | Rectangle | Purple | Scenes with detected \`[[wikilinks]]\` |\r
-| Character | Circle | Blue | Characters referenced via wikilinks |\r
-| Location | Diamond | Green | Locations referenced via wikilinks or character fields |\r
-| Prop | Hexagon | Pink | \`#hashtags\` in character text fields |\r
-| Other | Small circle | Orange | Unclassified wikilink targets |\r
-\r
-### Edge Types\r
-\r
-Edges represent three categories of connections:\r
-\r
-1. **Scene \u2194 Entity** \u2014 a scene references a character, location, or entity via \`[[wikilink]]\` in its body text.\r
-2. **Character \u2194 Character** \u2014 relationship edges (ally, enemy, romantic, family, mentor, other) from character profiles.\r
-3. **Character \u2192 Prop** \u2014 \`#hashtags\` found in character text fields (appearance, props, habits, etc.).\r
-4. **Character \u2192 Location** \u2014 from the \`locations\` field or \`#tags\` in the residency field.\r
-\r
-### Filter Toggles\r
-\r
-The toolbar provides entity-type filter buttons:\r
-\r
-- **Characters** \u2014 show/hide character nodes\r
-- **Locations** \u2014 show/hide location nodes\r
-- **Other** \u2014 show/hide unclassified nodes\r
-- **Props** \u2014 show/hide prop hexagons\r
-- **Relationships** \u2014 show/hide character-to-character relationship edges\r
-\r
-### Interaction\r
-\r
-- **Drag nodes** \u2014 click and drag any node to reposition it.\r
-- **Zoom** \u2014 scroll the mouse wheel to zoom in/out (cursor-centered).\r
-- **Pan** \u2014 click and drag the background to pan the view.\r
-- **Click a scene node** \u2014 fires the scene select callback.\r
-- **Legend** \u2014 a color legend shows all node types and relationship edge colors.\r
-\r
-> **Note on layout stability *(1.10.51)*:** The Story Graph now uses a cooling schedule (alpha decay) plus collision detection and velocity capping, so it settles smoothly instead of jittering on graphs with many connections. If you have a very large cast, the graph may still take a moment to settle \u2014 drag a few hub nodes to nudge the layout.\r
-\r
-### How Links Are Detected\r
-\r
-The Story Graph uses the **Link Scanner** to find connections. See [Link Scanner & Detected Links](#link-scanner--detected-links).\r
-\r
----\r
-\r
-## Link Scanner & Detected Links\r
-\r
-StoryLine includes a **Link Scanner** that automatically extracts \`[[wikilinks]]\` from your scene body text and classifies them:\r
-\r
-### How It Works\r
-\r
-1. The scanner extracts all \`[[wikilinks]]\` from each scene's Markdown body (below the frontmatter).\r
-2. Each link is classified against your project's characters, locations, and codex entries:\r
-   - If the link matches a character name or nickname \u2192 **character**\r
-   - If the link matches a location name or nickname \u2192 **location**\r
-   - If the link matches a codex entry name or nickname \u2192 **codex** (with its category)\r
-   - Otherwise \u2192 **other** (unclassified)\r
-\r
-### Where Links Appear\r
-\r
-- **Inspector Panel** \u2014 a "Detected Links" section shows all wikilinks found in the selected scene, displayed as typed pills (character / location / codex / other).\r
-- **Story Graph** \u2014 detected links drive the scene-to-entity edges in the graph visualization.\r
-- **Referenced By panel** \u2014 cross-entity references are shown on every character, location, and codex detail page (see [Cross-Entity References](#cross-entity-references)).\r
-\r
-### Usage Tips\r
-\r
-- Write \`[[Character Name]]\`, \`[[Location Name]]\`, or \`[[Codex Entry]]\` naturally in your scene prose or in any entity text field.\r
-- The scanner runs automatically \u2014 no manual tagging required.\r
-- Links that don't match any known entity appear as "other" \u2014 you can override their type via the context menu (see [Tag Type Overrides](#tag-type-overrides)).\r
-\r
----\r
-\r
-## Cross-Entity References\r
-\r
-StoryLine now tracks **cross-entity references** across your entire project. When you mention a character in a location description, or reference a location in a codex entry, StoryLine detects the connection and displays it in a **"Referenced By"** panel on the entity's side panel.\r
-\r
-### How It Works\r
-\r
-1. Write \`[[Character Name]]\`, \`[[Location Name]]\`, or \`[[Codex Entry]]\` in any text field \u2014 scene prose, character backstory, location descriptions, codex entry fields, etc.\r
-2. Use \`#tags\` that match entity names (e.g., \`#MagicSword\` will reference a codex entry named "MagicSword").\r
-3. Plain-text name mentions (without brackets or #) are also detected automatically.\r
-4. StoryLine scans all entities and scenes and builds a reverse reference index.\r
-5. Open any character, location, or codex detail page \u2014 the side panel shows a **"Referenced By"** section listing every entity and scene that mentions it.\r
-\r
-### What Gets Scanned\r
-\r
-| Source | Fields scanned |\r
-|---|---|\r
-| **Characters** | Backstory, appearance, personality, motivations, strengths, flaws, fears, belief, misbelief, notes |\r
-| **Locations** | Description, atmosphere, significance, inhabitants, connected locations, map notes, notes |\r
-| **Worlds** | Description, geography, culture, politics, magic/technology, beliefs, economy, history, notes |\r
-| **Codex entries** | All text fields |\r
-| **Scenes** | Full body text (wikilinks and plain-text matches) **plus** Codex entries tagged via the Scene Inspector (\`codexLinks\` frontmatter) |\r
-\r
-### Reference Display\r
-\r
-References are grouped by type:\r
-- **Character** \u2014 other characters that mention this entity\r
-- **Location** \u2014 locations or worlds that mention it\r
-- **Codex category name** (e.g., "Items", "Creatures") \u2014 codex entries that mention it\r
-- **Scene** \u2014 scenes that contain a wikilink or name match\r
-\r
-Each reference is a clickable link that opens the source file.\r
-\r
-### Tips\r
-\r
-- Use \`[[wikilinks]]\` or \`#tags\` for guaranteed detection \u2014 plain-text matching depends on exact name matches.\r
-- \`#tags\` are matched case-insensitively: \`#magicsword\` will match a codex entry named "MagicSword".\r
-- The scanner updates every time you open an entity detail page, so new connections appear immediately.\r
-- Self-references are excluded (a character's own fields won't list itself).\r
-\r
----\r
-\r
-## Codex Linking\r
-\r
-Link Codex entries directly to scenes, making custom categories (Items, Factions, Creatures, etc.) first-class metadata on your scene cards \u2014 just like Characters and Locations.\r
-\r
-### Enabling Categories for the Inspector\r
-\r
-1. Open the **Codex** view and click **Manage Categories** (gear icon in the toolbar).\r
-2. Each category row has an **Inspector** checkbox on the right side.\r
-3. Check it to make that category appear in the Scene Inspector sidebar.\r
-4. Click **Save**.\r
-\r
-Enabled categories appear as tag-pill input sections in the Inspector, right below the Location field. Each section shows the category icon and label, with autocomplete suggestions pulled from your Codex entries for that category.\r
-\r
-### Linking Entries to Scenes\r
-\r
-- **From the Inspector** \u2014 type an entry name in the tag-pill input for any enabled Codex category. Autocomplete suggests existing entries. Press Enter to add.\r
-- **From Detected Links** \u2014 right-click any detected link pill in the "Detected in text" section and choose a Codex category from the context menu. The entry is added to the scene's \`codexLinks\` and removed from the detected links list.\r
-\r
-### Where Codex Links Appear\r
-\r
-- **Scene Inspector** \u2014 tag-pill inputs for each enabled category.\r
-- **Plot Grid** \u2014 the "Sync from Scenes" modal includes enabled Codex categories in the "Columns from" dropdown. Sync your grid against Items, Factions, or any custom category. Click a Codex column header to open the entry file.\r
-- **Frontmatter** \u2014 stored as \`codexLinks\` in scene YAML:\r
-  \`\`\`yaml\r
-  codexLinks:\r
-    items:\r
-      - Magic Sword\r
-      - Shield\r
-    factions:\r
-      - Rebels\r
-  \`\`\`\r
-\r
----\r
-\r
-## Linking & Matching\r
-\r
-The **Linking & Matching** section appears at the bottom of every Character, Location, and Codex entry editor. It controls how the [Link Scanner](#link-scanner--detected-links) matches plain-text mentions of that entity in your scene prose and turns them into detected links.\r
-\r
-### Fields\r
-\r
-- **Type** *(entryType)* \u2014 an optional sub-type for the entry (e.g., a "Sword" type for an Items entry, or a "Potion" type). Free-text; used for your own organisation.\r
-- **Aliases** *(aliases)* \u2014 alternative names that should also link to this entry. Comma-separated. For example, a character "Elizabeth Bennet" might have aliases \`Lizzy, Miss Bennet\`. The Link Scanner matches any alias in addition to the primary name.\r
-- **Case-sensitive matching** *(caseSensitive)* \u2014 when on, the name and aliases only match text with the exact same capitalisation. Off by default (case-insensitive), which is usually what you want for prose. Turn it on for entries whose name is a common word (e.g., a location called "Hope") to avoid matching every occurrence of "hope" in your writing.\r
-- **Exclude terms** *(excludeTerms)* \u2014 phrases that suppress a match when they appear adjacent to (or overlapping) a potential match. For example, if "The Tower" is a location but you also write "the tower of paperwork", adding \`paperwork\` as an exclude term prevents the latter from being detected as a link. Exclude terms are **contextual**: they only suppress the specific match they overlap, not every mention in the scene.\r
-\r
-### How it works\r
-\r
-When the Link Scanner runs (on load and after every edit), it scans each scene's body text for occurrences of every entity's name + aliases, respecting the case-sensitivity and exclude-term rules. Matches appear as pills in the **Detected in text** section of the Scene Inspector. You can then promote a detected link to a Codex category, a character, or a location via the right-click menu.\r
-\r
-### Where the data lives\r
-\r
-The fields are stored in each entity's frontmatter:\r
-\r
-\`\`\`yaml\r
-# In a Codex entry\r
-aliases: [Lizzy, Miss Bennet]\r
-caseSensitive: false\r
-excludeTerms: [paperwork]\r
-entryType: Sword\r
-\`\`\`\r
-\r
-Characters and Locations use the same fields (Issue #228 extended this section from the Codex to Characters and Locations).\r
-\r
----\r
-\r
-## Hide / Show Built-in Fields\r
-\r
-Every character, location, and codex detail editor comes with a set of built-in fields (e.g., Fears, Belief, Atmosphere, Significance). If you don't use all of them, you can **hide** the ones you don't need to keep your editor clean.\r
-\r
-### How to Hide a Field\r
-\r
-1. Open any character, location, or codex detail editor.\r
-2. **Hover** over a field label \u2014 a small **eye-off icon** appears to the right of the label.\r
-3. **Click the icon** \u2014 the field disappears from the form.\r
-\r
-### How to Show Hidden Fields\r
-\r
-1. At the bottom of each category section, a link appears: **"Show N hidden fields"**.\r
-2. **Click the link** \u2014 the hidden fields expand in a dimmed container with a left border.\r
-3. You can view and edit data in hidden fields while they're expanded.\r
-4. The link text changes to **"Hide N hidden fields"** \u2014 click again to collapse.\r
-\r
-### How to Unhide a Field\r
-\r
-1. Expand the hidden fields using the "Show N hidden fields" link.\r
-2. **Hover** over the hidden field's label \u2014 an **eye icon** appears.\r
-3. **Click the eye icon** \u2014 the field is restored to its normal position permanently.\r
-\r
-### Details\r
-\r
-- The **Name** field can never be hidden.\r
-- Hidden fields are stored per entity type: \`character\`, \`location\`, or the codex category ID (e.g., \`items\`, \`creatures\`). Hiding "Fears" in Characters does not affect any other view.\r
-- **Data is never deleted.** Hiding a field only removes it from the UI. The value stays in your frontmatter unchanged and reappears when you unhide the field.\r
-- Hidden field preferences are saved per project in \`System/custom-sections.json\` and persist across sessions.\r
-\r
-#### Hiding entire categories\r
-\r
-An eye-off button on each section header lets you hide a whole category in one click, instead of hiding each field individually. Hidden categories are collected into a collapsible **"Show N hidden categories"** toggle at the bottom of the form \u2014 when collapsed, no trace of the hidden categories is visible in the normal flow. Click the toggle to expand, then click the eye button on a hidden category's header to un-hide it.\r
-\r
-- Hidden categories are stored per entity type alongside hidden fields.\r
-- Hiding a category does not delete its data \u2014 values stay in frontmatter and reappear when un-hidden.\r
-- Applies to Character, Codex, and Location views.\r
-\r
----\r
-\r
-## Reordering Fields & Sections\r
-\r
-You can change the order of fields inside a section, and the order of sections themselves, in the Character, Codex, and Location detail editors. This lets you put the fields you use most towards the top \u2014 for example, moving the **Hierarchy** section under Locations up so you don't have to scroll past everything else to set a parent.\r
-\r
-### Reordering fields within a section\r
-\r
-1. Open any character, location, or codex detail editor.\r
-2. **Hover** over a field label \u2014 small **up/down chevron buttons** (\u2303/\u2304) appear to the right of the label.\r
-3. Click a chevron to move that field up or down within its section.\r
-\r
-Both built-in fields and your [custom (universal) fields](#custom-field-templates) can be reordered, and they interleave freely \u2014 a custom field can sit between two built-in fields.\r
-\r
-### Reordering sections\r
-\r
-Custom sections you've added (via **+ Add Section** at the bottom of an editor) can be moved between slots:\r
-\r
-1. Hover the section header \u2014 up/down chevron buttons appear.\r
-2. Click to move the whole section earlier or later in the form.\r
-\r
-Built-in sections (like Hierarchy under Locations) are fixed in position; if a built-in section sits too low for your workflow, you can hide the sections above it that you don't need (see [Hide / Show Built-in Fields](#hide--show-built-in-fields)) to bring it closer to the top.\r
-\r
-### Where the order is saved\r
-\r
-Field and section order is saved per project in \`System/field-templates.json\` and persists across sessions. Each category (character, each codex category, location) keeps its own order.\r
-\r
-> **Note:** The scene Inspector (Scene Details sidebar) uses a fixed built-in field order. Custom scene fields appear in a "Custom Fields" block after the built-ins. Reordering built-in scene fields is not yet supported.\r
-\r
----\r
-\r
-## Tag Type Overrides\r
-\r
-When StoryLine auto-classifies \`#hashtags\` or detected \`[[wikilinks]]\`, it may sometimes get the type wrong (e.g., classifying a prop as a location). You can manually override any tag's type:\r
-\r
-### How to Override\r
-\r
-1. **From the Inspector** \u2014 right-click any detected link pill in the "Detected Links" section.\r
-2. **From the Characters View** \u2014 right-click any tag pill shown under a character's profile.\r
-3. A context menu appears with options:\r
-   - **Prop** \u2014 reclassify as a prop\r
-   - **Location** \u2014 reclassify as a location\r
-   - **Character** \u2014 reclassify as a character\r
-   - **Other** \u2014 reclassify as unclassified\r
-   - **Codex categories** \u2014 any Codex category enabled for the Inspector appears as an option. Selecting one adds the entity to the scene\u2019s \`codexLinks\` for that category and removes it from the detected links.\r
-   - **Reset** \u2014 remove the override and revert to auto-classification\r
-\r
-### Details\r
-\r
-- Overrides are stored in plugin settings and persist across sessions.\r
-- Overridden tags show a visual indicator (e.g., different styling) so you know they've been manually classified.\r
-- Overrides affect both the Inspector display and the Story Graph visualization.\r
-- \`#hashtags\` in **custom fields** are also scanned and can be overridden.\r
-\r
-### Character Locations Field\r
-\r
-The character profile includes a **Locations** field (right after Residency) for listing story locations the character appears at:\r
-\r
-- **Residency** = where they live (static, biographical)\r
-- **Locations** = places they go in the narrative (dynamic, plot-driven)\r
-\r
-Values in the Locations field create character \u2192 location edges in the Story Graph. You can also use \`#hashtags\` inside location entries for tag-based connections.\r
-\r
----\r
-\r
-## Export\r
-\r
-Export your project in six formats. Access via the **Export** button in the view switcher toolbar (download icon) or \`Ctrl+Shift+E\`.\r
-\r
-### Scope Options\r
-\r
-| Scope | Description |\r
-|-------|-------------|\r
-| **Outline** | Metadata table, summary statistics, character list, location/world list, plotline list, notes |\r
-| **Manuscript** | Full scene content assembled in act \u2192 chapter \u2192 sequence order |\r
-\r
-### Range Exports *(new in 1.10.58)*\r
-\r
-To export only part of a manuscript, choose **Scenes** or **Chapters** from the **Content** dropdown:\r
-\r
-- **Scenes** \u2014 the input is labelled **Scenes to export** and matches scene \`sequence\` numbers.\r
-- **Chapters** \u2014 the input is labelled **Chapters to export** and matches numeric \`chapter\` values.\r
-\r
-Enter single values and inclusive ranges separated by commas, for example:\r
-\r
-\`\`\`text\r
-1-5, 8, 9, 11, 13-18\r
-\`\`\`\r
-\r
-The selected scenes are exported in the normal act \u2192 chapter \u2192 sequence order. Range exports are available in Markdown, Word, PDF, HTML, CSV, and JSON formats.\r
-\r
-### Format Options\r
-\r
-| Format | Output |\r
-|--------|--------|\r
-| **Markdown (.md)** | Saved to \`ProjectName/Exports/\` folder |\r
-| **JSON (.json)** | Structured data, saved to \`ProjectName/Exports/\` folder |\r
-| **CSV (.csv)** | Spreadsheet-ready data, saved to \`ProjectName/Exports/\` folder |\r
-| **HTML (.html)** | Standalone web page with embedded styles. Works on desktop and mobile |\r
-| **PDF (.pdf)** | Rendered via the built-in print engine. Desktop only |\r
-| **DOCX (.docx)** | Word document ready for editors, agents, or print. Works on desktop and mobile |\r
-\r
-### Manuscript Options *(new in 1.9.9)*\r
-\r
-The export dialog also includes **Include inactive scenes** *(default: off)*. Parked scenes marked inactive are normally hidden from exports; switch this on when you want to include them in a review copy or outline export.\r
-\r
-When **Manuscript** is selected the dialog reveals three more toggles:\r
-\r
-- **Include scene titles** *(default: on)* \u2014 turn off to omit the \`## Scene Title\` headings between scenes. Produces a clean continuous prose document, ideal for publisher/agent submissions where working titles shouldn't be visible.\r
-- **Number scenes (Scene 1, Scene 2\u2026)** *(default: off)* \u2014 replaces titles with simple running numbered headings. Mutually exclusive with *Include scene titles*.\r
-- **Include corkboard notes** *(default: off)* \u2014 visual sticky notes from the Corkboard are normally hidden from every export. Switch this on to include them, e.g. when sharing planning notes with a co-writer.\r
-\r
-### Exported Fields\r
-\r
-**Outline exports** include all scene metadata:\r
-\r
-| Field | MD | JSON | CSV | HTML | PDF | DOCX |\r
-|-------|:--:|:----:|:---:|:----:|:---:|:----:|\r
-| Sequence | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| Chronological Order | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| Title | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| Act / Chapter | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| Status | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| POV | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| Location | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| Characters | \u2014 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |\r
-| Emotion | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| Intensity | \u2713 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |\r
-| Word Count | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| Target Word Count | \u2014 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |\r
-| Conflict | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |\r
-| Tags | \u2713 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |\r
-| Story Date / Time | \u2014 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |\r
-| Notes | \u2713 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |\r
-| Setup / Payoff | \u2014 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |\r
-\r
-**Manuscript exports** include: title, act, chapter, sequence, chronological order, and full scene body.\r
-\r
----\r
-\r
-## Import (Scrivener)\r
-\r
-Import an existing Scrivener project (.scriv) as a new StoryLine project. Desktop only.\r
-\r
-### How to Import\r
-\r
-1. Open **Settings \u2192 Import** and click **Import .scriv**, or run **Import Scrivener Project** from the command palette.\r
-2. Select your \`.scriv\` folder in the file picker.\r
-3. If any top-level Scrivener folders don\u2019t match a known category (Characters, Locations, Research, Notes), a **classification modal** appears asking how each should be imported:\r
-   - **Codex category** \u2014 creates a new custom Codex category (e.g. \u201CMagic\u201D, \u201CFactions\u201D)\r
-   - **Notes** / **Research** / **Scenes** \u2014 routes items to the corresponding StoryLine folder\r
-   - **Skip** \u2014 excludes the folder from import\r
-4. A new StoryLine project is created with all converted files.\r
-\r
-### What Gets Imported\r
-\r
-| Scrivener | StoryLine | Details |\r
-|---|---|---|\r
-| Draft / Manuscript folder | Scenes | RTF converted to Markdown. Part/chapter folder names written to \`part\` and \`chapter\` frontmatter. |\r
-| Character Sketches | Characters | Synopsis \u2192 tagline, keywords \u2192 tags, custom metadata \u2192 custom fields |\r
-| Places / Locations | Locations | Synopsis \u2192 description, keywords \u2192 tags, custom metadata \u2192 custom fields |\r
-| Research folder | Research | Imported as research notes |\r
-| Notes / Front Matter / Back Matter | Notes | Plain markdown notes |\r
-| Unknown folders | User\u2019s choice | Classification modal (see above) |\r
-| Images & PDFs | Binary files | Copied to vault with a companion .md that embeds them |\r
-| Labels | Tags | Scrivener label \u2192 tag |\r
-| Status | Status | Mapped to StoryLine\u2019s 6-stage pipeline (idea \u2192 outlined \u2192 draft \u2192 written \u2192 revised \u2192 final) |\r
-| Custom metadata | Custom fields | Field definitions are read from the project; values written to \`custom:\` in frontmatter |\r
-| Include in Compile | \`compile\` field | Items marked as non-compiled get \`compile: false\` |\r
-\r
-### Supported Formats\r
-\r
-- **Scrivener 3** (Mac & Windows) \u2014 fully supported\r
-- **Scrivener 2** (Mac) / **1.9** (Windows) \u2014 supported (file layout: \`Files/Docs/\`)\r
-- **Scrivener 1.x** (Mac, \`binder.scrivproj\` format) \u2014 **not supported**. Open the project in Scrivener 3 to convert it first.\r
-\r
-### Tips\r
-\r
-- The importer reads RTF files and converts formatting (bold, italic, paragraphs, Unicode). Complex RTF features like tables or embedded images within RTF are not converted.\r
-- A summary notice shows how many scenes, characters, locations, research notes, files, and warnings were produced.\r
-- Warnings are listed for any items that had no content file (e.g. from sync corruption or missing data).\r
-\r
----\r
-\r
-## Custom Field Templates\r
-\r
-Define your own reusable fields for characters, locations, and scenes. If the built-in fields don't cover everything you need, custom field templates let you add any fields you want \u2014 and they'll appear automatically in every character, location, or scene editor.\r
-\r
-### How to Use\r
-\r
-1. Open **Settings \u2192 Field Templates**.\r
-2. Click **Add Field** and give it a name (e.g., "Blood Type", "Languages Spoken", "Theme Song").\r
-3. Choose whether the field applies to **Characters**, **Locations**, **Scenes**, or a combination.\r
-4. The new field appears in every matching editor under the **Custom Fields** section.\r
-5. Fill in values as needed \u2014 empty fields are hidden from exports.\r
-\r
-### Field Types\r
-\r
-| Type | Description |\r
-|------|-------------|\r
-| **Text** | Single-line text input. |\r
-| **Textarea** | Multi-line text block with auto-grow. |\r
-| **Dropdown** | Single-select dropdown with predefined options. |\r
-| **Multi-select (tags)** | Pick multiple values displayed as removable pills. |\r
-\r
-### Multi-select Fields\r
-\r
-The multi-select type is ideal for traits, themes, categories, or any field where multiple items apply:\r
-\r
-- **Manual options** \u2014 Define a list of options in the field template (same as dropdown).\r
-- **Folder source** \u2014 Optionally enter a vault folder path (e.g., \`World/Traits\`). All \`.md\` note names in that folder become selectable options, merged with any manual options.\r
-- **Free entry** \u2014 Type a custom value and press Enter to add it even if it's not in the predefined list.\r
-- **Storage** \u2014 Values are saved as a YAML list in frontmatter (\`universalFields\`), making them queryable from Obsidian Bases and Dataview.\r
-\r
-Custom field data is stored in the entity's frontmatter under the \`universalFields\` key. For scenes, custom fields appear in the Inspector between the intensity slider and setup/payoff sections.\r
-\r
-Custom sections on Characters, Locations, and Codex entries use the same basic field types. Fields inside those user-created sections can be edited in place, reordered with the chevrons, moved to another custom section with the move icon, and configured with a folder source for dropdown or multi-select choices.\r
-\r
-> **Per-project:** Custom sections, codex category definitions, enabled codex categories, and custom location types are stored per project in \`System/custom-sections.json\` \u2014 they do not carry over between unrelated writing projects. Universal field templates (the ones added via the **+** button on a section header) are also per-project, stored in \`System/field-templates.json\`.\r
-\r
----\r
-\r
-## Image Galleries\r
-\r
-Characters and locations support image galleries for storing reference art, concept images, maps, mood boards, or any visual material.\r
-\r
-### Adding Images\r
-\r
-1. Open a character or location detail editor.\r
-2. Scroll to the **Gallery** section (below the portrait).\r
-3. Click **Add Image** to import from your computer or choose an existing vault image.\r
-4. Add an optional **caption** to describe each image.\r
-5. Up to **10 images** per character or location.\r
-\r
-### Browsing\r
-\r
-- Use the **carousel** arrows to browse through images in the detail panel.\r
-- Click any image to open it in a **floating lightbox**.\r
-\r
-### Lightbox\r
-\r
-- The lightbox is a floating window you can **drag** around and **resize**.\r
-- **Zoom** in and out with the scroll wheel \u2014 zoom level is remembered per image.\r
-- Navigate between gallery images using the arrow buttons.\r
-- Close with the \xD7 button or by clicking outside.\r
-\r
-Images are saved into the \`<Project>/Images/\` folder, with automatic deduplication.\r
-\r
----\r
-\r
-## Additional Source Folders\r
-\r
-By default, StoryLine only scans files inside your project's folder structure (Scenes, Codex/Characters, Codex/Locations, etc.). The **Additional Source Folders** feature lets you point StoryLine at any other folder **inside your vault** so it can pick up entities stored elsewhere \u2014 for example, a \`Shared Universe/Characters\` folder that sits outside a specific project but should still appear in the Codex.\r
-\r
-> **Folders must be inside your Obsidian vault.** Obsidian's plugin API is sandboxed to the vault: it can only read files that live inside the vault folder. A folder on your desktop or in \`C:\\Users\\\u2026\\Documents\` (outside the vault) cannot be scanned. If you want to use notes from outside the vault, move or copy them into the vault first.\r
-\r
-### How It Works\r
-\r
-1. Open **Settings \u2192 Advanced**.\r
-2. Expand the **Additional Source Folders (Experimental)** section.\r
-3. Type or browse for a vault folder and click **Add**.\r
-4. StoryLine recursively scans the folder and every \`.md\` file inside. Each file is automatically routed to the correct manager based on its frontmatter \`type:\` field:\r
-\r
-| \`type:\` value | Routed to |\r
-|---|---|\r
-| \`scene\` | Scene Manager |\r
-| \`character\` | Character Manager |\r
-| \`location\` | Location Manager |\r
-| \`world\` | Location Manager (as a world) |\r
-| Any codex category id | Codex Manager |\r
-\r
-5. Entities from additional folders appear alongside your project's own entities in all views.\r
-\r
-### Important Notes\r
-\r
-- \u26A0 **Experimental** \u2014 back up your files before linking external folders. Files in linked folders may be modified when you edit entities in StoryLine views.\r
-- **Folders must be inside the vault** \u2014 Obsidian cannot access files outside the vault. If you enter an absolute OS path (e.g. \`C:\\Users\\\u2026\\MyFolder\` on Windows or \`/Users/\u2026/MyFolder\` on macOS), StoryLine automatically converts it to a vault-relative path on save. If the path doesn't resolve to a folder inside the vault, the scan is silently skipped.\r
-- Works with **any folder structure** \u2014 files don't need to be organized by type. StoryLine reads the \`type:\` field in each file's frontmatter to determine what it is.\r
-- Folder paths are stored as **vault-relative** (e.g., \`Shared Universe/Characters\` or \`Book 2/Scenes\`). Leading/trailing slashes and Windows backslashes are normalized automatically.\r
-- The folder browser provides **autocomplete** \u2014 start typing and it suggests matching vault folders.\r
-- Adding or removing a folder triggers an **immediate re-scan** and view refresh, so newly linked entities appear right away (no project switch or reload needed).\r
-- Remove a folder by clicking the \xD7 button next to it in the settings.\r
-- Additional source folders are scanned after the main project folders, so project files take priority when there are duplicates.\r
-\r
----\r
-\r
-## Keyboard Shortcuts\r
-\r
-| Shortcut | Action |\r
-|----------|--------|\r
-| \`Ctrl+Shift+1\` | Switch to Board view |\r
-| \`Ctrl+Shift+2\` | Switch to Plotgrid view |\r
-| \`Ctrl+Shift+3\` | Switch to Timeline view |\r
-| \`Ctrl+Shift+4\` | Switch to Plotlines view |\r
-| \`Ctrl+Shift+5\` | Switch to Characters view |\r
-| \`Ctrl+Shift+6\` | Switch to Stats view |\r
-| \`Ctrl+Shift+7\` | Switch to Locations view |\r
-| \`Ctrl+Shift+N\` | Quick-add a new scene |\r
-| \`Ctrl+Shift+E\` | Export project |\r
-| \`Ctrl+Z\` | Undo last scene change |\r
-| \`Ctrl+Shift+Z\` | Redo last scene change |\r
-\r
-All shortcuts can be customized in Obsidian's **Settings \u2192 Hotkeys**.\r
-\r
----\r
-\r
-## Settings\r
-\r
-Open **Settings \u2192 StoryLine** to configure:\r
-\r
-| Setting | Description | Default |\r
-|---------|-------------|---------|\r
-| StoryLine Root | Root folder for all projects | \`StoryLine\` |\r
-| Default Status | Status for new scenes | \`idea\` |\r
-| Auto-generate Sequence | Auto-number new scenes | On |\r
-| Default Target Word Count | Word count goal per scene | \`800\` |\r
-| Daily Word Goal | Daily writing target (rings + sparkline) | \`1000\` |\r
-| Weekly Word Goal | Weekly writing target (Mon \u2192 today) | \`7000\` |\r
-| Monthly Word Goal | Monthly writing target (day 1 \u2192 today) | \`30000\` |\r
-| Project Word Goal | Word count goal for the whole project | \`80000\` |\r
-| Custom Location Types | User-defined types (Planet, Star System, Galaxy, \u2026) for the Location Type dropdown | \u2014 |\r
-| Default View | Which view opens first | \`Board\` |\r
-| Color Coding | Card color mode (status / POV / emotion / act / tag) | \`status\` |\r
-| Color Scheme | Choose from 16 palettes (Catppuccin + Moods) or custom | \`mocha\` |\r
-| Tag Color Overrides | Per-tag color overrides shown as compact chips | \u2014 |\r
-| Show Word Counts | Display word counts on cards | On |\r
-| Compact Card View | Smaller cards with less detail | Off |\r
-| Formatting Toolbar | Show/hide the formatting toolbar in scene editors and Manuscript view | On |\r
-| Plot Hole Detection | Enable the Validator engine | On |\r
-| Scene Templates | Custom scene templates for quick scene creation | \u2014 |\r
-| Additional Source Folders | Extra vault folders to scan for entities (experimental) | None |\r
-\r
----\r
-\r
-## Project Management\r
-\r
-StoryLine supports **multiple projects** in the same vault.\r
-\r
-### Creating a Project\r
-1. Command palette \u2192 **Create New StoryLine Project**.\r
-2. Enter a project title.\r
-3. StoryLine creates the folder structure automatically.\r
-\r
-### Switching Projects\r
-1. Command palette \u2192 **Open/Switch StoryLine Project**.\r
-2. Select the project from the dropdown.\r
-\r
-### Forking a Project\r
-Create a copy of an existing project (useful for alternate drafts or backups):\r
-1. Command palette \u2192 **Fork Current StoryLine Project**.\r
-2. Enter a new title. All scenes are duplicated.\r
-\r
-### Deleting a Project\r
-Permanently delete the active project and everything inside its folder (scenes, codex, notes, research, and project settings):\r
-1. Switch to the project you want to delete.\r
-2. Command palette \u2192 **Delete Current StoryLine Project**.\r
-3. A warning modal lists everything that will be removed. **Type the project title** to enable the Delete button, then click **Delete permanently**.\r
-\r
-The project folder is moved to your system trash (or Obsidian's \`.trash\` folder, depending on your **Settings \u2192 Files & Links \u2192 Deleted files** preference). If the project belongs to a series, it is also removed from \`series.json\`. If it was the active project, StoryLine switches to another project automatically.\r
-\r
-> **Why this matters:** StoryLine discovers projects by scanning the vault for \`type: storyline\` markdown files. Simply deleting a folder from Obsidian's file explorer can leave the \`.md\` file in \`.trash/\` (or have it restored by a sync plugin), which causes the project to reappear. The Delete command trashes the folder through Obsidian's API and re-scans, so the project is gone for good.\r
-\r
----\r
-\r
-## Series Mode\r
-\r
-Series Mode lets you group multiple book projects into a **series** with a shared Codex. Characters, locations, and any custom categories are stored once at the series level and automatically available in every book.\r
-\r
-### Creating a Series\r
-1. Open the project you want to use as the first book.\r
-2. **From Settings:** Go to **Settings \u2192 Project Management** and click **Create Series\u2026**.\r
-   *Or from the command palette:* **Create Series from Current Project**.\r
-3. Enter a series name.\r
-4. StoryLine creates a series folder, moves your book into it, migrates the Codex to the series level, and writes a \`series.json\` manifest.\r
-\r
-### Adding a Book to an Existing Series\r
-1. Open the project you want to add.\r
-2. Command palette \u2192 **Add Current Project to Series**.\r
-3. Pick a series from the dropdown (StoryLine scans for folders containing \`series.json\`).\r
-4. The book folder moves into the series folder and its Codex entries are merged into the shared Codex. Duplicate filenames are skipped.\r
-\r
-You can also add books from the **Series Management Modal** \u2014 open it from **Settings \u2192 Project Management \u2192 Manage Series\u2026** or the "Manage Series\u2026" button in the Open Project modal. Each series card has an "Add book" dropdown at the bottom.\r
-\r
-### Removing a Book from a Series\r
-1. Open a project that belongs to a series.\r
-2. Command palette \u2192 **Remove Current Project from Series**.\r
-3. The shared Codex is copied into a local Codex inside the book folder, and the book moves out of the series folder.\r
-\r
-### Renaming a Book\r
-Go to **Settings \u2192 Project Management** and click **Rename\u2026**. This renames the project file, its folder, updates the frontmatter title, and updates the series manifest if the book belongs to a series.\r
-\r
-### Managing Series\r
-Open the **Series Management Modal** from **Settings \u2192 Project Management \u2192 Manage Series\u2026** or the "Manage Series\u2026" button in the Open Project modal. From here you can:\r
-- Rename a series (also renames the folder on disk).\r
-- Reorder books within a series using the arrow buttons.\r
-- Rename individual books.\r
-- Add standalone books to the series.\r
-- Remove books from the series (moves the book out of the series folder; the book is kept as a standalone project).\r
-- **Delete a book permanently** (**trash** icon) \u2014 trashes the book's folder and removes it from the series. A type-to-confirm warning modal is shown first.\r
-\r
-### How It Works\r
-- When a project has a \`seriesId\` in its frontmatter, all Codex paths (Characters, Locations, custom categories) resolve to the **series-level** Codex folder instead of the book-local one.\r
-- All existing views \u2014 Characters, Locations, Codex Hub, Relationship Map, Story Graph, Link Scanner \u2014 work transparently with the shared Codex.\r
-- The project selector toolbar shows a **series badge** (library icon + series name) when the active project belongs to a series.\r
-- **Settings \u2192 Project Management** provides buttons for Rename book, Create series, and Manage series \u2014 everything is accessible without the command palette.\r
-\r
-### Mixing Book-Only and Series-Shared Entities\r
-\r
-By default every character, world, and location in a series Codex is visible to every book. From v1.9.5 you can fine-tune this per entity:\r
-\r
-- **Right-click a character card** in the Characters view, or a world / location row in the Locations view, to open the context menu.\r
-- **Promote to series (shared)** \u2014 moves the file from the book's local \`Codex/Characters\` (or \`Codex/Locations\`) folder into the shared series-level folder.\r
-- **Demote to project (book-only)** \u2014 moves a series-shared entity back into the current book's local Codex folder. Other books in the series no longer see it.\r
-- **Restrict to \u201C<book>\u201D only** \u2014 keeps the file in the shared Codex but adds a \`books:\` frontmatter list so the entity is treated as appearing only in the listed book.\r
-- **Add to / Remove from \u201C<book>\u201D** \u2014 toggle membership for the active book.\r
-- **Share across all books** \u2014 clears the \`books:\` list, restoring \u201Cappears everywhere\u201D behavior.\r
-\r
-The **All books / Showing: <book>** chip in the Characters and Locations search rows hides entries that aren't in the current book. Worlds remain visible if any of their child locations are in the current book, so you can still drill in.\r
-\r
-Wikilinks reference characters and locations **by name** (not by file path), so promoting / demoting never breaks references in scenes.\r
-\r
-#### \`books:\` frontmatter format\r
-\r
-\`\`\`yaml\r
----\r
-type: character\r
-name: Aria Vance\r
-books:\r
-  - The Sunken City\r
-  - The Iron Crown\r
----\r
-\`\`\`\r
-\r
-- Missing or empty \`books:\` \u2192 entity appears in every book in the series (default).\r
-- Non-empty \`books:\` \u2192 entity appears only in the listed books.\r
-\r
-### Pre-flight Checks\r
-Before any migration, StoryLine verifies that Obsidian's **"Automatically update internal links"** setting is enabled. This ensures all \`[[wikilinks]]\` remain valid when files move between folders. If the setting is off, the migration is blocked with a notice.\r
-\r
-### Series Folder Layout\r
-\`\`\`\r
-StoryLine/\r
-  My Series/\r
-    series.json              \u2190 Series manifest (name, book order)\r
-    Codex/                   \u2190 Shared across all books\r
-      Characters/\r
-      Locations/\r
-      [Custom]/\r
-    Book One.md\r
-    Book One/\r
-      Scenes/\r
-      System/\r
-    Book Two.md\r
-    Book Two/\r
-      Scenes/\r
-      System/\r
-\`\`\`\r
-\r
-> **Rule:** A solo book has a local Codex. A series book uses the series Codex by default. From v1.9.5, series books may additionally keep book-only entities in their per-project \`Codex/Characters\` and \`Codex/Locations\` folders \u2014 use the right-click **Promote / Demote** actions to move entities between scopes.\r
-\r
----\r
-\r
-## File Structure\r
-\r
-StoryLine organizes your vault like this:\r
-\r
-\`\`\`\r
-YourVault/\r
-  StoryLine/                      \u2190 Root folder (configurable)\r
-    My Novel.md                   \u2190 Project file\r
-    My Novel/                     \u2190 Project folder\r
-      Scenes/                     \u2190 Scene files (Markdown with frontmatter)\r
-        01 - The Beginning.md\r
-        02 - The Chase.md\r
-        ...\r
-      Codex/                      \u2190 Codex hub folder\r
-        Characters/               \u2190 Character profiles (Markdown with frontmatter)\r
-        Locations/                \u2190 Location & world profiles\r
-          Eryndor.md              \u2190 World file\r
-          Eryndor/                \u2190 Locations in this world\r
-            The Iron Citadel.md\r
-            Port Veyra.md\r
-        Props/                    \u2190 Example custom category\r
-        Factions/                 \u2190 Example custom category\r
-      System/                     \u2190 Per-project settings (auto-managed)\r
-        settings.json             \u2190 Tag colors, aliases, overrides\r
-        plotgrid.json             \u2190 Plotgrid layout data\r
-        board.json                \u2190 Corkboard positions\r
-        tracker.json              \u2190 Writing tracker history\r
-      Exports/                    \u2190 Exported files (MD, JSON, CSV, HTML, PDF, DOCX)\r
-    Another Book.md               \u2190 Another project\r
-    Another Book/\r
-      Scenes/\r
-      ...\r
-\`\`\`\r
-\r
-Existing projects with Characters and Locations at the top level (outside Codex/) continue to work \u2014 StoryLine detects the old layout automatically.\r
-\r
-Scene files are standard Markdown \u2014 you can edit them directly in Obsidian's editor, and StoryLine reads the frontmatter automatically.\r
-\r
----\r
-\r
-## Tips & Workflow\r
-\r
-1. **Start with the Board View** \u2014 create scenes as ideas, then outline and draft them.\r
-2. **Use acts and chapters** to structure your story. Add empty act/chapter columns from the Board toolbar so you can see gaps.\r
-3. **Apply a beat sheet** \u2014 use Save the Cat, 3-Act, or Hero's Journey templates for instant structure scaffolding.\r
-4. **Tag your plotlines** \u2014 assign tags like \`romance\`, \`mystery\`, \`character-arc\` to track storylines across the Plotlines View. Assign colors to tags for instant visual identification.\r
-5. **Set up POV and characters** early \u2014 the Characters View and Relationship Map become more useful as you add character metadata.\r
-6. **Use the intensity field** (-10 to +10) to plan your emotional arc. The Stats View graphs this as a tension curve.\r
-7. **Use chronological order** if your story has flashbacks or non-linear timelines. Toggle between reading and chronological order in the Timeline View.\r
-17. **Set timeline modes** for non-linear scenes \u2014 flashbacks, dreams, parallel timelines, etc. This suppresses false plot-hole warnings and adds visual badges.\r
-8. **Check Stats regularly** \u2014 the plot hole detector and pacing analysis catch structural issues early.\r
-9. **Save filter presets** for your common views (e.g., "Act 1 only", "Unfinished scenes", "Anna's POV").\r
-10. **Use scene notes** for editorial comments \u2014 they export with your outline but stay separate from manuscript text.\r
-11. **Save snapshots** before major rewrites \u2014 you can always restore a previous version.\r
-12. **Export outlines** to share with beta readers or editors without sharing your vault. CSV exports open directly in Excel/Sheets.\r
-13. **Use \`Ctrl+Z\`** freely \u2014 undo tracks all scene changes within the session.\r
-14. **Use writing sprints** to stay focused \u2014 the built-in timer in Stats View keeps you on track.\r
-15. **Scene content is just Markdown** \u2014 use headings, links, callouts, and any Obsidian feature inside your scenes.\r
-16. **Enable swimlanes** in the Timeline for a bird's-eye view of parallel storylines by POV, location, or tag.\r
-\r
----\r
-\r
-## License\r
-\r
-MIT\r
-\r
----\r
-\r
-*StoryLine \u2014 Transform your vault into a powerful book planning tool.*\r
+\u2717 No conflict`}`)}let c=a.createDiv("pacing-coach-legend"),l=c.createSpan({cls:"pacing-coach-legend-item"});l.createSpan({cls:"pacing-coach-legend-swatch pacing-coach-bar-swatch"}),l.createSpan({text:" With conflict"});let d=c.createSpan({cls:"pacing-coach-legend-item"});d.createSpan({cls:"pacing-coach-legend-swatch pacing-coach-noconflict-swatch"}),d.createSpan({text:" No conflict"});let u=i.filter(_=>_.conflict&&_.conflict.trim().length>0),p=u.length>0?Math.round(u.reduce((_,v)=>_+this.getSceneCount(v),0)/u.length):0,h=i.filter(_=>!_.conflict||_.conflict.trim().length===0),m=h.length>0?Math.round(h.reduce((_,v)=>_+this.getSceneCount(v),0)/h.length):0,g=a.createDiv("stats-sprint-row");this.createStatCard(g,"swords","With conflict",`${u.length} scenes (avg ${p.toLocaleString()} words)`),this.createStatCard(g,"minus-circle","No conflict",`${h.length} scenes (avg ${m.toLocaleString()} words)`);let f=h.filter(_=>this.getSceneCount(_)>p*1.5&&this.getSceneCount(_)>500).sort((_,v)=>this.getSceneCount(v)-this.getSceneCount(_));if(f.length>0){let _=a.createDiv("stats-subsection");_.createEl("p",{cls:"stats-hint stats-overused-title",text:`${f.length} long scene${f.length!==1?"s":""} without conflict \u2014 potential pacing issues:`});let v=_.createEl("ul",{cls:"stats-list"});for(let b of f.slice(0,8)){let S=v.createEl("li");S.createEl("a",{text:b.title||"Untitled",cls:"stats-scene-link"}).addEventListener("click",()=>{this.app.workspace.openLinkText(b.filePath,"",!0)}),S.createSpan({text:` \u2014 ${this.getSceneCount(b).toLocaleString()} ${this.getSceneCountLabel().toLowerCase()}, no conflict`})}}}renderWarnings(e,n){if(this.plugin.settings.enablePlotHoleDetection&&n.length>0){let i=Np.validate(n);if(i.length===0){let a=e.createDiv("stats-ok"),o=a.createSpan();Mr.setIcon(o,"check-circle"),a.createSpan({text:" No issues detected"})}else{let a=new Map;for(let d of i){let u=a.get(d.category)||[];u.push(d),a.set(d.category,u)}let o=i.filter(d=>d.severity==="error").length,s=i.filter(d=>d.severity==="warning").length,c=i.filter(d=>d.severity==="info").length,l=e.createDiv("stats-warning-summary");o>0&&l.createSpan({cls:"stats-severity-error",text:`${o} error${o>1?"s":""}`}),s>0&&l.createSpan({cls:"stats-severity-warning",text:`${s} warning${s>1?"s":""}`}),c>0&&l.createSpan({cls:"stats-severity-info",text:`${c} info`});for(let[d,u]of a){let p=e.createDiv("stats-warning-category");p.createEl("h5",{text:d});let h=p.createEl("ul",{cls:"stats-list stats-warning-list"});for(let m of u){let g=h.createEl("li",{cls:`stats-severity-${m.severity}`}),f=g.createSpan({cls:"stats-warning-icon"});switch(m.severity){case"error":Mr.setIcon(f,"x-circle");break;case"warning":Mr.setIcon(f,"alert-triangle");break;case"info":Mr.setIcon(f,"info");break}g.createSpan({text:` ${m.message}`})}}}}else n.length===0?e.createEl("p",{text:"No scenes to analyze."}):e.createEl("p",{cls:"stats-ok",text:"Plot hole detection is disabled. Enable it in settings \u2014 advanced."})}getSceneCountLabel(){return this.plugin.settings.countUnit==="chars"?"Characters":"Words"}getSceneCountNoun(){return this.plugin.settings.countUnit==="chars"?"character":"word"}getSceneCount(e){return this.plugin.settings.countUnit==="chars"?e.charcount||0:e.wordcount||0}getTotalSceneCount(e){return this.plugin.settings.countUnit==="chars"?e.totalChars:e.totalWords}createStatCard(e,n,i,a){let o=e.createDiv("stats-sprint-card"),s=o.createSpan({cls:"stats-sprint-card-icon"});Mr.setIcon(s,n),o.createDiv({cls:"stats-sprint-card-value",text:a}),o.createDiv({cls:"stats-sprint-card-label",text:i})}renderProgressRing(e,n,i,a,o,s=92){let c=e.createDiv("stats-ring");c.createDiv({cls:"stats-ring-label",text:n});let l=a>0?a:1,d=i/l,u=Math.round(d*100),p=i>=a&&a>0,h=10,m=(s-h)/2,g=s/2,f=2*Math.PI*m,_=Math.max(0,Math.min(1,d)),v=f*_,b=p?"var(--sl-success, #4CAF50)":o,S="http://www.w3.org/2000/svg",E=activeDocument.createElementNS(S,"svg");E.setAttribute("width",String(s)),E.setAttribute("height",String(s)),E.setAttribute("viewBox",`0 0 ${s} ${s}`),E.classList.add("stats-ring-svg");let y=activeDocument.createElementNS(S,"circle");y.setAttribute("cx",String(g)),y.setAttribute("cy",String(g)),y.setAttribute("r",String(m)),y.setAttribute("fill","none"),y.setAttribute("stroke","var(--background-modifier-border, #444)"),y.setAttribute("stroke-width",String(h)),E.appendChild(y);let w=activeDocument.createElementNS(S,"circle");w.setAttribute("cx",String(g)),w.setAttribute("cy",String(g)),w.setAttribute("r",String(m)),w.setAttribute("fill","none"),w.setAttribute("stroke",b),w.setAttribute("stroke-width",String(h)),w.setAttribute("stroke-linecap","round"),w.setAttribute("stroke-dasharray",`${v} ${f}`),w.setAttribute("transform",`rotate(-90 ${g} ${g})`),E.appendChild(w);let C=activeDocument.createElementNS(S,"text");C.setAttribute("x",String(g)),C.setAttribute("y",String(g)),C.setAttribute("text-anchor","middle"),C.setAttribute("dominant-baseline","central"),C.setAttribute("class","stats-ring-pct"),C.textContent=`${u}%`,E.appendChild(C),c.appendChild(E),c.createDiv({cls:"stats-ring-sub",text:`${i.toLocaleString()} / ${a.toLocaleString()}`})}median(e){if(e.length===0)return 0;let n=[...e].sort((a,o)=>a-o),i=Math.floor(n.length/2);return n.length%2!==0?n[i]:Math.round((n[i-1]+n[i])/2)}refresh(){this.proseCache=null,this.echoCache=null,this.rootContainer&&this.renderView(this.rootContainer)}};var ct=require("obsidian"),Se=Mt(require("obsidian"));rn();Ua();var Op=[{title:"Overview",icon:"globe",fields:[{key:"name",label:"Name",placeholder:"Name of the world or setting"},{key:"nickname",label:"Nickname / Alias",placeholder:"Alternative names (comma-separated)",multiline:!0},{key:"description",label:"Description",placeholder:"General overview of this world",multiline:!0}]},{title:"Geography",icon:"mountain",fields:[{key:"geography",label:"Geography",placeholder:"Environmental conditions, weather, climate, terrain",multiline:!0}]},{title:"Culture",icon:"landmark",fields:[{key:"culture",label:"Culture",placeholder:"Norms, values, traditions, social structures",multiline:!0}]},{title:"Politics",icon:"crown",fields:[{key:"politics",label:"Politics",placeholder:"Systems of power and control, governance",multiline:!0}]},{title:"Magic / Technology",icon:"wand-2",fields:[{key:"magicTechnology",label:"Magic / Technology",placeholder:"Rules and limitations that govern how things work",multiline:!0}]},{title:"Beliefs",icon:"book-open",fields:[{key:"beliefs",label:"Beliefs",placeholder:"Myths, spiritual, religious, and philosophical beliefs",multiline:!0}]},{title:"Economy",icon:"coins",fields:[{key:"economy",label:"Economy",placeholder:"Trade, currency, resources, wealth distribution",multiline:!0}]},{title:"History",icon:"scroll-text",fields:[{key:"history",label:"History",placeholder:"Key historical events, eras, conflicts",multiline:!0}]}],Lp=[{title:"Overview",icon:"map-pin",fields:[{key:"name",label:"Name",placeholder:"Name of this location"},{key:"nickname",label:"Nickname / Alias",placeholder:"Alternative names (comma-separated)",multiline:!0},{key:"locationType",label:"Type",placeholder:"City, building, wilderness, room\u2026"},{key:"description",label:"Description",placeholder:"Sights, sounds, smells \u2014 what does it feel like?",multiline:!0}]},{title:"Atmosphere",icon:"cloud",fields:[{key:"atmosphere",label:"Atmosphere / Mood",placeholder:"The feeling this place evokes",multiline:!0}]},{title:"Story Significance",icon:"bookmark",fields:[{key:"significance",label:"Significance",placeholder:"Why this place matters to the story",multiline:!0}]},{title:"People",icon:"users",fields:[{key:"inhabitants",label:"Inhabitants",placeholder:"Key inhabitants or characters often present",multiline:!0}]},{title:"Connections",icon:"link",fields:[{key:"connectedLocations",label:"Connected Locations",placeholder:"Nearby or linked locations"},{key:"mapNotes",label:"Map Notes",placeholder:"Coordinates, spatial relationships, layout notes",multiline:!0}]},{title:"Linking & Matching",icon:"link",fields:[{key:"entryType",label:"Type",placeholder:"Sub-type (e.g. Stronghold, Landmark, Region\u2026)"},{key:"caseSensitive",label:"Case-sensitive matching",placeholder:"Off \u2014 match regardless of case",toggle:!0},{key:"excludeTerms",label:"Exclude terms",placeholder:"Comma-separated phrases that should NOT link here",multiline:!0}]}],e_=["City","Town","Village","Neighborhood","Building","Room","Wilderness","Forest","Mountain","River","Lake","Sea","Island","Harbour","Road","Vehicle","Region","Country","Other"],iN=["name","image","gallery","nickname","description","geography","culture","politics","magicTechnology","beliefs","economy","history","books","booksById","sortOrder","entryType","caseSensitive","excludeTerms"],aN=["name","image","gallery","nickname","locationType","world","parent","description","atmosphere","significance","inhabitants","connectedLocations","mapNotes","books","booksById","sortOrder","entryType","caseSensitive","excludeTerms"];Ka();var Mp=class Mp extends ct.ItemView{constructor(e,n,i){super(e);this.selectedItem=null;this.rootContainer=null;this.collapsedSections=new Set;this.collapsedTreeNodes=new Set;this.autoSaveTimer=null;this.pendingSaveDraft=null;this.undoSnapshot=null;this._lastSaveTime=0;this.originalItemName=null;this.originalItemType=null;this.searchText="";this.sortBy="name";this.groupingMode="none";this.activeVisualGroupId="";this.bookFilterActive=!1;this._portaledDropdowns=[];this.plugin=n,this.sceneManager=i,this.locationManager=n.locationManager}clearPortaledDropdowns(){for(let e of this._portaledDropdowns)try{e.remove()}catch(n){}this._portaledDropdowns=[]}getViewType(){return hn}getDisplayText(){var n,i,a;let e=(a=(i=(n=this.plugin)==null?void 0:n.sceneManager)==null?void 0:i.activeProject)==null?void 0:a.title;return e?`StoryLine - ${e}`:"StoryLine"}getIcon(){return"map-pin"}async onOpen(){this.plugin.storyLeaf=this.leaf;let e=this.containerEl.children[1];e.empty(),e.addClass("story-line-location-container"),Mn(e),this.rootContainer=e,await this.sceneManager.initialize(),await this.plugin.reloadEntities();let n=this.getLocationVisualGroups();n.length>0&&(this.groupingMode="named",this.activeVisualGroupId=n[0].id),this.renderView(e)}async onClose(){await this.flushPendingSave(),activeDocument.querySelectorAll(".gallery-lightbox-window").forEach(e=>e.remove()),this.clearPortaledDropdowns()}renderView(e){this.clearPortaledDropdowns(),e.empty();let n=e.createDiv("story-line-toolbar");n.createDiv("story-line-title-row").createEl("h3",{cls:"story-line-view-title",text:"StoryLine"}),En(n,hn,this.plugin,this.leaf);let a=n.createDiv("story-line-toolbar-controls");xp(e,{activeId:"locations-pseudo",leaf:this.leaf,plugin:this.plugin});let o=a.createEl("button",{cls:"clickable-icon"});Se.setIcon(o,"map-plus"),fe(o,"New World"),o.addEventListener("click",()=>this.promptNewWorld());let s=a.createEl("button",{cls:"clickable-icon"});if(Se.setIcon(s,"map-pin-plus-inside"),fe(s,"New Location"),s.addEventListener("click",()=>this.promptNewLocation()),!this.selectedItem){let l=a.createEl("button",{cls:"clickable-icon"});Se.setIcon(l,"folder-tree"),fe(l,"Manage visual groups"),l.addEventListener("click",()=>this.openLocationVisualGroupManager())}let c=e.createDiv("story-line-location-content");this.selectedItem?this.renderDetail(c):this.renderOverview(c)}renderOverview(e){var x;e.empty(),e.createEl("h3",{text:"Worlds & locations"});let n=e.createDiv("codex-search-row"),i=n.createEl("input",{cls:"codex-search-input",attr:{type:"text",placeholder:"Search locations\u2026"}});i.value=this.searchText;let a=((x=activeDocument.activeElement)==null?void 0:x.closest(".story-line-location-container"))!=null;i.addEventListener("input",()=>{this.searchText=i.value,this.renderOverview(e)}),a&&window.setTimeout(()=>{i.focus(),i.selectionStart=i.selectionEnd=i.value.length},0),n.createSpan({cls:"codex-sort-label",text:"Sort by"});let o=n.createEl("select",{cls:"codex-sort-select"});for(let T of[{value:"name",label:"Name"},{value:"modified",label:"Last edited"},{value:"created",label:"Date created"},{value:"type",label:"Type"},{value:"manual",label:"Manual"}]){let A=o.createEl("option",{text:T.label,value:T.value});this.sortBy===T.value&&(A.selected=!0)}o.addEventListener("change",()=>{this.sortBy=o.value,this.renderOverview(e)});let s=this.getLocationVisualGroups();if(s.length>0){n.createSpan({cls:"codex-sort-label",text:"Group by"});let T=n.createEl("select",{cls:"codex-sort-select"});T.createEl("option",{text:"None",value:"none"});for(let A of s){let D=T.createEl("option",{text:A.name,value:A.id});this.groupingMode==="named"&&this.activeVisualGroupId===A.id&&(D.selected=!0)}this.groupingMode==="none"&&(T.value="none"),T.addEventListener("change",()=>{this.groupingMode=T.value==="none"?"none":"named",this.activeVisualGroupId=T.value==="none"?"":T.value,this.renderOverview(e)})}let c=this.plugin.sceneManager.getCurrentBookTitle(),l=this.plugin.sceneManager.getCurrentBookId();if(!!this.plugin.sceneManager.getSeriesFolder()&&c){let T=n.createEl("button",{cls:`codex-book-filter${this.bookFilterActive?" active":""}`,text:this.bookFilterActive?`Showing: ${c}`:"All books"});fe(T,this.bookFilterActive?"Click to show all series locations":`Click to hide entries not in \u201C${c}\u201D`),T.addEventListener("click",()=>{this.bookFilterActive=!this.bookFilterActive,this.renderOverview(e)})}let u=this.searchText.toLowerCase(),p=this.locationManager.getAllWorlds(),h=this.locationManager.getOrphanLocations(),m=this.sceneManager.getAllScenes().filter(T=>!T.inactive),g=u?p.filter(T=>T.name.toLowerCase().includes(u)?!0:this.locationManager.getLocationsForWorld(T.name).some(D=>D.name.toLowerCase().includes(u))):[...p],f=u?h.filter(T=>T.name.toLowerCase().includes(u)):[...h];if(this.bookFilterActive&&c){let T=c.toLowerCase(),A=D=>l&&D.booksById&&D.booksById.length>0?D.booksById.includes(l):!D.books||D.books.length===0?!0:D.books.some(L=>L.toLowerCase()===T);g=g.filter(D=>this.locationManager.getLocationsForWorld(D.name).some(A)),f=f.filter(A)}let _=T=>{this.sortBy==="manual"?T.sort((A,D)=>{var k,R;let L=(k=A.sortOrder)!=null?k:Number.MAX_SAFE_INTEGER,O=(R=D.sortOrder)!=null?R:Number.MAX_SAFE_INTEGER;return L!==O?L-O:A.name.toLowerCase().localeCompare(D.name.toLowerCase())}):this.sortBy==="modified"?T.sort((A,D)=>{var L,O;return((L=D.modified)!=null?L:"").localeCompare((O=A.modified)!=null?O:"")}):this.sortBy==="created"?T.sort((A,D)=>{var L,O;return((L=D.created)!=null?L:"").localeCompare((O=A.created)!=null?O:"")}):this.sortBy==="type"?T.sort((A,D)=>{let L=A.locationType||"",O=D.locationType||"";return L!==O?L.localeCompare(O):A.name.toLowerCase().localeCompare(D.name.toLowerCase())}):T.sort((A,D)=>A.name.toLowerCase().localeCompare(D.name.toLowerCase()))};if(_(g),_(f),g.length===0&&f.length===0&&!u&&!(this.groupingMode==="named"&&s.length>0)){let T=e.createDiv("location-empty-state"),A=T.createDiv("location-empty-icon");Se.setIcon(A,"map"),T.createEl("h4",{text:"No worlds or locations yet"}),T.createEl("p",{text:'Click "+ world" to create a worldbuilding profile, or "+ location" to add a specific place.'});return}let v=e.createDiv("location-tree"),b=g.map(T=>T.filePath),S=f.filter(T=>!T.parent||!f.some(A=>A.name.toLowerCase()===T.parent.toLowerCase())),E=(T,A)=>{let D=A?g.filter(O=>A.entryPaths.includes(O.filePath)):g.filter(O=>!s.some(k=>k.entryPaths.includes(O.filePath))),L=A?S.filter(O=>A.entryPaths.includes(O.filePath)):S.filter(O=>!s.some(k=>k.entryPaths.includes(O.filePath)));A&&(D.sort((O,k)=>A.entryPaths.indexOf(O.filePath)-A.entryPaths.indexOf(k.filePath)),L.sort((O,k)=>A.entryPaths.indexOf(O.filePath)-A.entryPaths.indexOf(k.filePath)));for(let O of D)this.renderWorldNode(T,O,m,b,s);if(L.length>0){D.length>0&&T.createDiv("location-orphan-divider").createSpan({text:"Standalone Locations"});for(let O of L)this.renderLocationNode(T,O,m,0,[],s)}};if(this.groupingMode==="named"){for(let A of s){let D=v.createDiv("codex-visual-group"),L=D.createDiv({cls:"codex-entry-group-heading",text:A.name});tc(D,L,A,s,()=>this.plugin.saveSettings(),()=>{this.rootContainer&&this.renderOverview(this.rootContainer)}),this.attachLocationGroupDropTarget(D,A,s),E(D.createDiv("codex-visual-group-items"),A)}if(g.some(A=>!s.some(D=>D.entryPaths.includes(A.filePath)))||S.some(A=>!s.some(D=>D.entryPaths.includes(A.filePath)))){let A=v.createDiv("codex-visual-group");A.createDiv({cls:"codex-entry-group-heading",text:"Ungrouped"}),this.attachLocationGroupDropTarget(A,void 0,s),E(A.createDiv("codex-visual-group-items"))}}else E(v);let y=[...this.locationManager.getAllLocations().map(T=>T.name.toLowerCase()),...p.map(T=>T.name.toLowerCase())],C=this.sceneManager.queryService.getUniqueValues("location").filter(T=>!y.includes(T.toLowerCase()));if(u&&(C=C.filter(T=>T.toLowerCase().includes(u))),C.length>0){v.createDiv("location-orphan-divider").createSpan({text:"Locations from scenes (no profile yet)"});for(let A of C)this.renderUnlinkedLocation(v,A,m)}}renderWorldNode(e,n,i,a=[],o=[]){let s=e.createDiv("location-tree-node location-world-node"),c=this.collapsedTreeNodes.has(n.filePath),l=s.createDiv("location-tree-header");l.setAttribute("draggable","true"),l.addEventListener("dragstart",h=>{var m,g;(m=h.dataTransfer)==null||m.setData("application/x-storyline-world",n.filePath),(g=h.dataTransfer)==null||g.setData("application/x-storyline-location-group",n.filePath),h.dataTransfer&&(h.dataTransfer.effectAllowed="move")}),l.addEventListener("dragover",h=>{var f,_,v,b;let m=(_=(f=h.dataTransfer)==null?void 0:f.types)==null?void 0:_.includes("application/x-storyline-world"),g=(b=(v=h.dataTransfer)==null?void 0:v.types)==null?void 0:b.includes("application/x-storyline-location");!m&&!g||(h.preventDefault(),l.addClass("location-tree-drop-target"))}),l.addEventListener("dragleave",()=>l.removeClass("location-tree-drop-target")),l.addEventListener("drop",h=>{var _,v,b;h.preventDefault(),l.removeClass("location-tree-drop-target");let m=(_=h.dataTransfer)==null?void 0:_.getData("application/x-storyline-location-group");if(m&&m!==n.filePath&&this.groupingMode==="named"&&o.length>0){this.reorderVisualLocationGroup(m,n.filePath,o);return}let g=(v=h.dataTransfer)==null?void 0:v.getData("application/x-storyline-world");if(g&&g!==n.filePath){this.reorderWorlds(g,n.filePath,a);return}let f=(b=h.dataTransfer)==null?void 0:b.getData("application/x-storyline-location");f&&this.reparentLocation(f,{world:n.name,parent:void 0})});let d=l.createSpan("location-tree-chevron"),u=this.locationManager.getLocationsForWorld(n.name);u.length>0?(Se.setIcon(d,c?"chevron-right":"chevron-down"),d.addEventListener("click",h=>{h.stopPropagation(),this.collapsedTreeNodes.has(n.filePath)?this.collapsedTreeNodes.delete(n.filePath):this.collapsedTreeNodes.add(n.filePath),this.renderView(this.rootContainer)})):d.setCssStyles({width:"14px"});let p=l.createSpan("location-tree-icon");if(n.image)try{let h=Pt(this.app,n.image),m=p.createEl("img",{attr:{src:h,alt:n.name},cls:"location-tree-thumb"});m.onerror=()=>{m.remove(),Se.setIcon(p,"globe")}}catch(h){Se.setIcon(p,"globe")}else Se.setIcon(p,"globe");if(l.createSpan({cls:"location-tree-name",text:n.name}),this.renderLocationGroupSelect(l,n,o),l.addEventListener("click",()=>{this.selectedItem=n.filePath,this.renderView(this.rootContainer)}),l.addEventListener("contextmenu",h=>{h.preventDefault(),this.showItemContextMenu(n,h)}),!c&&u.length>0){let h=s.createDiv("location-tree-children"),m=this.locationManager.getAllLocations(),g=u.filter(_=>!_.parent||!m.some(v=>v.name.toLowerCase()===_.parent.toLowerCase()));this.sortLocations(g);let f=g.map(_=>_.name);for(let _ of g)this.renderLocationNode(h,_,i,1,f,o)}}renderLocationNode(e,n,i,a,o=[],s=[]){let c=e.createDiv("location-tree-node"),l=this.locationManager.getChildLocations(n.name);this.sortLocations(l);let d=this.collapsedTreeNodes.has(n.filePath),u=c.createDiv("location-tree-header");u.setCssStyles({paddingLeft:`${a*20}px`}),u.setAttribute("draggable","true"),u.addEventListener("dragstart",f=>{var _,v,b;(_=f.dataTransfer)==null||_.setData("application/x-storyline-location",n.name),(v=f.dataTransfer)==null||v.setData("application/x-storyline-location-group",n.filePath),(b=f.dataTransfer)==null||b.setData("text/plain",n.name),f.dataTransfer&&(f.dataTransfer.effectAllowed="move")}),u.addEventListener("dragover",f=>{var v,b;(b=(v=f.dataTransfer)==null?void 0:v.types)!=null&&b.includes("application/x-storyline-location")&&(f.preventDefault(),u.addClass("location-tree-drop-target"))}),u.addEventListener("dragleave",()=>u.removeClass("location-tree-drop-target")),u.addEventListener("drop",f=>{var b,S,E,y,w,C;f.preventDefault(),u.removeClass("location-tree-drop-target");let _=(b=f.dataTransfer)==null?void 0:b.getData("application/x-storyline-location-group");if(_&&_!==n.filePath&&this.groupingMode==="named"&&s.length>0){this.reorderVisualLocationGroup(_,n.filePath,s);return}let v=(S=f.dataTransfer)==null?void 0:S.getData("application/x-storyline-location");if(v&&v!==n.name){let x=this.locationManager.getAllLocations().find(A=>A.name===v);x&&((E=x.world)!=null?E:"").toLowerCase()===((y=n.world)!=null?y:"").toLowerCase()&&((w=x.parent)!=null?w:"").toLowerCase()===((C=n.parent)!=null?C:"").toLowerCase()?this.reorderLocations(v,n.name,o):this.reparentLocation(v,{world:n.world,parent:n.name})}});let p=u.createSpan("location-tree-chevron");l.length>0?(Se.setIcon(p,d?"chevron-right":"chevron-down"),p.addEventListener("click",f=>{f.stopPropagation(),this.collapsedTreeNodes.has(n.filePath)?this.collapsedTreeNodes.delete(n.filePath):this.collapsedTreeNodes.add(n.filePath),this.renderView(this.rootContainer)})):p.setCssStyles({width:"14px"});let h=u.createSpan("location-tree-icon");if(n.image)try{let f=Pt(this.app,n.image),_=h.createEl("img",{attr:{src:f,alt:n.name},cls:"location-tree-thumb"});_.onerror=()=>{_.remove(),Se.setIcon(h,"map-pin")}}catch(f){Se.setIcon(h,"map-pin")}else Se.setIcon(h,"map-pin");u.createSpan({cls:"location-tree-name",text:n.name}),this.renderLocationGroupSelect(u,n,s);let m=n.name.toLowerCase(),g=i.filter(f=>{var _;return((_=f.location)==null?void 0:_.toLowerCase())===m}).length;if(g>0&&u.createSpan({cls:"location-tree-count",text:`${g} sc`}),n.locationType&&u.createSpan({cls:"location-type-badge",text:n.locationType}),u.addEventListener("click",()=>{this.selectedItem=n.filePath,this.renderView(this.rootContainer)}),u.addEventListener("contextmenu",f=>{f.preventDefault(),this.showItemContextMenu(n,f)}),!d&&l.length>0){let f=c.createDiv("location-tree-children"),_=l.map(v=>v.name);for(let v of l)this.renderLocationNode(f,v,i,a+1,_,s)}}getLocationVisualGroups(){return Vl(this.plugin.settings,"location")}async reorderVisualLocationGroup(e,n,i){for(let o of i)o.entryPaths=o.entryPaths.filter(s=>s!==e);let a=i.find(o=>o.entryPaths.includes(n));if(a){let o=a.entryPaths.indexOf(n);a.entryPaths.splice(Math.max(0,o),0,e)}await this.plugin.saveSettings(),this.rootContainer&&this.renderView(this.rootContainer)}attachLocationGroupDropTarget(e,n,i){e.addEventListener("dragover",a=>{var o;(o=a.dataTransfer)!=null&&o.types.includes("application/x-storyline-location-group")&&(a.preventDefault(),e.addClass("codex-visual-group-drop-target"))}),e.addEventListener("dragleave",a=>{e.contains(a.relatedTarget)||e.removeClass("codex-visual-group-drop-target")}),e.addEventListener("drop",a=>{var s;a.preventDefault(),e.removeClass("codex-visual-group-drop-target");let o=(s=a.dataTransfer)==null?void 0:s.getData("application/x-storyline-location-group");if(o){for(let c of i)c.entryPaths=c.entryPaths.filter(l=>l!==o);n&&n.entryPaths.push(o),this.plugin.saveSettings(),this.rootContainer&&this.renderView(this.rootContainer)}})}renderLocationGroupSelect(e,n,i){if(i.length===0)return;let a=e.createEl("select",{cls:"codex-entry-group-select location-tree-group-select",attr:{"aria-label":`Visual group for ${n.name}`}});a.createEl("option",{text:"No group",value:""});let o=i.find(s=>s.entryPaths.includes(n.filePath));for(let s of i){let c=a.createEl("option",{text:s.name,value:s.id});c.selected=s.id===(o==null?void 0:o.id)}a.addEventListener("click",s=>s.stopPropagation()),a.addEventListener("mousedown",s=>s.stopPropagation()),a.addEventListener("change",()=>{for(let c of i)c.entryPaths=c.entryPaths.filter(l=>l!==n.filePath);let s=i.find(c=>c.id===a.value);s&&s.entryPaths.push(n.filePath),this.plugin.saveSettings(),this.rootContainer&&this.renderView(this.rootContainer)})}openLocationVisualGroupManager(){Ap(this.app,this.plugin.settings,"location","locations",()=>this.plugin.saveSettings(),()=>{let e=this.getLocationVisualGroups();e.length>0&&(this.groupingMode="named",this.activeVisualGroupId=e[e.length-1].id),this.rootContainer&&this.renderView(this.rootContainer)})}sortLocations(e){this.sortBy==="manual"&&e.sort((n,i)=>{var s,c;let a=(s=n.sortOrder)!=null?s:Number.MAX_SAFE_INTEGER,o=(c=i.sortOrder)!=null?c:Number.MAX_SAFE_INTEGER;return a!==o?a-o:n.name.toLowerCase().localeCompare(i.name.toLowerCase())})}renderUnlinkedLocation(e,n,i){let o=e.createDiv("location-tree-node location-unlinked-node").createDiv("location-tree-header");o.createSpan({cls:"location-tree-chevron"}).setCssStyles({width:"14px"});let s=o.createSpan("location-tree-icon");Se.setIcon(s,"map-pin"),o.createSpan({cls:"location-tree-name",text:n});let c=n.toLowerCase(),l=i.filter(u=>{var p;return((p=u.location)==null?void 0:p.toLowerCase())===c}).length;l>0&&o.createSpan({cls:"location-tree-count",text:`${l} sc`}),o.createEl("button",{cls:"location-create-profile-btn",text:"Create"}).addEventListener("click",async u=>{u.stopPropagation(),await this.createLocationFromName(n)})}async reparentLocation(e,n){let i=this.locationManager.getAllLocations().find(o=>o.name===e);if(!i)return;if(n.parent){let o=i,s=new Set;for(;o&&!s.has(o.filePath);){if(s.add(o.filePath),o.name===n.parent)return;o=o.parent?this.locationManager.getAllLocations().find(c=>c.name===o.parent):void 0}}let a={...i,world:n.world,parent:n.parent};await this.locationManager.saveLocation(a),this.plugin.refreshOpenViews()}async reorderLocations(e,n,i=[]){var g,f,_,v;let a=this.locationManager.getAllLocations(),o=a.find(b=>b.name===e),s=a.find(b=>b.name===n);if(!o||!s||!(((g=o.world)!=null?g:"").toLowerCase()===((f=s.world)!=null?f:"").toLowerCase()&&((_=o.parent)!=null?_:"").toLowerCase()===((v=s.parent)!=null?v:"").toLowerCase()))return;let l=a.filter(b=>{var S,E,y,w;return((S=b.world)!=null?S:"").toLowerCase()===((E=s.world)!=null?E:"").toLowerCase()&&((y=b.parent)!=null?y:"").toLowerCase()===((w=s.parent)!=null?w:"").toLowerCase()}),d=new Map(l.map(b=>[b.name,b])),u=i.length>0?[...i.map(b=>d.get(b)).filter(b=>!!b),...l.filter(b=>!i.includes(b.name))]:l.sort((b,S)=>{var w,C;let E=(w=b.sortOrder)!=null?w:Number.MAX_SAFE_INTEGER,y=(C=S.sortOrder)!=null?C:Number.MAX_SAFE_INTEGER;return E!==y?E-y:b.name.toLowerCase().localeCompare(S.name.toLowerCase())}),p=u.findIndex(b=>b.name===e),h=u.findIndex(b=>b.name===n);if(p<0||h<0||p===h)return;let[m]=u.splice(p,1);u.splice(h,0,m),await Promise.all(u.map((b,S)=>b.sortOrder===S?Promise.resolve():this.locationManager.saveLocation({...b,sortOrder:S}))),this.sortBy="manual",await this.plugin.refreshOpenViews()}async reorderWorlds(e,n,i=[]){let a=this.locationManager.getAllWorlds(),o=new Map(a.map(u=>[u.filePath,u])),s=i.length>0?[...i.map(u=>o.get(u)).filter(u=>!!u),...a.filter(u=>!i.includes(u.filePath))]:a.sort((u,p)=>{var g,f;let h=(g=u.sortOrder)!=null?g:Number.MAX_SAFE_INTEGER,m=(f=p.sortOrder)!=null?f:Number.MAX_SAFE_INTEGER;return h!==m?h-m:u.name.toLowerCase().localeCompare(p.name.toLowerCase())}),c=s.findIndex(u=>u.filePath===e),l=s.findIndex(u=>u.filePath===n);if(c<0||l<0||c===l)return;let[d]=s.splice(c,1);s.splice(l,0,d),await Promise.all(s.map((u,p)=>u.sortOrder===p?Promise.resolve():this.locationManager.saveWorld({...u,sortOrder:p}))),this.sortBy="manual",await this.plugin.refreshOpenViews()}showItemContextMenu(e,n){var u,p;let i=new Se.Menu,a=this.plugin.sceneManager,o=a.getSeriesFolder(),s=o?`${o}/Codex/Locations`:null,c=a.getProjectLocalLocationFolder(),l=a.getCurrentBookTitle(),d=a.getCurrentBookId();if(i.addItem(h=>h.setTitle(e.name).setDisabled(!0)),i.addSeparator(),o&&s&&c&&(e.filePath.startsWith(s+"/")?i.addItem(m=>m.setTitle("Demote to project (book-only)").setIcon("arrow-down-from-line").onClick(()=>this.moveItemTo(e,c,"demoted"))):i.addItem(m=>m.setTitle("Promote to series (shared)").setIcon("arrow-up-from-line").onClick(()=>this.moveItemTo(e,s,"promoted"))),i.addSeparator()),o&&l){let h=l.toLowerCase(),m=!e.books||e.books.length===0,g=d&&e.booksById&&e.booksById.length>0?e.booksById.includes(d):m||((p=(u=e.books)==null?void 0:u.some(f=>f.toLowerCase()===h))!=null?p:!1);m?i.addItem(f=>f.setTitle(`Restrict to "${l}" only`).setIcon("book-marked").onClick(()=>this.setItemBooks(e,[l]))):g?i.addItem(f=>f.setTitle(`Remove from "${l}"`).setIcon("book-x").onClick(()=>this.setItemBooks(e,(e.books||[]).filter(_=>_.toLowerCase()!==h)))):i.addItem(f=>f.setTitle(`Add to "${l}"`).setIcon("book-plus").onClick(()=>this.setItemBooks(e,[...e.books||[],l]))),i.addItem(f=>f.setTitle("Share across all books").setIcon("books").setDisabled(m).onClick(()=>this.setItemBooks(e,[])))}i.showAtMouseEvent(n)}async moveItemTo(e,n,i){try{await this.locationManager.moveItem(e,n),new ct.Notice(`"${e.name}" ${i}`),await this.plugin.refreshOpenViews()}catch(a){new ct.Notice(`Could not move: ${a.message}`)}}async setItemBooks(e,n){try{let i=this.sceneManager.getProjects(),a=n.map(s=>{var c;return(c=i.find(l=>{var u;let d=(u=l.filePath.substring(0,l.filePath.lastIndexOf("/")).split("/").pop())!=null?u:"";return l.title.toLowerCase()===s.toLowerCase()||d.toLowerCase()===s.toLowerCase()}))==null?void 0:c.bookId}).filter(s=>!!s),o={...e,books:n.length?n:void 0,booksById:a.length?a:void 0};o.type==="world"?await this.locationManager.saveWorld(o):await this.locationManager.saveLocation(o),await this.plugin.refreshOpenViews()}catch(i){new ct.Notice(`Could not update book membership: ${i.message}`)}}renderDetail(e){var C;e.empty();let n=this.locationManager.getItem(this.selectedItem);if(!n){this.selectedItem=null,this.renderOverview(e);return}let i=n.type==="world",a={...n,custom:{...n.custom||{}},universalFields:{...n.universalFields||{}}};this.undoSnapshot={...n,custom:{...n.custom||{}}},this.originalItemName=n.name,this.originalItemType=n.type;let o=e.createDiv("location-detail-header"),s=o.createSpan({cls:"codex-nav-back-link"}),c=s.createSpan();Se.setIcon(c,"circle-arrow-left"),s.createSpan({text:" All Locations"}),s.addEventListener("click",()=>{this.selectedItem=null,this.renderView(this.rootContainer)});let l=o.createDiv("location-detail-header-right"),d=l.createEl("button",{cls:"codex-detail-action-btn",attr:{"aria-label":"Open file"}}),u=d.createSpan();Se.setIcon(u,"file"),fe(d,"Open file"),d.addEventListener("click",()=>this.openFile(n));let p=l.createEl("button",{cls:"codex-detail-action-btn codex-detail-delete-btn",attr:{"aria-label":"Delete"}}),h=p.createSpan();Se.setIcon(h,"trash"),fe(p,"Delete"),p.addEventListener("click",()=>this.confirmDelete(n));let m=e.createDiv("location-detail-type");Se.setIcon(m,i?"globe":"map-pin"),m.createSpan({text:` ${i?"World":"Location"}`});let g=e.createDiv("location-detail-portrait"),f=()=>{if(g.empty(),a.image)try{let T=Pt(this.app,a.image),A=g.createEl("img",{attr:{src:T,alt:a.name}});A.classList.add("location-detail-portrait-img"),A.onerror=()=>{A.remove();let D=g.createDiv("location-detail-portrait-placeholder");Se.setIcon(D,"image")}}catch(T){let A=g.createDiv("location-detail-portrait-placeholder");Se.setIcon(A,"image")}else{let T=g.createDiv("location-detail-portrait-placeholder");Se.setIcon(T,"image"),T.createSpan({text:"Click to add image"})}let x=g.createDiv("location-portrait-change-label");x.textContent=a.image?"Change image":""};f(),g.addEventListener("click",()=>{this.pickImage(a.image).then(async x=>{x!==void 0&&(a.image=x||void 0,a.type==="world"?await this.locationManager.saveWorld(a):await this.locationManager.saveLocation(a),f())})});let _=e.createDiv("location-detail-layout"),v=_.createDiv("location-detail-form"),b=_.createDiv("location-detail-side"),S=i?Op:Lp,E=this.buildCustomSectionsHost(a,S.length);Pr(v,E,0);let y=(C=this.plugin.settings.hiddenCategories.location)!=null?C:[],w=[];for(let x=0;x<S.length;x++){if(y.includes(S[x].title)){w.push(S[x]),Pr(v,E,x+1);continue}this.renderCategory(v,S[x],a),Pr(v,E,x+1)}i||this.renderLocationHierarchy(v,a),this.renderCustomFields(v,a),ec(v,E),w.length>0&&this.renderHiddenCategoriesToggle(v,w,a),this.renderGallery(b,a),i?this.renderWorldSidePanel(b,a):this.renderLocationSidePanel(b,a),this.renderReferencesPanel(b,n.name)}renderCategory(e,n,i){var E;let a=e.createDiv("location-section"),o=this.collapsedSections.has(n.title),s=a.createDiv("location-section-header"),c=s.createSpan("location-section-chevron");Se.setIcon(c,o?"chevron-right":"chevron-down");let l=s.createSpan("location-section-icon");Se.setIcon(l,n.icon),s.createSpan({text:n.title});let d=s.createSpan({cls:"character-section-hide-cat-btn",attr:{title:"Hide this category","aria-label":"Hide this category",role:"button"}});Se.setIcon(d,"eye-off"),d.addEventListener("click",async y=>{y.stopPropagation();let w=this.plugin.settings;w.hiddenCategories.location||(w.hiddenCategories.location=[]);let C=w.hiddenCategories.location;C.includes(n.title)||C.push(n.title),await this.plugin.saveSettings(),this.rootContainer&&this.renderDetail(this.rootContainer)});let u=s.createEl("button",{cls:"character-section-add-field-btn",attr:{title:"Add universal field to this section","aria-label":"Add universal field"}});Se.setIcon(u,"plus"),u.addEventListener("click",y=>{y.stopPropagation();let x=(i.type==="world"?Op:Lp).map(L=>L.title),T=this.plugin.fieldTemplates.getBySection(n.title,"location").map(L=>({id:L.id,label:L.label})),A=n.fields.filter(L=>{var O;return!((O=this.plugin.settings.hiddenFields.location)!=null?O:[]).includes(L.key)}).map(L=>L.key);new Rn(this.app,n.title,null,async(L,O)=>{L.category="location",await this.plugin.fieldTemplates.add(L),O!==void 0&&await this.plugin.fieldTemplates.moveAfter(n.title,"location",A,L.id,O),this.rootContainer&&this.renderDetail(this.rootContainer)},void 0,x,T).open()});let p=a.createDiv("location-section-body");o&&p.setCssStyles({display:"none"}),s.addEventListener("click",y=>{y.target.closest(".character-section-add-field-btn")||y.target.closest(".character-section-hide-cat-btn")||(this.collapsedSections.has(n.title)?(this.collapsedSections.delete(n.title),p.setCssStyles({display:""}),Se.setIcon(c,"chevron-down")):(this.collapsedSections.add(n.title),p.setCssStyles({display:"none"}),Se.setIcon(c,"chevron-right")))});let h=(E=this.plugin.settings.hiddenFields.location)!=null?E:[],m=n.fields.filter(y=>!h.includes(y.key)),g=n.fields.filter(y=>h.includes(y.key)),f=this.plugin.fieldTemplates.getBySection(n.title,"location"),_=new Map(m.map(y=>[y.key,y])),v=new Map(f.map(y=>[y.id,y])),b=m.map(y=>y.key),S=this.plugin.fieldTemplates.getMergedOrder(n.title,"location",b);for(let y of S)if(y.kind==="builtin"){let w=_.get(y.key);w&&this.renderField(p,w,i,n.title,b)}else{let w=v.get(y.key);w&&this.renderUniversalField(p,w,i,b)}if(g.length>0){let y=p.createDiv("hidden-fields-toggle");y.createEl("a",{text:`Show ${g.length} hidden field${g.length>1?"s":""}`,cls:"hidden-fields-toggle-link"});let w=p.createDiv("hidden-fields-container");w.setCssStyles({display:"none"});for(let x of g)this.renderField(w,x,i);let C=!1;y.addEventListener("click",()=>{C=!C,w.setCssStyles({display:C?"":"none"}),y.querySelector("a").textContent=C?`Hide ${g.length} hidden field${g.length>1?"s":""}`:`Show ${g.length} hidden field${g.length>1?"s":""}`})}}renderHiddenCategoriesToggle(e,n,i){let a=e.createDiv("hidden-fields-toggle"),o=n.length;a.createEl("a",{text:`Show ${o} hidden categor${o>1?"ies":"y"}`,cls:"hidden-fields-toggle-link"});let s=e.createDiv("hidden-categories-container");s.setCssStyles({display:"none"});for(let l of n)this.renderHiddenCategory(s,l,i);let c=!1;a.addEventListener("click",()=>{c=!c,s.setCssStyles({display:c?"":"none"}),a.querySelector("a").textContent=c?`Hide ${o} hidden categor${o>1?"ies":"y"}`:`Show ${o} hidden categor${o>1?"ies":"y"}`})}renderHiddenCategory(e,n,i){var b;let a=e.createDiv("location-section is-category-hidden"),o=this.collapsedSections.has(n.title),s=a.createDiv("location-section-header"),c=s.createSpan("location-section-chevron");Se.setIcon(c,o?"chevron-right":"chevron-down");let l=s.createSpan("location-section-icon");Se.setIcon(l,n.icon),s.createSpan({text:n.title});let d=s.createSpan({cls:"character-section-hide-cat-btn",attr:{title:"Show this category","aria-label":"Show this category",role:"button"}});Se.setIcon(d,"eye"),d.addEventListener("click",async S=>{var C;S.stopPropagation();let y=(C=this.plugin.settings.hiddenCategories.location)!=null?C:[],w=y.indexOf(n.title);w>=0&&y.splice(w,1),await this.plugin.saveSettings(),this.rootContainer&&this.renderDetail(this.rootContainer)});let u=a.createDiv("location-section-body");o&&u.setCssStyles({display:"none"}),s.addEventListener("click",S=>{S.target.closest(".character-section-hide-cat-btn")||(this.collapsedSections.has(n.title)?(this.collapsedSections.delete(n.title),u.setCssStyles({display:""}),Se.setIcon(c,"chevron-down")):(this.collapsedSections.add(n.title),u.setCssStyles({display:"none"}),Se.setIcon(c,"chevron-right")))});let p=(b=this.plugin.settings.hiddenFields.location)!=null?b:[],h=n.fields.filter(S=>!p.includes(S.key)),m=this.plugin.fieldTemplates.getBySection(n.title,"location"),g=new Map(h.map(S=>[S.key,S])),f=new Map(m.map(S=>[S.id,S])),_=h.map(S=>S.key),v=this.plugin.fieldTemplates.getMergedOrder(n.title,"location",_);for(let S of v)if(S.kind==="builtin"){let E=g.get(S.key);E&&this.renderField(u,E,i,n.title,_)}else{let E=f.get(S.key);E&&this.renderUniversalField(u,E,i,_)}}renderField(e,n,i,a,o){var d,u;let s=e.createDiv("location-field-row"),c=s.createEl("label",{cls:"location-field-label",text:n.label});if(a&&o&&this.addBuiltInMoveChevrons(c,a,"location",o,n.key),n.key!=="name"){let h=((d=this.plugin.settings.hiddenFields.location)!=null?d:[]).includes(n.key),m=c.createSpan({cls:"field-hide-btn",attr:{"aria-label":h?"Show this field":"Hide this field"}});Se.setIcon(m,h?"eye":"eye-off"),m.addEventListener("click",async g=>{g.stopPropagation();let f=this.plugin.settings;f.hiddenFields.location||(f.hiddenFields.location=[]);let _=f.hiddenFields.location,v=_.indexOf(n.key);v>=0?_.splice(v,1):_.push(n.key),await this.plugin.saveSettings(),this.rootContainer&&this.renderDetail(this.rootContainer)})}let l=ln(i[n.key]);if(n.toggle){let h=s.createDiv({cls:"codex-field-toggle-wrap"}).createEl("input",{type:"checkbox"});h.checked=i[n.key]===!0||l==="true",h.addEventListener("change",()=>{i[n.key]=h.checked,this.scheduleSave(i)});return}if(n.key==="locationType"){let p=s.createEl("select",{cls:"location-field-input dropdown"});p.createEl("option",{text:n.placeholder,value:""});for(let f of e_){let _=p.createEl("option",{text:f,value:f.toLowerCase()});String(l).toLowerCase()===f.toLowerCase()&&(_.selected=!0)}let h=(u=this.plugin.settings.customLocationTypes)!=null?u:[];if(h.length>0){let f=p.createEl("option",{text:"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",value:""});f.disabled=!0;for(let _ of h){let v=p.createEl("option",{text:_,value:_.toLowerCase()});String(l).toLowerCase()===_.toLowerCase()&&(v.selected=!0)}}let m=[...e_.map(f=>f.toLowerCase()),...h.map(f=>f.toLowerCase())];if(l&&!m.includes(String(l).toLowerCase())){let f=p.createEl("option",{text:String(l),value:String(l)});f.selected=!0}let g="__add_custom_type__";p.createEl("option",{text:"+ add custom type???",value:g}),p.addEventListener("change",async()=>{var f;if(p.value===g){let _=await this.promptCustomLocationType();if(_){let v=(f=this.plugin.settings.customLocationTypes)!=null?f:[];v.some(b=>b.toLowerCase()===_.toLowerCase())||(v.push(_),this.plugin.settings.customLocationTypes=v,await this.plugin.saveSettings()),i[n.key]=_.toLowerCase(),await this.flushSave(),this.rootContainer&&this.renderDetail(this.rootContainer)}else p.value=String(l).toLowerCase();return}i[n.key]=p.value,this.scheduleSave(i)})}else if(n.multiline){let p=s.createEl("textarea",{cls:"location-field-textarea",attr:{placeholder:n.placeholder,rows:"3"}});p.value=l,p.addEventListener("input",()=>{i[n.key]=p.value,this.scheduleSave(i)})}else{let p=s.createEl("input",{cls:"location-field-input",type:"text",attr:{placeholder:n.placeholder}});p.value=l,p.addEventListener("input",()=>{i[n.key]=p.value,this.scheduleSave(i)}),n.key==="name"&&p.addEventListener("blur",()=>{this.checkLocationRename(i,p)})}}addBuiltInMoveChevrons(e,n,i,a,o){let s=e.createSpan({cls:"field-move-btn",attr:{title:"Move field up","aria-label":"Move field up"}});Se.setIcon(s,"chevron-up"),s.addEventListener("click",async l=>{l.stopPropagation(),await this.plugin.fieldTemplates.moveEntryUp(n,i,a,"builtin",o),this.rootContainer&&this.renderDetail(this.rootContainer)});let c=e.createSpan({cls:"field-move-btn",attr:{title:"Move field down","aria-label":"Move field down"}});Se.setIcon(c,"chevron-down"),c.addEventListener("click",async l=>{l.stopPropagation(),await this.plugin.fieldTemplates.moveEntryDown(n,i,a,"builtin",o),this.rootContainer&&this.renderDetail(this.rootContainer)})}renderUniversalField(e,n,i,a){i.universalFields||(i.universalFields={});let o=i.universalFields[n.id],s=typeof o=="string"?o:"",c=e.createDiv("location-field-row codex-universal-field-row"),l=c.createDiv("codex-universal-label-wrap");l.createEl("label",{cls:"location-field-label",text:n.label});let d=l.createSpan({cls:"codex-universal-edit-btn",attr:{title:"Edit or remove this universal field","aria-label":"Edit field"}});Se.setIcon(d,"pencil"),d.addEventListener("click",()=>{let g=(i.type==="world"?Op:Lp).map(v=>v.title),f=this.plugin.fieldTemplates.getBySection(n.section,n.category).map(v=>({id:v.id,label:v.label}));new Rn(this.app,n.section,n,async(v,b)=>{v.category="location",await this.plugin.fieldTemplates.update(n.id,v),b!==void 0&&await this.plugin.fieldTemplates.moveAfter(n.section,n.category,a!=null?a:[],n.id,b),this.rootContainer&&this.renderDetail(this.rootContainer)},async()=>{await this.plugin.fieldTemplates.remove(n.id),this.rootContainer&&this.renderDetail(this.rootContainer)},g,f).open()});let u=l.createSpan({cls:"codex-universal-move-btn",attr:{title:"Move field up","aria-label":"Move field up"}});Se.setIcon(u,"chevron-up"),u.addEventListener("click",async h=>{h.stopPropagation(),await this.plugin.fieldTemplates.moveEntryUp(n.section,n.category,a!=null?a:[],"universal",n.id),this.rootContainer&&this.renderDetail(this.rootContainer)});let p=l.createSpan({cls:"codex-universal-move-btn",attr:{title:"Move field down","aria-label":"Move field down"}});if(Se.setIcon(p,"chevron-down"),p.addEventListener("click",async h=>{h.stopPropagation(),await this.plugin.fieldTemplates.moveEntryDown(n.section,n.category,a!=null?a:[],"universal",n.id),this.rootContainer&&this.renderDetail(this.rootContainer)}),n.type==="multi-select"){let h=i.universalFields[n.id],m=Array.isArray(h)?[...h]:typeof h=="string"&&h?[h]:[],g=[...n.options];if(n.folderSource){let w=this.app.vault.getAbstractFileByPath(n.folderSource);if(w&&"children"in w)for(let C of w.children)C instanceof Se.TFile&&C.extension==="md"&&(g.includes(C.basename)||g.push(C.basename))}g.sort((w,C)=>w.localeCompare(C));let f=c.createDiv("universal-multi-select"),_=f.createDiv("universal-multi-pills"),b=f.createDiv("universal-multi-input-row").createEl("input",{cls:"universal-multi-input",type:"text",attr:{placeholder:n.placeholder||"Type to add\u2026"}}),S=activeDocument.body.createDiv("universal-multi-dropdown");S.setCssStyles({display:"none"}),this._portaledDropdowns.push(S);let E=()=>{_.empty();for(let w of m){let C=_.createSpan({cls:"universal-multi-pill"});C.createSpan({text:w}),C.createSpan({cls:"universal-multi-pill-x",text:"\xD7"}).addEventListener("click",()=>{let T=m.indexOf(w);T>=0&&m.splice(T,1),i.universalFields[n.id]=[...m],this.scheduleSave(i),E()})}};E();let y=w=>{S.empty();let C=w.toLowerCase(),x=g.filter(T=>!m.includes(T)&&T.toLowerCase().includes(C));if(x.length===0){S.setCssStyles({display:"none"});return}S.setCssStyles({display:""});for(let T of x)S.createDiv({cls:"universal-multi-dropdown-item",text:T}).addEventListener("mousedown",D=>{D.preventDefault(),m.push(T),i.universalFields[n.id]=[...m],this.scheduleSave(i),E(),b.value="",y("")})};b.addEventListener("focus",()=>y(b.value)),b.addEventListener("input",()=>y(b.value)),b.addEventListener("blur",()=>{window.setTimeout(()=>{S.setCssStyles({display:"none"})},200)}),b.addEventListener("keydown",w=>{if(w.key==="Enter"&&b.value.trim()){w.preventDefault();let C=b.value.trim();m.includes(C)||(m.push(C),i.universalFields[n.id]=[...m],this.scheduleSave(i),E()),b.value="",y("")}})}else if(n.type==="dropdown"){let h=c.createEl("select",{cls:"location-field-input dropdown"});h.createEl("option",{text:n.placeholder||"Select\u2026",value:""});let m=[...n.options];if(n.folderSource){let g=this.app.vault.getAbstractFileByPath(n.folderSource);if(g&&"children"in g)for(let f of g.children)f instanceof Se.TFile&&f.extension==="md"&&(m.includes(f.basename)||m.push(f.basename));m.sort((f,_)=>f.localeCompare(_))}for(let g of m){let f=h.createEl("option",{text:g,value:g});s===g&&(f.selected=!0)}if(s&&!m.includes(s)){let g=h.createEl("option",{text:s,value:s});g.selected=!0}h.addEventListener("change",()=>{i.universalFields[n.id]=h.value,this.scheduleSave(i)})}else if(n.type==="textarea"){let h=c.createEl("textarea",{cls:"location-field-textarea",attr:{placeholder:n.placeholder,rows:"3"}});h.value=s,h.addEventListener("input",()=>{i.universalFields[n.id]=h.value,this.scheduleSave(i)})}else if(n.type==="checkbox"){let h=o===!0||o==="true"||o==="yes",g=c.createDiv("location-field-checkbox-wrap").createEl("input",{cls:"location-field-checkbox",type:"checkbox"});g.checked=h,g.addEventListener("change",()=>{i.universalFields[n.id]=g.checked,this.scheduleSave(i)})}else{let h=c.createEl("input",{cls:"location-field-input",type:"text",attr:{placeholder:n.placeholder}});h.value=s,h.addEventListener("input",()=>{i.universalFields[n.id]=h.value,this.scheduleSave(i)})}}renderLocationHierarchy(e,n){let i=e.createDiv("location-section"),a=i.createDiv("location-section-header"),o=a.createSpan("location-section-chevron");Se.setIcon(o,"chevron-down");let s=a.createSpan("location-section-icon");Se.setIcon(s,"git-branch"),a.createSpan({text:"Hierarchy"});let c=i.createDiv("location-section-body"),l=c.createDiv("location-field-row");l.createEl("label",{cls:"location-field-label",text:"World"});let d=l.createEl("select",{cls:"location-field-input dropdown"});d.createEl("option",{text:"None (standalone)",value:""});for(let m of this.locationManager.getAllWorlds()){let g=d.createEl("option",{text:m.name,value:m.name});n.world===m.name&&(g.selected=!0)}d.addEventListener("change",()=>{n.world=d.value||void 0,this.scheduleSave(n)});let u=c.createDiv("location-field-row");u.createEl("label",{cls:"location-field-label",text:"Parent location"});let p=u.createEl("select",{cls:"location-field-input dropdown"});p.createEl("option",{text:"None (top-level)",value:""});let h=this.locationManager.getAllLocations().filter(m=>m.filePath!==n.filePath);for(let m of h){let g=p.createEl("option",{text:m.name,value:m.name});n.parent===m.name&&(g.selected=!0)}p.addEventListener("change",()=>{n.parent=p.value||void 0,this.scheduleSave(n)})}renderCustomFields(e,n){let i=e.createDiv("location-section"),a="Custom Fields",o=this.collapsedSections.has(a),s=i.createDiv("location-section-header"),c=s.createSpan("location-section-chevron");Se.setIcon(c,o?"chevron-right":"chevron-down");let l=s.createSpan("location-section-icon");Se.setIcon(l,"plus-circle"),s.createSpan({text:a});let d=i.createDiv("location-section-body");o&&d.setCssStyles({display:"none"}),s.addEventListener("click",()=>{this.collapsedSections.has(a)?(this.collapsedSections.delete(a),d.setCssStyles({display:""}),Se.setIcon(c,"chevron-down")):(this.collapsedSections.add(a),d.setCssStyles({display:"none"}),Se.setIcon(c,"chevron-right"))});let u=()=>{d.empty();let p=n.custom||{};for(let[g,f]of Object.entries(p)){if(wp(g))continue;let _=d.createDiv("location-field-row location-custom-row"),v=_.createEl("input",{cls:"location-field-input location-custom-key",type:"text",attr:{placeholder:"Field name"}});v.value=g;let b=_.createEl("input",{cls:"location-field-input location-custom-value",type:"text",attr:{placeholder:"Value"}});b.value=f;let S=_.createEl("button",{cls:"location-custom-remove",attr:{title:"Remove"}});Se.setIcon(S,"x"),v.addEventListener("change",()=>{delete n.custom[g];let E=v.value.trim();E&&(n.custom[E]=b.value),this.scheduleSave(n)}),b.addEventListener("input",()=>{let E=v.value.trim();E&&(n.custom[E]=b.value,this.scheduleSave(n))}),S.addEventListener("click",()=>{delete n.custom[g],_.remove(),this.scheduleSave(n)})}d.createDiv("location-custom-add-row").createEl("button",{cls:"location-custom-add-btn",text:"+ add field"}).addEventListener("click",()=>{n.custom||(n.custom={});let g=Object.keys(n.custom).length+1,f=`field_${g}`;for(;n.custom[f];)f=`field_${++g}`;n.custom[f]="",u()})};u()}buildCustomSectionsHost(e,n){this.plugin.settings.locationCustomSections||(this.plugin.settings.locationCustomSections=[]);let i=this.plugin.settings.locationCustomSections;return{app:this.app,draft:e,sections:i,builtinSectionCount:n,collapsedSections:this.collapsedSections,collapseKeyPrefix:"location",cssPrefix:"location",scheduleSave:a=>this.scheduleSave(a),persistSections:()=>{this.plugin.saveSettings()},requestRerender:()=>{this.rootContainer&&this.renderView(this.rootContainer)}}}renderWorldSidePanel(e,n){let i=this.locationManager.getLocationsForWorld(n.name),a=this.sceneManager.getAllScenes().filter(u=>!u.inactive),o=e.createDiv("location-side-stats");o.createEl("h4",{text:"World summary"});let s=o.createDiv("location-stat-grid");this.renderStat(s,String(i.length),"Locations");let c=new Set(i.map(u=>u.name.toLowerCase())),l=a.filter(u=>u.location&&c.has(u.location.toLowerCase()));if(this.renderStat(s,String(l.length),"Scenes"),i.length>0){let u=e.createDiv("location-side-list");u.createEl("h4",{text:"Locations in this world"});for(let p of i){let h=u.createDiv("location-side-item"),m=h.createSpan("location-side-item-icon");Se.setIcon(m,"map-pin"),h.createSpan({text:p.name}),p.locationType&&h.createSpan({cls:"location-type-badge-sm",text:p.locationType}),h.addEventListener("click",()=>{this.selectedItem=p.filePath,this.renderView(this.rootContainer)})}}e.createEl("button",{cls:"location-add-to-world-btn",text:`+ Add location to ${n.name}`}).addEventListener("click",()=>this.promptNewLocation(n.name))}renderLocationSidePanel(e,n){var g;let i=this.sceneManager.queryService.getFilteredScenes(void 0,{field:"sequence",direction:"asc"}),a=n.name.toLowerCase(),o=i.filter(f=>{var _;return((_=f.location)==null?void 0:_.toLowerCase())===a}),s=e.createDiv("location-side-stats");if(s.createEl("h4",{text:"Location info"}),n.world){let f=s.createDiv("location-side-world-info"),_=f.createSpan();Se.setIcon(_,"globe"),f.createSpan({text:` ${n.world}`})}if(n.parent){let f=s.createDiv("location-side-parent-info"),_=f.createSpan();Se.setIcon(_,"corner-down-right"),f.createSpan({text:` Inside: ${n.parent}`})}let c=s.createDiv("location-stat-grid");this.renderStat(c,String(o.length),"Scenes");let l=this.locationManager.getChildLocations(n.name);if(l.length>0&&this.renderStat(c,String(l.length),"Sub-locations"),o.length>0){let f=e.createDiv("location-side-scenes");f.createEl("h4",{text:"Scenes here"});for(let _ of o){let v=f.createDiv("location-side-scene-item"),b=$r(_.act,"??"),S=_.sequence!==void 0?String(_.sequence).padStart(2,"0"):"??";v.createSpan({cls:"scene-id",text:`[${b}-${S}]`}),v.createSpan({cls:"scene-title",text:` ${_.title}`});let E=ht(_.status||"idea"),y=v.createSpan({cls:"scene-status-badge",attr:{title:E.label}});Se.setIcon(y,E.icon),v.addEventListener("click",()=>this.openScene(_))}}let d=this.plugin.characterManager,u=(g=this.plugin.settings)==null?void 0:g.characterAliases,p=d?d.buildAliasMap(u):null,h=f=>{if(!p)return f;let _=p.get(f.toLowerCase());if(_)return _;let v=f.split(/\s+/);for(let b of v){let S=p.get(b.toLowerCase());if(S)return S}return f},m=new Map;for(let f of o){if(f.pov){let _=h(f.pov);m.set(_,(m.get(_)||0)+1)}if(f.characters)for(let _ of f.characters){let v=h(_);v!==h(f.pov||"")&&m.set(v,(m.get(v)||0)+1)}}if(m.size>0){let f=e.createDiv("location-side-chars");f.createEl("h4",{text:"Characters here"});let _=Array.from(m.entries()).sort((v,b)=>b[1]-v[1]);for(let[v,b]of _){let S=f.createDiv("location-side-char-item"),E=S.createSpan();Se.setIcon(E,"user"),S.createSpan({text:` ${v}`}),S.createSpan({cls:"location-side-char-count",text:`${b}`})}}}renderReferencesPanel(e,n){let a=this.plugin.linkScanner.buildEntityIndex().get(n.toLowerCase());if(!a||a.length===0)return;let o=e.createDiv("location-references-panel");o.createEl("h3",{text:"Referenced by"});let s={};for(let c of a){let l=c.type==="codex"&&c.codexCategory?c.codexCategory:c.type;s[l]||(s[l]=[]),s[l].push(c)}for(let[c,l]of Object.entries(s)){let d=o.createDiv("reference-group");d.createEl("h4",{text:c.charAt(0).toUpperCase()+c.slice(1)});let u=d.createEl("ul",{cls:"reference-list"});for(let p of l)u.createEl("li").createEl("a",{text:p.name,cls:"reference-link"}).addEventListener("click",g=>{g.preventDefault(),this.app.workspace.openLinkText(p.filePath,"",!1)})}}renderStat(e,n,i){let a=e.createDiv("location-stat-item");a.createDiv({cls:"location-stat-value",text:n}),a.createDiv({cls:"location-stat-label",text:i})}promptCustomLocationType(){return new Promise(e=>{let n=!1,i=new ct.Modal(this.app);i.titleEl.setText("Add custom location type");let a="";new ct.Setting(i.contentEl).setName("Type name").setDesc("E.g. Planet, star system, galaxy, dimension???").addText(o=>{var s;o.setPlaceholder("Planet"),o.onChange(c=>a=c),window.setTimeout(()=>{var c;return(c=o.inputEl)==null?void 0:c.focus()},0),(s=o.inputEl)==null||s.addEventListener("keydown",c=>{if(c.key==="Enter"){c.preventDefault();let l=a.trim();l&&(n=!0,i.close(),e(l))}})}),new ct.Setting(i.contentEl).addButton(o=>{o.setButtonText("Add").setCta().onClick(()=>{let s=a.trim();if(!s){new ct.Notice("Please enter a type name.");return}n=!0,i.close(),e(s)})}).addButton(o=>{o.setButtonText("Cancel").onClick(()=>{n=!0,i.close(),e(null)})}),i.onClose=()=>{n||e(null)},i.open()})}scheduleSave(e){this.autoSaveTimer&&window.clearTimeout(this.autoSaveTimer),this.pendingSaveDraft=e,this.autoSaveTimer=window.setTimeout(async()=>{var n;try{let i=(n=this.plugin.sceneManager)==null?void 0:n.undoManager;i&&this.undoSnapshot&&(i.recordUpdate(e.filePath,this.undoSnapshot,e,`Update ${e.type} "${e.name}"`,"location"),this.undoSnapshot={...e,custom:{...e.custom||{}}}),this._lastSaveTime=Date.now(),e.type==="world"?await this.locationManager.saveWorld(e):await this.locationManager.saveLocation(e),this.pendingSaveDraft=null}catch(i){}},600)}async flushSave(){var e;if(this.autoSaveTimer!==null&&(window.clearTimeout(this.autoSaveTimer),this.autoSaveTimer=null),this.pendingSaveDraft){let n=this.pendingSaveDraft;this.pendingSaveDraft=null;try{let i=(e=this.plugin.sceneManager)==null?void 0:e.undoManager;i&&this.undoSnapshot&&(i.recordUpdate(n.filePath,this.undoSnapshot,n,`Update ${n.type} "${n.name}"`,"location"),this.undoSnapshot={...n,custom:{...n.custom||{}}}),this._lastSaveTime=Date.now(),n.type==="world"?await this.locationManager.saveWorld(n):await this.locationManager.saveLocation(n)}catch(i){}}}checkLocationRename(e,n){var p;let i=this.originalItemName,a=(p=e.name)==null?void 0:p.trim();if(!i||!a||i===a)return;let o=this.plugin.cascadeRename,s=this.originalItemType==="world",c=s?o.previewWorldRename(i,a):o.previewLocationRename(i,a),l=c.sceneCount+c.locationCount+c.characterLocationCount;if(l===0){this.originalItemName=a;return}let d=o.buildSummary(c);new Js(this.app,s?"world":"location",i,a,c,d,async()=>{s?await o.cascadeWorldRename(i,a):await o.cascadeLocationRename(i,a),this.originalItemName=a,new ct.Notice(`Updated ${l} reference${l!==1?"s":""} from "${i}" to "${a}"`)},()=>{e.name=i,n.value=i,this.scheduleSave(e)}).open()}async flushPendingSave(){if(this.autoSaveTimer&&(window.clearTimeout(this.autoSaveTimer),this.autoSaveTimer=null),this.pendingSaveDraft){try{this._lastSaveTime=Date.now();let e=this.pendingSaveDraft;e.type==="world"?await this.locationManager.saveWorld(e):await this.locationManager.saveLocation(e)}catch(e){}this.pendingSaveDraft=null}}promptNewWorld(){let e=new ct.Modal(this.app);e.titleEl.setText("New world");let n="";new ct.Setting(e.contentEl).setName("World name").addText(i=>{i.setPlaceholder("Enter world name\u2026").onChange(a=>n=a),window.setTimeout(()=>i.inputEl.focus(),50)}),new ct.Setting(e.contentEl).addButton(i=>{i.setButtonText("Create").setCta().onClick(async()=>{if(!n.trim()){new ct.Notice("Please enter a name.");return}try{let a=await this.locationManager.createWorld(this.sceneManager.getLocationFolder(),n.trim());this.selectedItem=a.filePath,e.close(),this.renderView(this.rootContainer),new ct.Notice(`World "${n.trim()}" created`)}catch(a){new ct.Notice(String(a))}})}),e.open()}promptNewLocation(e){let n=new ct.Modal(this.app);n.titleEl.setText("New location");let i="",a=e||"";new ct.Setting(n.contentEl).setName("Location name").addText(s=>{s.setPlaceholder("Enter location name\u2026").onChange(c=>i=c),window.setTimeout(()=>s.inputEl.focus(),50)});let o=this.locationManager.getAllWorlds();o.length>0&&new ct.Setting(n.contentEl).setName("World").setDesc("Which world does this location belong to?").addDropdown(s=>{s.addOption("","None (standalone)");for(let c of o)s.addOption(c.name,c.name);a&&s.setValue(a),s.onChange(c=>a=c)}),new ct.Setting(n.contentEl).addButton(s=>{s.setButtonText("Create").setCta().onClick(async()=>{if(!i.trim()){new ct.Notice("Please enter a name.");return}try{let c=await this.locationManager.createLocation(this.sceneManager.getLocationFolder(),i.trim(),a||void 0);this.selectedItem=c.filePath,n.close(),this.renderView(this.rootContainer),new ct.Notice(`Location "${i.trim()}" created`)}catch(c){new ct.Notice(String(c))}})}),n.open()}async createLocationFromName(e){try{let n=await this.locationManager.createLocation(this.sceneManager.getLocationFolder(),e);this.selectedItem=n.filePath,this.renderView(this.rootContainer),new ct.Notice(`Location profile created for "${e}"`)}catch(n){new ct.Notice(String(n))}}confirmDelete(e){let n=new ct.Modal(this.app);n.titleEl.setText(`Delete ${e.type==="world"?"World":"Location"}`),n.contentEl.createEl("p",{text:`Are you sure you want to delete "${e.name}"? The file will be moved to trash.`}),new ct.Setting(n.contentEl).addButton(i=>{i.setButtonText("Delete").setClass("mod-warning").onClick(async()=>{var o;let a=(o=this.plugin.sceneManager)==null?void 0:o.undoManager;if(a){let s=this.app.vault.getAbstractFileByPath(e.filePath);if(s instanceof ct.TFile){let c=await this.app.vault.read(s);a.recordDelete(e.filePath,c,`Delete ${e.type} "${e.name}"`,"location")}}await this.locationManager.deleteItem(e.filePath),this.selectedItem=null,n.close(),this.renderView(this.rootContainer),new ct.Notice(`"${e.name}" deleted`)})}).addButton(i=>i.setButtonText("Cancel").onClick(()=>n.close())),n.open()}async openFile(e){let n=this.app.vault.getAbstractFileByPath(e.filePath);n instanceof ct.TFile&&await this.app.workspace.getLeaf("tab").openFile(n,{state:{mode:"source",source:!1}})}async openScene(e){let n=this.app.vault.getAbstractFileByPath(e.filePath);if(n instanceof ct.TFile){let i=this.app.workspace.getLeavesOfType("markdown").find(o=>{var s,c;return((c=(s=o.getViewState())==null?void 0:s.state)==null?void 0:c.file)===e.filePath});if(i){this.app.workspace.setActiveLeaf(i,{focus:!0});return}await this.app.workspace.getLeaf("tab").openFile(n,{state:{mode:"source",source:!1}})}else new ct.Notice(`Could not find file: ${e.filePath}`)}async navigateToItem(e){if(await this.plugin.reloadEntities(),!this.locationManager.getItem(e)){new ct.Notice("Location not found in the active project.");return}this.selectedItem=e,this.rootContainer&&this.renderView(this.rootContainer)}async refresh(){if(this.selectedItem&&Date.now()-this._lastSaveTime<Mp.SAVE_REFRESH_GRACE_MS){await this.plugin.reloadEntities();return}await this.plugin.reloadEntities(),this.rootContainer&&this.renderView(this.rootContainer)}renderGallery(e,n){var E;let a="__Gallery",o=e.createDiv("character-gallery"),s=(E=n.gallery)!=null?E:[],c=this.collapsedSections.has(a),l=o.createDiv("character-gallery-header"),d=l.createSpan("location-section-chevron");if(Se.setIcon(d,c?"chevron-right":"chevron-down"),l.createEl("h4",{text:"Gallery"}),s.length<10){let y=l.createEl("button",{cls:"character-section-add-field-btn",attr:{title:`Add image (${s.length}/10)`,"aria-label":"Add gallery image"}});Se.setIcon(y,"plus"),y.addEventListener("click",w=>{w.stopPropagation(),this.pickImage().then(async C=>{if(C&&C!==""){s.push({path:C,caption:""}),n.gallery=[...s],n.type==="world"?await this.locationManager.saveWorld(n):await this.locationManager.saveLocation(n),o.empty(),e.removeChild(o),this.renderGallery(e,n);let x=e.querySelector(".location-side-stats");if(x){let T=e.querySelector(".character-gallery");T&&e.insertBefore(T,x)}}})})}let u=o.createDiv("character-gallery-body");c&&u.setCssStyles({display:"none"}),l.addEventListener("click",y=>{y.target.closest(".character-section-add-field-btn")||(this.collapsedSections.has(a)?(this.collapsedSections.delete(a),u.setCssStyles({display:""}),Se.setIcon(d,"chevron-down")):(this.collapsedSections.add(a),u.setCssStyles({display:"none"}),Se.setIcon(d,"chevron-right")))});let p=u.createDiv("character-gallery-viewer"),h=u.createDiv("character-gallery-caption"),m=s.length>0?0:-1,g=()=>{if(p.empty(),h.empty(),m>=0&&m<s.length){let y=s[m],w=Pt(this.app,y.path);if(w){let A=p.createEl("img",{cls:"character-gallery-img",attr:{src:w,alt:y.caption||"Gallery image"}});A.setCssStyles({cursor:"pointer"}),A.addEventListener("click",()=>{let D=o.offsetWidth;this.openGalleryLightbox(s,m,D)}),A.onerror=()=>{A.remove();let D=p.createDiv("character-gallery-placeholder");Se.setIcon(D,"image-off")}}else{let A=p.createDiv("character-gallery-placeholder");Se.setIcon(A,"image-off")}let C=h.createEl("input",{cls:"character-gallery-caption-input",attr:{type:"text",placeholder:"Add caption\u2026",value:y.caption||""}}),x=m;C.addEventListener("input",()=>{s[x].caption=C.value,n.gallery=s.length?[...s]:void 0,this.scheduleSave(n)});let T=h.createEl("button",{cls:"character-gallery-remove-btn",attr:{title:"Remove this image"}});Se.setIcon(T,"x"),T.addEventListener("click",()=>{s.splice(x,1),n.gallery=s.length?[...s]:void 0,this.scheduleSave(n),m=s.length>0?Math.min(x,s.length-1):-1,g(),S()})}else{let y=p.createDiv("character-gallery-empty");y.textContent="No images yet"}},f=u.createDiv("character-gallery-nav"),_=f.createEl("button",{cls:"character-gallery-arrow",attr:{title:"Previous"}});Se.setIcon(_,"chevron-left"),_.addEventListener("click",()=>{s.length!==0&&(m=(m-1+s.length)%s.length,g(),S())});let v=f.createDiv("character-gallery-thumbs"),b=f.createEl("button",{cls:"character-gallery-arrow",attr:{title:"Next"}});Se.setIcon(b,"chevron-right"),b.addEventListener("click",()=>{s.length!==0&&(m=(m+1)%s.length,g(),S())});let S=()=>{v.empty();for(let y=0;y<s.length;y++){let w=v.createDiv({cls:`character-gallery-thumb${y===m?" active":""}`}),C=Pt(this.app,s[y].path);if(C){let T=w.createEl("img",{attr:{src:C}});T.onerror=()=>{T.remove(),Se.setIcon(w,"image-off")}}else Se.setIcon(w,"image-off");let x=y;w.addEventListener("click",()=>{m=x,g(),S()})}};g(),S()}openGalleryLightbox(e,n,i){var P;(P=activeDocument.querySelector(".gallery-lightbox-window"))==null||P.remove();let a=n,o=Math.min(Math.round(i*2),window.innerWidth-40),s=Math.round(o*3/4)+36+28,c=activeDocument.body.createDiv("gallery-lightbox-window");c.setCssStyles({width:`${o}px`,height:`${s}px`});let l=c.createDiv("gallery-lightbox-titlebar"),d=l.createSpan({cls:"gallery-lightbox-title"}),u=l.createEl("button",{cls:"gallery-lightbox-close",attr:{title:"Close"}});Se.setIcon(u,"x"),u.addEventListener("click",()=>{I(),c.remove()});let p=c.createDiv("gallery-lightbox-content-row"),h=p.createEl("button",{cls:"gallery-lightbox-nav-btn",attr:{title:"Previous"}});Se.setIcon(h,"chevron-left"),h.addEventListener("click",()=>{a=(a-1+e.length)%e.length,E()});let m=p.createDiv("gallery-lightbox-content"),g=p.createEl("button",{cls:"gallery-lightbox-nav-btn",attr:{title:"Next"}});Se.setIcon(g,"chevron-right"),g.addEventListener("click",()=>{a=(a+1)%e.length,E()});let f=c.createDiv("gallery-lightbox-caption"),_=c.createDiv("gallery-lightbox-resize-handle"),v=new Map,b=()=>{var N;return(N=v.get(a))!=null?N:1},S=N=>{v.set(a,N)},E=()=>{let N=e[a],F=Pt(this.app,N.path);if(d.textContent=N.caption||`Image ${a+1} of ${e.length}`,m.empty(),F){let H=m.createEl("img",{attr:{src:F,alt:N.caption||"Gallery image"}});H.setCssStyles({transformOrigin:"center center"});let U=b();U!==1&&H.setCssStyles({transform:`scale(${U})`})}f.textContent=N.caption||"",f.setCssStyles({display:N.caption?"":"none"}),h.setCssStyles({display:e.length>1?"":"none"}),g.setCssStyles({display:e.length>1?"":"none"})};E(),m.addEventListener("wheel",N=>{N.preventDefault();let F=N.deltaY>0?-.1:.1,H=Math.max(.5,Math.min(5,b()+F));S(H);let U=m.querySelector("img");U&&U.setCssStyles({transform:`scale(${H})`})},{passive:!1});let y=0,w=1;m.addEventListener("touchstart",N=>{if(N.touches.length===2){let F=N.touches[0].clientX-N.touches[1].clientX,H=N.touches[0].clientY-N.touches[1].clientY;y=Math.hypot(F,H),w=b()}},{passive:!0}),m.addEventListener("touchmove",N=>{if(N.touches.length===2){N.preventDefault();let F=N.touches[0].clientX-N.touches[1].clientX,H=N.touches[0].clientY-N.touches[1].clientY,G=Math.hypot(F,H)/y,z=Math.max(.5,Math.min(5,w*G));S(z);let V=m.querySelector("img");V&&V.setCssStyles({transform:`scale(${z})`})}},{passive:!1});let C=!1,x=0,T=0;l.addEventListener("pointerdown",N=>{if(N.target.closest(".gallery-lightbox-close"))return;C=!0;let F=c.getBoundingClientRect();x=N.clientX-F.left,T=N.clientY-F.top,c.setCssStyles({left:`${F.left}px`,top:`${F.top}px`,transform:"none"}),l.setPointerCapture(N.pointerId),N.preventDefault()}),l.addEventListener("pointermove",N=>{C&&c.setCssStyles({left:`${N.clientX-x}px`,top:`${N.clientY-T}px`})}),l.addEventListener("pointerup",()=>{C=!1}),l.addEventListener("lostpointercapture",()=>{C=!1});let A=!1,D=0,L=0,O=0,k=0;_.addEventListener("pointerdown",N=>{A=!0,D=N.clientX,L=N.clientY,O=c.offsetWidth,k=c.offsetHeight,_.setPointerCapture(N.pointerId),N.preventDefault(),N.stopPropagation()}),_.addEventListener("pointermove",N=>{if(!A)return;let F=Math.max(200,O+(N.clientX-D)),H=Math.max(150,k+(N.clientY-L));c.setCssStyles({width:`${F}px`,height:`${H}px`})}),_.addEventListener("pointerup",()=>{A=!1}),_.addEventListener("lostpointercapture",()=>{A=!1});let R=N=>{N.key==="Escape"&&(I(),c.remove())};activeDocument.addEventListener("keydown",R);let I=()=>{activeDocument.removeEventListener("keydown",R)}}pickImage(e){let n=this.sceneManager.getSceneFolder();return Xr(this.app,n,e)}};Mp.SAVE_REFRESH_GRACE_MS=2e3;var Pp=Mp;var _r=require("obsidian");var oN=`# StoryLine \u2014 Obsidian Plugin for Writers
+
+By Jan Sandstr\xF6m
+
+StoryLine transforms your Obsidian vault into a full-featured book planning and writing tool. Organize scenes, build rich character profiles, manage worlds and locations, track plotlines, and monitor your progress \u2014 all without leaving Obsidian. Fully theme-aware with dark and light mode support.
+
+---
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Getting Started](#getting-started)
+- [Views](#views)
+  - [Board View](#board-view)
+  - [Corkboard Mode](#corkboard-mode)
+  - [Plotgrid View](#plotgrid-view)
+  - [Timeline View](#timeline-view)
+  - [Plotlines View](#plotlines-view)
+  - [Manuscript View](#manuscript-view)
+  - [Characters View](#characters-view)
+  - [Locations View](#locations-view)
+  - [Codex Hub](#codex-hub)
+  - [Stats View](#stats-view)
+  - [Navigator View](#navigator-view)
+  - [Scene Details Sidebar](#scene-details-sidebar)
+  - [Research Sidebar](#research-sidebar)
+- [Scene Cards](#scene-cards)
+- [Scene Subtitles](#scene-subtitles)
+- [Scene Archive](#scene-archive)
+- [Inactive Scenes](#inactive-scenes)
+- [Inspector Panel](#inspector-panel)
+- [Filtering & Presets](#filtering--presets)
+- [Multi-Select & Bulk Edit](#multi-select--bulk-edit)
+- [Setup / Payoff Tracking](#setup--payoff-tracking)
+- [Plot Hole Detection](#plot-hole-detection)
+- [Undo / Redo](#undo--redo)
+- [Reading Order vs Chronological Order](#reading-order-vs-chronological-order)
+- [Beat Sheet Templates](#beat-sheet-templates)
+- [Scene Notes](#scene-notes)
+- [Arc Points](#arc-points)
+- [Scene Snapshots](#scene-snapshots)
+- [View Snapshots](#view-snapshots)
+- [Scene Templates](#scene-templates)
+- [Custom Scene Fields](#custom-scene-fields)
+- [Color Coding & Tag Colors](#color-coding--tag-colors)
+- [Scene Colors](#scene-colors)
+- [Plotline HSL Sliders](#plotline-hsl-sliders)
+- [Sticky Note Themes](#sticky-note-themes)
+- [Per-Project Color Overrides](#per-project-color-overrides)
+- [Timeline Swimlanes](#timeline-swimlanes)
+- [Timeline Modes](#timeline-modes)
+- [Pacing Analysis](#pacing-analysis)
+- [Writing Sprint](#writing-sprint)
+- [Relationship Map](#relationship-map)
+- [Story Graph](#story-graph)
+- [Link Scanner & Detected Links](#link-scanner--detected-links)
+- [Cross-Entity References](#cross-entity-references)
+- [Codex Linking](#codex-linking)
+- [Linking & Matching](#linking--matching)
+- [Hide / Show Built-in Fields](#hide--show-built-in-fields)
+- [Reordering Fields & Sections](#reordering-fields--sections)
+- [Tag Type Overrides](#tag-type-overrides)
+- [Export](#export)
+- [Import (Scrivener)](#import-scrivener)
+- [Custom Field Templates](#custom-field-templates)
+- [Image Galleries](#image-galleries)
+- [Additional Source Folders](#additional-source-folders)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Settings](#settings)
+- [Project Management](#project-management)
+- [Series Mode](#series-mode)
+- [File Structure](#file-structure)
+- [Tips & Workflow](#tips--workflow)
+
+---
+
+## Installation
+
+### Manual Install
+
+1. Copy these three files into your vault at \`.obsidian/plugins/StoryLine/\`:
+   - \`main.js\`
+   - \`manifest.json\`
+   - \`styles.css\`
+2. Open Obsidian \u2192 **Settings \u2192 Community Plugins** \u2192 enable **StoryLine**.
+3. Restart Obsidian.
+
+### From Source
+
+1. Clone or download this repository into \`.obsidian/plugins/StoryLine/\`.
+2. Run \`npm install\` and \`npm run build\`.
+3. Enable the plugin in Obsidian settings.
+
+---
+
+## Getting Started
+
+1. **Create a project** \u2014 Open the command palette (\`Ctrl+P\`) and run **StoryLine: Create New Project**. Give your project a title.
+2. StoryLine creates a folder structure for you:
+   \`\`\`
+   StoryLine/
+     My Novel/
+       Scenes/
+       Codex/
+         Characters/
+         Locations/
+   \`\`\`
+3. **Create your first scene** \u2014 Use \`Ctrl+Shift+N\` or click the **+** button in the Board view.
+4. **Switch between views** using the tab bar at the top of any StoryLine view.
+
+---
+
+## Language Support
+
+StoryLine analyses your prose for word counts, reading time, dialogue %, stop-words, readability and PDF line-wrapping. From v1.10.12 these all respect the **project language**.
+
+### Setting the language
+
+- **Per project** \u2014 open the project file and add a \`language:\` key to its frontmatter:
+  \`\`\`yaml
+  ---
+  type: storyline-project
+  title: My Swedish Novel
+  language: sv
+  ---
+  \`\`\`
+- **Default for new projects** \u2014 Settings \u2192 **StoryLine** \u2192 **Default project language**. Choose \`auto\` to detect from existing content.
+
+### Supported codes
+
+\`en\` English \xB7 \`sv\` Swedish \xB7 \`nl\` Dutch \xB7 \`da\` Danish \xB7 \`no\` Norwegian \xB7 \`fi\` Finnish \xB7 \`pl\` Polish \xB7 \`es\` Spanish \xB7 \`fr\` French \xB7 \`de\` German \xB7 \`it\` Italian \xB7 \`pt\` Portuguese \xB7 \`ru\` Russian \xB7 \`zh\` Chinese \xB7 \`ja\` Japanese \xB7 \`ko\` Korean \xB7 \`th\` Thai \xB7 \`ar\` Arabic \xB7 \`he\` Hebrew \xB7 \`hi\` Hindi. Use full BCP-47 tags (\`pt-BR\`, \`zh-Hant\`, \u2026) and StoryLine will pick the closest script profile.
+
+### What changes per language
+
+- **Word counts** use \`Intl.Segmenter\` for Chinese / Japanese / Korean / Thai (where spaces aren't word boundaries) and locale-aware splitting elsewhere.
+- **Reading time** uses words-per-minute for Latin/Cyrillic scripts and characters-per-minute for CJK/Thai.
+- **Dialogue detection** recognises locale quote marks: \`\xAB \xBB\`, \`\u201E "\`, \`\u300C \u300D\`, \`\u300E \u300F\`, \`\u300A \u300B\`.
+- **Stop-words & word-frequency** use language-appropriate lists.
+- **Flesch readability** is shown only for English (it's tuned for English syllable structure); other languages show **N/A** but still report sentence and word averages.
+- **PDF export** keeps CJK characters together without inserting spaces.
+
+---
+
+## Views
+
+StoryLine provides seven interconnected views plus a sidebar navigator. Switch between them using the tab bar or keyboard shortcuts.
+
+### Board View
+
+The main workspace \u2014 a Kanban-style board that displays your scenes as cards.
+
+- **Group by:** Act, Chapter, Status, or POV (use the dropdown in the toolbar).
+- **Status order** \u2014 when grouped by Status, columns follow the default progression: Idea, Outlined, Draft, Written, Revised, Final. Custom statuses follow in their configured order.
+- **Drag and drop** cards between columns to reassign act, chapter, status, or POV.
+- **Color-coded cards** based on status, POV, emotion, act, or tag (configurable in settings).
+- **Quick actions:** right-click any card for a context menu with edit, duplicate, delete, and open options.
+- **Add acts/chapters** using the Structure and Chapters buttons in the toolbar.
+- **Insert Chapter** \u2014 when grouping by Chapter, a **+ New Chapter** button appears in the toolbar to append a new chapter. To insert a chapter between existing ones, right-click a chapter column header and choose **Insert Chapter Before** or **Insert Chapter After**; existing chapters (and their scenes, labels, and descriptions) are renumbered automatically to make room.
+- **Resequence** \u2014 click the resequence button to auto-number all scenes based on their current board order.
+- **Search** \u2014 type in the search bar to filter scenes by title, content, characters, or tags.
+- **Beat Sheet Templates** \u2014 apply a beat sheet template (Save the Cat, 3-Act, Hero's Journey, Seven-Point, Story Circle, Romancing the Beat, 27 Chapter Method) from the Structure modal.
+- **Act labels** \u2014 custom labels on act dividers (e.g., beat names); inline-editable.
+
+### Corkboard Mode
+
+Toggle between the standard Kanban column layout and a freeform **corkboard** canvas using the toggle button in the Board toolbar.
+
+- **Sticky notes** \u2014 create color-coded sticky notes to brainstorm and capture your first ideas. Notes support markdown formatting. Sticky notes are stored in a separate \`Notes/\` folder inside your project so they don't clutter the \`Scenes/\` folder in Obsidian's file explorer.
+- **Image sticky notes** \u2014 pin reference art, maps, and charts on the board. Click **+ New Image Note** in the toolbar, or drag an image from the vault file explorer or your desktop onto the canvas. Each image note has an optional caption that supports markdown and \`[[wikilinks]]\` \u2014 links in captions are included in relationship scanning. Right-click an image note to set, change, or remove the image. Click the image to open a fullscreen lightbox.
+- **Convert to scene** \u2014 when an idea is ready, convert a sticky note into a full scene with one click. The file is moved from \`Notes/\` to \`Scenes/\` automatically.
+- **Freeform positioning** \u2014 drag scene cards and sticky notes anywhere on the spatial canvas.
+- **Positions saved per project** \u2014 your corkboard layout is stored in \`System/board.json\` and syncs across devices.
+
+### Plotgrid View
+
+A spreadsheet-like grid for detailed scene planning.
+
+- Rows and columns represent your story structure.
+- Click any cell to edit its content, link a scene, set colors, or adjust metadata.
+- **Zoom in/out** for overview or detail.
+- Drag scenes onto cells to link them.
+- Supports custom row/column headers for acts, chapters, plotlines, etc.
+- **Fit row heights to content** \u2014 click the scan icon in the toolbar to resize visible row heights so linked scene cards, notes, and entity tags are easier to see without changing column widths.
+- **Act & chapter dividers** \u2014 colored bands appear when the act or chapter changes, showing labels from your project structure.
+- **Status color-coding** \u2014 scene rows show a colored left border matching their current status.
+- **Click to open** \u2014 click a row header to open the linked scene file. Click a column header to open the character or location file.
+- **Shared filters** \u2014 the same filter bar used in Board and Timeline views is now available in the Plotgrid. Filter by status, act, chapter, POV, characters, locations, tags, or search text. Presets are shared across views.
+- **Tabbed cell inspector** \u2014 when a cell has a linked scene, the inspector shows two tabs:
+  - **Cell tab** \u2014 cell content, detected characters/locations/tags, and a linked scene link.
+  - **Scene tab** \u2014 the full scene editor (status, POV, characters, location, tags, conflict, synopsis, etc.) so you can edit scene details without leaving the grid.
+- **Auto-Note** \u2014 When the Auto-Note toggle is on (enabled by default), typing text into an empty, unlinked cell automatically creates a corkboard note and links it back to the cell. The note is saved as an *idea* with a \`plotgridOrigin\` label built from the row and column names, so you can always trace it back to where it started. Toggle Auto-Note on or off with the sticky-note icon in the Plotgrid toolbar \u2014 the icon turns accent-colored when active.
+- **Codex entity tags** \u2014 Each cell automatically displays small color-coded pills at the bottom showing characters (blue), locations (green), and codex entries (purple) detected in the cell text and/or the linked scene's prose. Entity detection uses the same LinkScanner engine \u2014 no manual tagging needed.
+- **Sync from Scenes** \u2014 Click the sync button in the toolbar to auto-populate the grid. Choose a column source: Characters, Plotlines (tags), Locations, or any Codex category enabled for the Inspector. Rows are created from scenes (sorted by act \u2192 chapter \u2192 sequence) and cells are filled where data exists. Manual edits are preserved in merge mode. Click a Codex column header to open the linked entry file.
+- **Linked scene cards** \u2014 The Sync from Scenes modal includes **Show linked scene cards in synced cells** (enabled by default). Turn it off to hide linked scene previews, POV pills, and entity pills derived from linked scenes while keeping the scene links and manual cell text. The preference is saved immediately and applies across projects.
+- **Drag with confirmation** \u2014 Dragging a cell onto another cell that already has content asks for confirmation before overwriting. Cell-to-cell moves can be undone with \`Ctrl+Z\`.
+
+### Timeline View
+
+Visualize your scenes on a chronological timeline.
+
+- Scenes are positioned by \`storyDate\` and \`storyTime\` metadata.
+- Useful for tracking parallel storylines and temporal flow.
+- Click a scene to edit its time properties.
+- Supports multiple timelines for complex narratives.
+- Add acts and chapters from the toolbar.
+- **Order Toggle** \u2014 switch between **Reading Order** (scene sequence) and **Chronological Order** (in-story timeline). See [Reading Order vs Chronological Order](#reading-order-vs-chronological-order).
+- **Dual-order badges** \u2014 each scene card shows both its reading-order number and chronological-order number.
+- **Beat Sheet Templates** \u2014 apply a story structure template from the Structure modal.
+- **Act labels** \u2014 custom beat/act labels are displayed on timeline dividers and are inline-editable.
+- **Swimlane mode** \u2014 see [Timeline Swimlanes](#timeline-swimlanes).
+- **Multi-select** \u2014 ctrl/cmd-click to select multiple scenes. Right-click a selected scene for bulk actions.
+- **Shift dates** \u2014 when two or more scenes are selected, right-click \u2192 **"Shift dates (N scenes)\u2026"** opens a modal to adjust their dates/times in bulk. Two modes: **"Start on a new date"** (set a new date/time for the earliest scene; the delta is applied to all others, preserving gaps) or **"Move by a set amount"** (shift all by a signed number of days/weeks/hours/minutes). A live preview shows each scene's current \u2192 new date/time. Only \`storyDate\` and \`storyTime\` are written; sequence and order are untouched.
+
+### Plotlines View
+
+Track your story's plotlines (tags) across the narrative. Two view modes are available \u2014 toggle between them with the buttons in the toolbar.
+
+#### Subway Map (default)
+- Transit-style SVG visualization with one flat lane per plotline.
+- Scenes appear as labeled station nodes along each plotline's track.
+- **Gradient connectors** link shared scenes across plotlines, colored by the source tag.
+- **Act dividers** show vertical lines with act labels for structural context.
+- **Scene labels & tag pills** display below each node for quick identification.
+- **Hover details** show title, subtitle, synopsis, Arc Point status, plotlines, and story date/time when available.
+- **Drag to pan** \u2014 click and drag the map to navigate large stories.
+- **Per-tag color picker** \u2014 click the palette icon next to any plotline header to assign a custom color. Right-click a header for "Change color" / "Reset color".
+
+#### List View
+- Each plotline (tag) gets its own row showing which scenes it appears in.
+- Quickly see which plotlines are active, dormant, or unresolved.
+
+#### Common Features
+- **Rename** or **delete** plotlines across all scenes at once.
+- **Descriptions / notes** *(new in 1.10.51)* \u2014 click the **file-text** icon on a plotline header to add a short note reminding you what the plotline is supposed to do. The description is shown under the plotline header in list view, and is carried over when you rename the plotline. Useful for tracking open threads ("the mage in the tower") without resorting to a full plotline for every small detail.
+- Visualize plotline density and coverage.
+- Scenes default to **reading order** (chapter). Toggle to chronological order from the toolbar.
+
+### Manuscript View
+
+A Scrivenings-style continuous document view that presents your entire story as a single scrollable manuscript. Each scene is an embedded Live Preview editor \u2014 you can read and edit everything in place without switching files.
+
+- **Embedded editing** \u2014 every scene is a fully functional Obsidian Live Preview editor. Click into any scene and start typing.
+- **Continuous reading** \u2014 scenes are arranged in reading order (act \u2192 chapter \u2192 sequence) with no frontmatter visible.
+- **Act & chapter headings** \u2014 automatic section dividers appear whenever the act or chapter changes.
+- **Scene dividers** \u2014 each scene block shows a subtle header with the scene title and a color-coded status badge (idea, draft, written, etc.).
+- **Clickable titles** \u2014 click any scene title to open that scene file in a new tab.
+- **Plain Text toggle** \u2014 hides wiki-link styling, tag \`#\` prefixes, and external-link URLs so the text reads like clean prose. Defaults to ON for first-time users; the toolbar remembers your last choice (ON or OFF) across view switches and Obsidian restarts.
+- **Lock Links toggle** \u2014 makes internal links and tags non-editable. The cursor skips over link and tag text, preventing accidental changes while you write around them. Default: ON.
+- **Filter support** \u2014 use the same filter bar as other views to narrow down which scenes appear.
+- **Word count footer** \u2014 total scene count and aggregate word count displayed at the bottom.
+- **Lazy loading** \u2014 editors are mounted on demand as you scroll, keeping memory usage low even for large projects.
+- **Navigator integration** \u2014 clicking a scene in the Navigator scrolls the manuscript to that scene instead of opening a new file.
+- **Inspector tracking** \u2014 the Scene Details sidebar automatically follows whichever scene is currently visible in the manuscript.
+- **Focus Mode** \u2014 click the glasses icon in the filter bar to enter Focus Mode. Surrounding UI (sidebars, ribbon, title bar, tab headers) is dimmed, darkened, and optionally blurred so you can concentrate on your text. The filter bar, scene headers, dividers, and footer are hidden. Adjust the effect in **Settings \u2192 Focus Mode Settings**: Dim amount (toolbar opacity), Darken (environment brightness), and Blur (environment blur). Click the glasses icon again to exit.
+- **Find & replace across the whole book** \u2014 right-click inside a scene in the Manuscript view and choose **Find & replace in manuscript** (added to Obsidian's native editor context menu, so all the usual editor menu items remain available) to open a search panel that scans every scene in the current filter/sort scope (not just the scenes currently scrolled into view). Use the chevron buttons or Enter / Shift+Enter to jump between matches; navigating to a match in an unmounted scene auto-mounts its editor and scrolls it into view. Toggle case-sensitive, whole-word, or regular-expression matching with the Aa / whole-word / .* buttons. Enter replacement text and click the replace icon (single match) or check icon (all matches). Replacements in unmounted scenes are written directly to disk. *(Issue #195)*
+
+Access the Manuscript view from the **Manuscript** tab (**book-open-text** icon) in the view switcher, located between Plotlines and Codex.
+
+### Characters View
+
+A dedicated character management system with rich profiles. Characters are accessed through the **Codex** hub.
+
+#### Overview Grid
+- All characters displayed as **compact cards** with role badge, snippet, and completeness bar.
+- **Portrait images** \u2014 each card shows a circular portrait (64\xD764 px). Click the placeholder icon to add an image.
+- Cards are color-coded by role (protagonist, antagonist, supporting, minor, mentor, love interest).
+- **Unlinked characters** \u2014 characters mentioned in scenes but without a profile are listed separately with a one-click "Create" button.
+- Click any card to open the full character detail editor.
+- **Visual groups** \u2014 use the group button to create named, display-only groups such as \`Friends\`. Drag character cards into bordered groups, reorder cards within a group, and drag a group header onto another group header to reorder the groups. Groups are saved per project and do not move character files or change frontmatter.
+- **Relationship Map** \u2014 see [Relationship Map](#relationship-map).
+
+#### Character Detail Editor
+- **Collapsible sections** organized into seven categories:
+  - **Basic Information** \u2014 name, age, role, occupation, nickname, residency, locations. *(Since 1.9.6 a character can hold more than one role at once \u2014 type comma-separated values such as \`protagonist, narrator\` and one badge per role is rendered.)*
+  - **Physical Characteristics** \u2014 appearance, distinguishing features.
+  - **Personality** \u2014 traits, strengths, weaknesses, fears, motivations.
+  - **Backstory** \u2014 background, key events, secrets.
+  - **Relationships** \u2014 allies, enemies, romantic, mentors, other connections.
+  - **Character Arc** \u2014 starting state, desired arc, ending state.
+  - **Custom Fields** \u2014 add your own key/value pairs for anything else.
+- **Portrait area** \u2014 circular portrait (96\xD796 px) at the top of the editor. Click to add or change the image. Hover shows "Add image" / "Change image" label.
+- **Image gallery** \u2014 add up to 10 reference images with captions. Browse them in a carousel below the portrait, or open any image in a floating lightbox you can resize and drag around. See [Image Galleries](#image-galleries).
+- **Image picker** \u2014 choose to import an image from your computer (saved into \`<Project>/Images/\`), pick an existing vault image, or remove the current image.
+- All fields show grey **placeholder text** that disappears when you type.
+- **Auto-save** \u2014 changes are saved automatically after a short delay (no manual save needed).
+- **Show in StoryLine** \u2014 when editing a character\u2019s markdown file in a regular Obsidian tab, right-click and choose **Show in StoryLine** (or use the command palette) to jump back to the character\u2019s detail panel. This also works for location and codex entry files.
+- **Side panel** shows:
+  - Scene count, word count, and POV scene count.
+  - Intensity curve graph for scenes featuring this character.
+  - Gap detection warnings.
+  - Full list of scenes the character appears in, with status badges.
+  - **Referenced By** \u2014 other characters, locations, codex entries, and scenes that mention this character (see [Cross-Entity References](#cross-entity-references)).
+  - **Linked Aliases** \u2014 when you use the **Link to\u2026** action on an unlinked character name (in the overview grid's "Unlinked" tab), that alias is mapped to a canonical character profile so scenes aggregate correctly. The side panel now lists every alias linked to the current character, each with an **Unlink** button that removes the mapping and restores the alias as a standalone entry. *(Issue #213)*
+- **Hide/show fields** \u2014 hover over any field label to reveal an eye icon. Click to hide unused fields. See [Hide / Show Built-in Fields](#hide--show-built-in-fields).
+
+### Locations View
+
+A hierarchical worldbuilding and location management system. Locations are accessed through the **Codex** hub.
+
+#### Two-Level Structure
+- **Worlds** \u2014 top-level containers for worldbuilding (geography, culture, politics, magic/technology, beliefs, economy, history).
+- **Locations** \u2014 specific places that can optionally belong to a world. Locations can also have a **parent location**, enabling unlimited nesting (e.g., a building \u2192 its rooms).
+
+#### Overview Tree
+- Worlds appear as **collapsible top-level nodes** with a globe icon and location count.
+- **Image thumbnails** \u2014 small (20\xD720 px) thumbnails appear next to each node when an image is set.
+- Locations nest underneath their world, with further child locations indented below their parent.
+- **Standalone locations** (not linked to any world) appear in a separate section.
+- **Unlinked locations** \u2014 places referenced in scenes but without a profile show a "Create" button.
+- **Visual groups** \u2014 use the group button to create named, display-only groups. Drag worlds or standalone locations into bordered groups, reorder entries within a group, and drag group headers to reorder the groups. Groups are saved per project and do not change the location hierarchy or move files.
+- Click any node to open its detail editor.
+- **Drag-and-drop reparenting** *(new in 1.10.51)* \u2014 drag any location node and drop it onto another location (to make that its parent) or onto a world (to move it into that world as a top-level location). Cycles are prevented automatically. This is a fast way to reorganise your hierarchy without opening each location's Hierarchy section.
+
+#### Detail Editor
+- **World profiles** have eight collapsible sections: Overview, Geography & Environment, Culture & Society, Politics & Power, Magic & Technology, Beliefs & Mythology, Economy & Trade, History & Lore.
+- **Location profiles** have five sections: Overview, Atmosphere & Description, Story Significance, Connected Locations, and a Hierarchy section with World and Parent dropdowns.
+- **Nicknames / Aliases** \u2014 Both worlds and locations now support a **Nickname / Alias** field (comma-separated). The Link Scanner uses these to match alternative names in your prose, so writing "The Citadel" will link to a location whose nickname includes it.
+- **Portrait area** \u2014 rectangular portrait (120\xD780 px) at the top of the detail editor. Click to add or change the image.
+- **Image gallery** \u2014 add up to 10 images with captions. Browse via carousel or open in a floating lightbox. See [Image Galleries](#image-galleries).
+- **Image picker** \u2014 import from computer (saved into \`<Project>/Images/\` with automatic dedup), choose from vault, or remove.
+- **Custom fields** for any additional notes.
+- **Custom location types** \u2014 the **Type** dropdown on a Location includes built-in options (City, Town, Wilderness, \u2026) plus any types you've added. Pick **+ Add custom type\u2026** at the bottom of the list to add a new one on the fly (e.g. **Planet**, **Star System**, **Galactic Region**, **Galaxy**, **Dimension**) \u2014 useful for sci-fi, fantasy, and tabletop campaigns. You can also manage the list under **Settings \u2192 Custom Location Types**.
+- **Auto-save** with focus-loss protection (editing won't be interrupted).
+- **Side panel** shows:
+  - Location/world stats (scene count, sub-location count).
+  - List of scenes set at the location.
+  - Characters who appear at the location (with frequency count).
+  - For worlds: all locations in that world with one-click navigation.
+  - **Referenced By** \u2014 other entities and scenes that mention this location (see [Cross-Entity References](#cross-entity-references)).
+- **Hide/show fields** \u2014 hover over any field label to reveal an eye icon. Click to hide unused fields. See [Hide / Show Built-in Fields](#hide--show-built-in-fields).
+
+### Codex Hub
+
+The Codex is a unified hub that brings Characters, Locations, and custom categories together in one place.
+
+- **Tab navigation** \u2014 Switch between Characters, Locations, and any custom categories using the tab bar at the top of the Codex.
+- **Custom categories** \u2014 Add your own categories (for example: Props, Factions, Magic Systems, Creatures) from the Codex toolbar. Each category gets its own folder inside \`Codex/\`, its own search, and individual detail pages with editable fields.
+- **Inspector toggle** \u2014 In the Manage Categories modal, each category has an **Inspector** checkbox. When enabled, that category appears as a tag-pill section in the Scene Inspector sidebar, letting you link Codex entries to scenes just like Characters and Locations. Linked entries are stored in the scene\u2019s \`codexLinks\` frontmatter field.
+- **Search** \u2014 A search bar at the top of the hub filters across all entries, including Characters and Locations.
+- **Visual groups** \u2014 use the group button to create named, display-only groups for the active Codex category. Drag entries into bordered groups, reorder entries within a group, and drag group headers to reorder the groups. Groups are saved per project and do not move files or change frontmatter. Empty groups remain available as drop targets.
+- **Back navigation** \u2014 From any detail page, click the back arrow to return to the Codex hub.
+- **Change detection** \u2014 When a codex entry's content has been modified since it was last reviewed, an amber warning banner appears on the detail page listing all scenes that reference the entry. Click any scene name to open it. Click **"Mark as reviewed"** to clear the warning and update the stored digest. Digests are stored per-project in \`System/codex-digests.json\`.
+- **Backward compatible** \u2014 Existing projects that have Characters and Locations folders at the top level (outside Codex/) continue to work without any changes.
+
+#### Linking & Matching
+
+Every Codex category (Items, Creatures, Lore, Organizations, Culture, Systems, and custom categories) includes a shared **Linking & Matching** section at the bottom of each entry's detail page. Characters and Locations also have this section (without the Aliases field, since they already have a Nickname field in Basic Information / Overview).
+
+| Field | Description |
+|-------|-------------|
+| **Type** | A free-form sub-type label (e.g. "Sword", "Potion", "Legend") shown as a badge next to the entry name in the list. |
+| **Aliases** | Comma- or newline-separated alternative names that should also link to this entry when found in scene text. *(Codex entries only \u2014 Characters and Locations use the Nickname field.)* |
+| **Case-sensitive matching** | An on/off toggle. When on, the entry's name and aliases only match text with the exact same capitalisation (e.g. "Dust" matches "Dust" but not "dust"). Off by default. |
+| **Exclude terms** | Comma- or newline-separated phrases that suppress a match when they appear **at the same location** in the text (e.g. listing "Lady Margaret" on a "Lady" entry prevents that specific mention from linking). Exclude terms are checked *per match*, not across the whole scene \u2014 so a legitimate mention elsewhere in the same scene still tags the entity. |
+
+These rules are applied by the Link Scanner when it scans scene bodies for plain-text mentions, so you have fine-grained control over which words get linked \u2014 useful for complex name-play in speculative fiction.
+
+> **Tip:** The scanner automatically treats the first word of a character's name as an alias (e.g. "Anna" for "Anna Svensson"), but skips this for titles (Lady, Lord, Sir, \u2026) and descriptive phrases ("Lady of Dreams", "Keeper of the Keys") to avoid false positives.
+
+### Stats View
+
+A statistics dashboard organized into eight collapsible sections. Click any section header to expand or collapse it.
+
+#### 1. Overview (open by default)
+- **Word count progress** \u2014 actual vs. project goal with a progress bar.
+- **Estimated reading time** \u2014 calculated from total words.
+- **Pace projection** \u2014 words per day needed to hit your goal, with an estimated completion date.
+
+#### 2. Writing Sprint (open by default)
+- **Session stats** \u2014 words written this session, duration, words per minute.
+- **Streak** \u2014 consecutive days with writing activity.
+- **Daily goal** \u2014 today's words vs. your daily target, with a progress bar.
+- **Progress rings** \u2014 three circular rings show progress toward your **Daily**, **Weekly** (Mon \u2192 today), and **Monthly** (day 1 \u2192 today) word goals. Each ring turns green when its goal is reached; the percentage label is uncapped, so you'll see "127%" if you blow past a target. Configure goals under Settings \u2192 Writing Goals.
+- **7-day sparkline** \u2014 miniature bar chart showing your last seven days of writing.
+
+#### 3. Writing History (collapsible)
+- **Daily bar chart** \u2014 words written per day, with a range selector: 7d, 30d, 90d, or All.
+- Hover any bar to see the exact date and word count.
+
+#### 4. Progress Breakdown (collapsible)
+- **By status** \u2014 word counts for each status stage (idea \u2192 final).
+- **By chapter** \u2014 word count per chapter, with outlier highlighting for unusually short or long chapters.
+- **Act balance** \u2014 stacked bars showing how evenly your acts are distributed.
+
+#### 5. Characters & World (collapsed by default)
+- **POV distribution** \u2014 who gets the most page time.
+- **Character scene coverage** \u2014 heatmap of how often each character appears.
+- **Character \xD7 Chapter Heatmap** \u2014 a grid showing character appearances per chapter with color-coded intensity. Helps spot under-represented characters and distribution gaps.
+- **Location frequency** \u2014 bar chart of how often each location is used.
+
+#### 6. Pacing & Tension (collapsed by default)
+- **Average scene length by act** \u2014 bar chart.
+- **Word count distribution** \u2014 histogram of scene lengths.
+- **Scene length outliers** \u2014 flags unusually short or long scenes.
+- **Dialogue vs. narrative ratio** \u2014 per-scene breakdown.
+- **Tension curve** \u2014 visual graph of your story's emotional arc based on scene intensity values.
+
+#### 5b. Setup & Payoff Map (collapsed by default)
+- **Setup \u2192 Payoff chains** \u2014 visualizes explicit links between scenes using \`setup_scenes\` and \`payoff_scenes\` frontmatter.
+- **Dangling payoffs** \u2014 flags scenes whose setup references are never paid off.
+- **Click to open** \u2014 click any scene name to open it in a new tab.
+
+#### 6b. Pacing Coach (inside Pacing & Tension)
+- **Scene length with conflict presence** \u2014 bar chart where each bar is a scene and dots indicate whether \`conflict\` is defined. Long bars without conflict are highlighted.
+- **Summary stats** \u2014 average word count with/without conflict, total scene counts.
+- **Flagged scenes** \u2014 specific long scenes lacking conflict are listed as potential pacing issues.
+
+#### 7. Prose Analysis (collapsed, lazy-loaded)
+- **Readability scores** \u2014 Flesch-Kincaid Grade Level and Flesch Reading Ease.
+- **Average sentence and word length.**
+- **Word frequency** \u2014 top 20 most-used words (excluding common stop words), shown as a bar chart.
+- **Overused words** \u2014 flags words that appear disproportionately often.
+- This section loads on demand when expanded to avoid slowing down the dashboard.
+
+#### 7b. Echo Finder (collapsed, lazy-loaded)
+- **Repeated phrases** \u2014 scans all scene prose for duplicated multi-word sequences that may indicate unintentional repetition.
+- Lazy-loaded on expand to avoid slowing down the dashboard.
+
+#### 8. Warnings (open by default)
+- **Plot hole detection** \u2014 automated warnings grouped by category (see [Plot Hole Detection](#plot-hole-detection)).
+
+### Navigator View
+
+A compact sidebar panel for quick scene navigation without leaving your current view.
+
+#### Toolbar
+- **Search** \u2014 type to filter scenes by title.
+- **Sort** \u2014 multiple modes: Reading order (by act, default), **By chapter** *(since 1.10.14, groups scenes under collapsible chapter headers, acts hidden)*, Chronological, Status, Recently Modified, Word Count, and Title (A\u2013Z).
+- **Scene Details** \u2014 a button that opens the Scene Details Sidebar in the right panel (see below).
+
+#### Plotline Filter
+- Collapsible section listing all plotline tags in the project.
+- Each plotline shows a **color dot** (matching your color scheme) and a **scene count**.
+- Click a plotline to filter scenes to only those tagged with it. Click again to clear.
+
+#### Scene List
+- Scenes grouped by **act** with collapsible act headers.
+- Each row shows: sequence number, title, status badge, and word count.
+- **Pinned scenes** appear at the top in a dedicated section for quick access.
+- Click a scene to select it in the main view. Right-click for a context menu: pin/unpin and change status.
+
+#### Progress Bar
+- A bottom bar showing overall word count progress toward your project goal.
+
+#### Auto-Open
+- The Navigator opens automatically when a project loads (configurable via **Settings \u2192 Auto-open Navigator**).
+- You can also open it manually via the command palette: **Open StoryLine Navigator**.
+
+### Scene Details Sidebar
+
+A standalone sidebar panel that shows the full Inspector for the currently active scene file. Use it to view and edit scene metadata side-by-side with your writing.
+
+#### How It Works
+
+1. Open the Scene Details Sidebar from the **Scene Details** button in the Navigator, or via the command palette (**Open Scene Details Sidebar**).
+2. The panel automatically detects the active file in the editor.
+3. If the active file is a scene (has \`type: scene\` in frontmatter), the full Inspector is displayed \u2014 title, status, POV, characters, location, tags, conflict, notes, setup/payoff links, and more.
+4. When you switch to a different file, the panel updates automatically.
+5. If the active file is not a scene, an empty state message is shown.
+
+#### Features
+
+- **Info tab** *(since 1.10.14)* \u2014 a lightweight planning panel showing synopsis, status, POV, location, word count and notes at a glance. Use it when you want a quick overview without scrolling through the full Inspector.
+- **Auto-update** \u2014 follows the active editor file. Switch between scene files and the sidebar updates instantly.
+- **Full Inspector** \u2014 all the same fields and editing capabilities as the main Inspector panel.
+- **Refresh on save** \u2014 when you modify a scene file in the editor, the sidebar refreshes to reflect changes (with a short delay to avoid conflicts).
+- **Non-intrusive** \u2014 lives in the right sidebar and doesn\u2019t interfere with your main views.
+
+### Research Sidebar
+
+A right-sidebar panel for collecting and browsing research material alongside your writing. Research posts are stored as Markdown files in the \`Research/\` folder inside your project.
+
+#### Post Types
+
+| Type | Purpose |
+|------|---------|
+| **Note** | Free-form research notes |
+| **Web Clip** | Content clipped from the web, with source URL |
+| **Image** | Image-based reference material |
+| **Question** | Open questions that need answering, with resolved/unresolved tracking |
+
+#### Features
+
+- **Search** - type in the search box to filter posts by title, body text, and tags.
+- **Tag filter** - click any tag chip to filter results to that tag. Click again to clear. Your selection is remembered between sessions.
+- **Type filter** - filter by post type (Note, Web Clip, Image, Question) or show all. Your selection is remembered between sessions.
+- **Auto-suggest** - click the sparkle button to switch to auto-suggest mode. The panel surfaces research posts relevant to the active scene's characters, location, and tags.
+- **Open question badge** - shows a red badge with the count of unresolved questions.
+- **Inline detail** - click a card to expand it and read the full content, source URL, and action buttons.
+- **Create** - click the + button to create a new research post with title, type, tags, optional source URL, and content.
+- **Image posts** - when creating or editing an Image-type post, use the built-in image picker to import or choose a vault image. Image previews appear inline on expanded cards.
+- **Open / Resolve / Delete** - expanded cards include buttons to open the file in the editor, toggle question resolved status, or delete the post.
+
+#### How to Open
+
+Use the command palette: **Open Research Sidebar**.
+
+---
+
+## Scene Cards
+
+Each scene is a Markdown file with YAML frontmatter. StoryLine manages these fields:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| \`title\` | Scene title | \`"The Chase"\` |
+| \`act\` | Act number | \`2\` |
+| \`chapter\` | Chapter number | \`7\` |
+| \`sequence\` | Reading order (as written) | \`14\` |
+| \`chronologicalOrder\` | In-story chronological order | \`8\` |
+| \`pov\` | Point of view character | \`"[[Anna]]"\` |
+| \`characters\` | Characters present (wikilinks) | \`["[[Anna]]", "[[Erik]]"]\` |
+| \`location\` | Setting (wikilink) | \`"[[Castle]]"\` |
+| \`status\` | Completion status | \`draft\` |
+| \`storyDate\` | Date in the story | \`"2026-02-17"\` or \`"Day 3"\` |
+| \`storyTime\` | Time in the story | \`"14:00"\` or \`"morning"\` |
+| \`conflict\` | Main conflict | \`"Anna must escape"\` |
+| \`emotion\` | Emotional tone | \`"tense"\` |
+| \`intensity\` | Arc intensity (-10 to +10) | \`7\` |
+| \`wordcount\` | Actual word count (auto) | \`1200\` |
+| \`target_wordcount\` | Target word count | \`800\` |
+| \`tags\` | Plotlines and themes | \`["romance", "betrayal"]\` |
+| \`notes\` | Editorial / author notes | \`"Needs more tension"\` || \`timeline_mode\` | Non-linear narrative technique | \`"flashback"\` |
+| \`timeline_strand\` | Parallel/frame strand group | \`"1985"\` |
+| \`subtitle\` | Optional subtitle below the title | \`"Three years later"\` |
+| \`color\` | Custom scene card background color (hex) | \`"#FF6B6B"\` |
+| \`codexLinks\` | Linked Codex entries per category | \`{ items: ["Sword"], factions: ["Rebels"] }\` |
+| \`setup_scenes\` | Scenes this sets up (by title or \`[[wikilink]]\`) | \`["Scene 10"]\` or \`["[[Scene 10]]"]\` |
+| \`payoff_scenes\` | Scenes that pay off this one (by title or \`[[wikilink]]\`) | \`["Scene 10"]\` or \`["[[Scene 10]]"]\` |
+
+**Status progression:** \`idea\` \u2192 \`outlined\` \u2192 \`draft\` \u2192 \`written\` \u2192 \`revised\` \u2192 \`final\`. Custom statuses can be added in Settings. Enable **Counts as written** on a custom status if it should be included in character writing-progress bars.
+
+**References as wikilinks** *(since 1.9.6)* \u2014 \`pov\`, \`location\`, \`characters\`, \`setup_scenes\` and \`payoff_scenes\` are written as Obsidian \`[[wikilinks]]\` by default so they auto-update when you rename a character or scene. Plain-text values still work \u2014 readers accept either form. Toggle the writer at **Settings \u2192 Write scene references as wikilinks**.
+
+**Wordcount exclusions** *(since 1.9.6)* \u2014 Two toggles under **Settings \u2192 Scene Cards** control what \`MetadataParser.countWords\` actually counts:
+
+- **Exclude \`%%comments%%\` from wordcount** *(default on)* \u2014 Obsidian comment blocks are stripped before counting, so author notes and TODOs do not inflate scene/manuscript totals.
+- **Also ignore checkbox lines** *(default off)* \u2014 When enabled, lines starting with \`- [ ]\` or \`- [x]\` are also stripped, useful for outline-style scenes that mix prose with task lists.
+
+These settings flow through scene cards, the inspector, the Writing Tracker, and exports.
+
+**Count unit: words or characters** *(since 1.10.31)* \u2014 A **Count unit for scene lengths** dropdown under **Settings \u2192 Scene Cards** lets you choose whether scene cards, the Timeline, and the Inspector show scene length in **Words** (default) or **Characters**. The character count is stored in a new \`charcount\` frontmatter field and applies the same exclusions as the word count. Handy for prose writers who track length in characters (e.g. Russian, Chinese, Japanese).
+
+**Default scene frontmatter** *(since 1.9.6)* \u2014 Universal Field Templates have an optional **Default value** that is auto-applied to newly created scenes (multi-select fields accept comma-separated defaults). In addition, **Settings \u2192 Default scene frontmatter** accepts a free-form YAML block whose keys are merged into every newly created scene's frontmatter. StoryLine-owned keys (\`type\`, \`title\`, \`act\`, \`chapter\`, \`sequence\`, \`status\`, \`wordcount\`, \u2026) always win on conflict, so the default snippet can never overwrite the engine's own metadata.
+
+**Scene card preview text** *(since 1.10.14)* \u2014 Beneath each scene card title you can show a short preview line. Choose what to display at **Settings \u2192 Scene Cards \u2192 Scene card preview text**: **None**, **Synopsis**, **First lines of draft**, or **Conflict**. The card stays compact and the preview is clipped to ~4 lines.
+
+**Hide frontmatter on StoryLine notes** *(since 1.10.14)* \u2014 Toggle **Settings \u2192 Editor \u2192 Hide frontmatter** to hide the properties block on notes inside your StoryLine root folder. Other vault notes are unaffected. All scene metadata remains editable from the Inspector.
+
+Write your scene content below the frontmatter as normal Markdown.
+
+---
+
+## Scene Subtitles
+
+Scenes can have an optional **subtitle** field \u2014 a short phrase displayed below the title. Use it for things like:
+
+- *"Three years later"*
+- *"Meanwhile, in Paris"*
+- *"Interlude: Letters from the front"*
+
+Subtitles appear on scene cards (Board view) and in the Manuscript view header. Edit them in the Inspector panel just below the title input.
+
+Set the \`subtitle\` field in frontmatter, or type it directly in the Inspector. Leave it blank to hide.
+
+---
+
+## Scene Archive
+
+Archive a scene to remove it from all views without deleting it. Archived scenes are moved to the \`Archive/\` folder inside your project.
+
+- **Archive** \u2014 right-click any scene in the Board or Navigator and choose **Archive Scene**. The file moves to \`Archive/\` and disappears from the index.
+- **Restore** \u2014 click the **archive** icon in the Board view toolbar. This opens a modal listing all archived scenes, each with a **Restore** button that moves the file back to \`Scenes/\` and re-indexes it.
+- **Forking** \u2014 when you fork a project, archived scenes are copied to the new project's \`Archive/\` folder.
+
+Archived scenes stay as regular \`.md\` files and can be reviewed or edited at any time through Obsidian's file explorer.
+
+---
+
+## Inactive Scenes
+
+Mark a scene inactive when you want to park it without moving it to the Archive. Inactive scenes stay in the project and keep their metadata, notes, links, and position, but they are hidden from Manuscript, exports, Navigator, and aggregate stats by default.
+
+- **Mark inactive** \u2014 open the scene in the Inspector and enable **Inactive scene**, or right-click a scene in the Board and choose **Mark Inactive**.
+- **Show parked scenes** \u2014 use the **Active / All / Inactive** control in the shared filter bar to switch between normal scenes, every scene, or inactive scenes only.
+- **Export inactive scenes** \u2014 exports exclude inactive scenes unless you enable **Include inactive scenes** in the export dialog.
+
+Inactive status is stored as \`inactive: true\` in scene frontmatter. Use Archive when you want to move a scene out of the active project folder entirely; use inactive when the scene still belongs in your planning space.
+
+---
+
+## Inspector Panel
+
+Click any scene card to open the **Inspector Panel** on the right side. It provides:
+
+- **Metadata editing** \u2014 title, act, chapter, sequence, status, POV, location, conflict, emotion, intensity. Act and chapter are free-text fields: use plain numbers (\`1\`, \`2\`, \`10\`), hierarchical decimals (\`1.1\`, \`1.2\`, \`2.1\`), or text labels (\`Prologue\`, \`Interlude A\`). Sorting throughout the plugin is numeric-aware. Avoid Windows-illegal characters (\`< > : " / \\ | ? *\`) \u2014 the Inspector will warn you if you type one.
+- **Prologue & Epilogue** *(new in 1.10.18)* \u2014 Set act to **0** for Prologue or **99** for Epilogue. Quick-select buttons appear below the Act input. All views display "Prologue" and "Epilogue" instead of "Act 0" / "Act 99".
+- **Characters** \u2014 add/remove characters with autocomplete and tag-pill inputs.
+- **Codex sections** \u2014 any Codex category enabled for the Inspector (via Codex \u2192 Manage Categories) appears as a tag-pill input below the Location field. Add or remove linked Codex entries with autocomplete from your category\u2019s entries.
+- **Tags** \u2014 manage plotline tags with autocomplete, color-coded tag badges when tag colors are configured.
+- **Notes** \u2014 editorial notes for author comments and reminders. StoryLine stores scene notes in a separate notes file named \`Scene Title - Notes.md\` and links it from the scene frontmatter with \`notesFile\`. Type \`[[\` to get an inline wikilink autocomplete *(new in 1.9.9)* \u2014 pick a note with **\u2191/\u2193 + Enter** (or click) to drop a \`[[Note Name]]\` link straight into your comment.
+- **Custom Fields** \u2014 values for any [Custom Scene Fields](#custom-scene-fields) you've defined for the project. Click the **+** button on the section header to create a new field on the fly, or the pencil button next to a field to edit / delete it.
+- **Snapshots** \u2014 save and restore point-in-time versions of the scene.
+- **Word count** \u2014 current vs. target with progress indicator.
+- **Setup/Payoff links** \u2014 see and manage which scenes set up or pay off this scene.
+- **Time & Order** \u2014 story date, story time, chronological order, timeline mode, and timeline strand (see [Reading Order vs Chronological Order](#reading-order-vs-chronological-order) and [Timeline Modes](#timeline-modes)).
+- **Open scene** \u2014 click to open the full Markdown file in reading view (frontmatter stays hidden).
+
+---
+
+## Filtering & Presets
+
+All views support filtering by:
+
+- **Active state** \u2014 show active scenes, all scenes, or inactive scenes only
+- **Status** (idea, outlined, draft, written, revised, final)
+- **Characters** \u2014 filter by character presence
+- **Locations** \u2014 filter by location
+- **Tags** \u2014 filter by plotline/theme tags
+- **Custom Scene Fields** \u2014 every dropdown / multi-select [custom field](#custom-scene-fields) automatically gets its own chip group in the filter panel.
+- **Search text** \u2014 free-text search across titles and content
+
+### Filter Chips
+
+Active filters appear as clickable chips at the top. Click a chip to remove that filter.
+
+### Saved Presets
+
+Save your current filter combination as a **preset** for quick reuse:
+
+1. Set your desired filters.
+2. Click **Save Preset** and give it a name.
+3. Access saved presets from the preset dropdown.
+4. Delete presets you no longer need.
+
+---
+
+## Multi-Select & Bulk Edit
+
+In the **Board View**, hold \`Ctrl\` (or \`Cmd\` on Mac) and click multiple scene cards to select them. A **bulk action bar** appears with:
+
+- **Set Status** \u2014 change status for all selected scenes.
+- **Move to Act** \u2014 reassign act for all selected scenes.
+- **Add Tag** \u2014 add a tag to all selected scenes.
+- **Delete** \u2014 trash all selected scenes (with confirmation).
+- **Clear** \u2014 deselect all.
+
+---
+
+## Setup / Payoff Tracking
+
+Link scenes that set up (foreshadow) and pay off (resolve) each other:
+
+1. Open a scene in the **Inspector Panel**.
+2. Scroll to the **Setup / Payoff** section.
+3. Type a scene title in the **Sets up** or **Set up by** input to search and select. Existing links appear as removable pills.
+4. Links are bidirectional \u2014 if Scene A "sets up" Scene B, Scene B shows Scene A under "Set up by".
+
+Links are stored by **scene title** (or as \`[[wikilinks]]\` to the scene). The reader is tolerant of other forms too \u2014 plain file paths (\`"MyProject/Scenes/Scene 10.md"\`) and filenames with a \`.md\` extension are normalised to the scene title automatically, so links written that way still resolve. The recommended form is a plain title or a \`[[wikilink]]\`.
+
+The Stats View and Plot Hole Detection will warn about:
+- Setups without payoffs.
+- Payoffs without setups.
+- Setups that appear *after* their payoff (ordering issues).
+
+---
+
+## Plot Hole Detection
+
+StoryLine's **Validator** engine automatically scans your story for potential issues. Enable it in Settings (\`enablePlotHoleDetection\`). Warnings appear in the **Stats View**, grouped into six categories:
+
+### 1. Timeline
+- Duplicate sequence numbers.
+- Large sequence gaps (>5 missing numbers) \u2014 skipped for \`timeskip\`, \`dream\`, and \`mythic\` modes.
+- Story dates out of chronological order \u2014 skipped for \`flashback\`, \`flash_forward\`, \`dream\`, \`mythic\`, and \`circular\` modes.
+- Parallel/frame strand scenes are validated independently within each strand group.
+
+### 2. Characters
+- Scenes missing a POV character.
+- Characters that only appear once (potential orphans).
+- Characters that disappear for more than 40% of the story.
+
+### 3. Plotlines
+- Tags/plotlines that appear in early acts but vanish before the end.
+- Plotlines missing from middle acts.
+- Scenes with no tags at all.
+
+### 4. Setup / Payoff
+- Setups that reference non-existent scenes.
+- Missing reverse links (one-directional connections).
+- Setup scenes that appear *after* their payoff scene.
+
+### 5. Structure
+- Untitled scenes.
+- Scenes without an act assignment.
+- Severe act imbalance (one act 3\xD7 larger than another).
+- Scenes with no conflict defined.
+
+### 6. Continuity & Pacing
+- Sharp intensity drops (\u22656 points between consecutive scenes) \u2014 skipped when \`dream\` or \`mythic\` scenes are involved.
+- Monotonous emotion streaks (5+ consecutive scenes with the same emotion) \u2014 streaks reset at \`dream\`/\`mythic\` boundaries.
+
+Each warning has a **severity level**:
+- **Error** \u2014 likely a real problem.
+- **Warning** \u2014 worth investigating.
+- \u2139\uFE0F **Info** \u2014 minor suggestion.
+
+---
+
+## Undo / Redo
+
+StoryLine tracks changes to scenes (create, update, delete) and lets you undo/redo:
+
+- **Undo:** \`Ctrl+Z\` (or command palette: *Undo Last Scene Change*)
+- **Redo:** \`Ctrl+Shift+Z\` / \`Ctrl+Y\` (or command palette: *Redo Last Scene Change*)
+
+When a StoryLine view is active and you're not typing in a text field, \`Ctrl+Z\` and \`Ctrl+Y\` automatically route to StoryLine's undo/redo instead of Obsidian's editor undo.
+
+The undo stack stores up to 50 actions and persists within the current session.
+
+---
+
+## Reading Order vs Chronological Order
+
+For non-linear narratives (flashbacks, time jumps, in medias res), StoryLine supports two separate ordering fields:
+
+- **Reading Order** (\`sequence\`) \u2014 the order scenes appear when the reader reads the book, page by page.
+- **Chronological Order** (\`chronologicalOrder\`) \u2014 the order events happen within the story's timeline.
+
+### How to Use
+
+1. **Set story dates** \u2014 fill in the \`storyDate\` and \`storyTime\` fields on each scene. When you switch the Timeline to Chronological Order, scenes are automatically sorted by these fields.
+2. **Set chronological order manually** \u2014 if you prefer, set \`chronologicalOrder\` in the Inspector's **Time & Order** section, or directly in the scene's YAML frontmatter. Scenes without a story date fall back to this number.
+3. **Switch order in Timeline View** \u2014 use the order dropdown in the toolbar to toggle between "Reading Order" and "Chronological Order".
+4. **Dual-order badges** appear on scene cards showing both numbers (e.g., \`R:5 / C:2\` means reading order 5, chronological order 2).
+5. **Drag-and-drop** in the Timeline respects the currently active order mode.
+
+### Export
+
+Both \`sequence\` and \`chronologicalOrder\` are included in all export formats (Markdown, JSON, CSV, PDF).
+
+#### Scene separators
+
+When exporting a manuscript you can insert a separator between scenes. Choose from:
+
+- **Blank Line** \u2014 default; no extra separator is added (heading structure provides separation).
+- **\`* * *\`** \u2014 centered three-asterisk scene break.
+- **Custom Separator** \u2014 any UTF-8 text (e.g. \`~ ~ ~\`, \`\u2014\`, or a word).
+
+The setting is in **Settings \u2192 Export & Import \u2192 Scene separator**, and can also be overridden per-export in the Export modal. Separators are skipped at act and chapter boundaries, where a heading already provides visual separation. Markdown exports emit plain text (no HTML), keeping the \`.md\` file portable for Scribe and other markdown consumers; HTML/PDF/Word exports render the separator centered with vertical spacing.
+
+---
+
+## Beat Sheet Templates
+
+Apply proven story structure templates to quickly scaffold your acts:
+
+### Built-in Templates
+
+| Template | Beats | Description |
+|----------|-------|-------------|
+| **Save the Cat!** | 15 beats | Blake Snyder's popular screenplay structure (Opening Image, Theme Stated, Set-Up, Catalyst, Debate, Break into Two, B Story, Fun & Games, Midpoint, Bad Guys Close In, All Is Lost, Dark Night of the Soul, Break into Three, Finale, Final Image) |
+| **Three-Act Structure** | 10 beats | Classic three-act framework (Hook, Inciting Incident, First Plot Point, Rising Action, Midpoint, Complications, Crisis, Climax, Falling Action, Resolution) |
+| **Hero's Journey** | 12 stages | Joseph Campbell's monomyth (Ordinary World, Call to Adventure, Refusal of the Call, Meeting the Mentor, Crossing the Threshold, Tests Allies Enemies, Approach to the Inmost Cave, The Ordeal, Reward, The Road Back, Resurrection, Return with the Elixir) |
+| **Seven-Point Story Structure** | 7 beats | Dan Wells' structure (Hook, Plot Turn 1, Pinch Point 1, Midpoint, Pinch Point 2, Plot Turn 2, Resolution) |
+| **Story Circle** | 8 beats | Dan Harmon's story circle (You, Need, Go, Search, Find, Take, Return, Change) |
+| **Romancing the Beat** | 20 beats | Gwen Hayes' four-phase romance structure (Phase 1 Setup: Introduce Hero 1, Introduce Hero 2, Meet Cute, No Way #1, Adhesion; Phase 2 Falling in Love: No Way #2, The Inkling, Deepening Desire, Maybe This Could Work, Midpoint of Love; Phase 3 Retreating from Love: Inkling of Doubt, Deepening Doubt, Retreat, Shields Up, Break Up; Phase 4 Fighting for Love: Dark Night of the Soul, Wake Up, Grand Gesture, Whole-Hearted, Epilogue) |
+| **27 Chapter Method** | 27 beats | Kat O'Keeffe's fractal 3\xD73\xD73 structure \u2014 3 Acts \u2192 9 Parts \u2192 27 Chapters, each following a setup\u2013conflict\u2013resolution pattern |
+
+### How to Use
+
+1. Open the **Structure** modal from the Board or Timeline toolbar (the columns icon).
+2. Select a **Beat Sheet Template** and click **Apply** \u2014 StoryLine creates the acts and assigns beat labels automatically.
+3. **Create placeholder scenes** \u2014 toggle "Create placeholder scenes from beats" before applying to auto-create one scene per beat with the correct act, chapter, and synopsis.
+4. **Custom Structure** \u2014 use the Custom Structure builder at the bottom of the modal to define your own number of acts, chapters per act, and scenes per chapter.
+5. **Save a custom beat sheet** \u2014 enter a Template name in the Custom Structure builder and click **Save as beat sheet**. The saved template appears in the Saved custom beat sheets section and is available from any project.
+6. **Apply or delete saved templates** from the Saved custom beat sheets section. Applying uses the same merge behavior as built-in templates and can optionally create placeholder scenes.
+7. **Act labels** appear on column headers (Board View) and timeline dividers (Timeline View).
+8. **Edit labels inline** by clicking the label text on any act divider.
+9. To **add chapters**, use the "Add chapters" section in the same modal. Enter a range (e.g. "1-10") and click Add.
+10. **Seeing chapters**: After adding chapters, switch to Board View \u2192 **Kanban** mode \u2192 set "Group by" to **Chapter**. Chapters will appear as columns.
+
+Beat names are stored as \`actLabels\` on the project and persist across sessions.
+
+### Scene Ordering Terminology
+
+| Term | YAML field | Meaning |
+|------|-----------|---------|
+| **Reading order** | \`chapter\` | The order scenes appear in the book as the reader reads them. Chapter 1 comes before Chapter 2, etc. |
+| **Chronological order** | \`sequence\` (or \`chronologicalOrder\` if set) | The order events happen in story time. For non-linear narratives (flashbacks, parallel timelines), this may differ from reading order. |
+| **Scene #** | \`sequence\` | A unique number identifying each scene, used for file naming and default sorting. |
+
+In the Navigator, Timeline, and Plotlines views you can toggle between **Reading order** and **Chronological order** to see your scenes arranged either way.
+
+---
+
+## Scene Notes
+
+Each scene can have an external **notes file** for editorial comments, reminders, and revision notes:
+
+- Edit notes in the **Inspector Panel** under the Notes section.
+- StoryLine creates the notes file when you first edit notes for a scene. New notes files are named \`Scene Title - Notes.md\` and saved in the project's scene notes folder.
+- The scene stores a \`notesFile\` link in frontmatter so StoryLine can reopen the same notes file later. Older inline \`notes\` frontmatter is still read as a fallback.
+- Notes are separate from the scene body \u2014 they're for author-facing comments that won't appear in the manuscript.
+- Notes are included in **outline exports** (Markdown, JSON, CSV) so you can share them with editors.
+- Type \`[[\` *(new in 1.9.9)* to get inline wikilink autocomplete \u2014 link to characters, locations, research notes, or anything else in your vault directly from the comments field.
+
+- **Live Markdown editor** *(new in 1.10.18)* \u2014 The Notes tab in the Scene Details sidebar now renders as a full Obsidian Live Preview editor. Write with markdown formatting, wikilinks, and tags \u2014 just like a regular note file. Edits are saved automatically.
+- **Refresh-safe editing** \u2014 Refreshing scene metadata while the same scene remains selected no longer rebuilds the embedded Notes editor, so its scroll position and selection are preserved.
+
+---
+
+## Arc Points
+
+Arc Points *(introduced in 1.10.18, [issue #128](https://github.com/PixeroJan/obsidian-storyline/issues/128))* mark **arc milestones** \u2014 planned narrative beats on a character's arc journey, such as "Mira discovers she is dying" or "Jonas burns the archive". They let you plan at *arc granularity* alongside scene granularity, without conflating the two.
+
+An Arc Point is a regular scene file with one extra frontmatter boolean: \`arcAnchor: true\`. This is independent of \`status\` \u2014 it describes what the node *means narratively* (an arc milestone), not where it is in the production pipeline. A common workflow is to create Arc Points as lightweight **stub scenes** (\`status: stub\`) for beats you intend to write later \u2014 possibly in a future book \u2014 then let them grow into fully-written scenes over time. The Arc Point flag stays on when a stub becomes a real scene, because the scene *is* the arc beat; removing it would be semantically wrong. \`status\` continues to evolve from \`stub\` \u2192 \`draft\` \u2192 \`done\` on its own track.
+
+> **Why use stub scenes instead of just notes?** Because Arc Points render on the Subway map and Board alongside real scenes, giving you a visual arc landscape across your story (and, with the \`_Plotline\` naming convention, across a series). Without the flag, stub scenes are indistinguishable from real scenes and create noise in word counts, the Validator, and the Timeline. The Arc Point flag + the **All / Scenes / Arc Points** filter let you switch between the two lenses in one click.
+
+> **Tip:** The Arc Point flag is a single boolean \u2014 it doesn't record *which* arc a milestone belongs to or *what kind* of beat it is (inciting incident, midpoint, climax, etc.). To track that, pair Arc Points with [plotlines](#plotlines-view) (e.g. a \`_Mira\` plotline for Mira's character arc) and/or a [custom scene field](#custom-scene-fields) for the beat type. The \`_\`-prefix naming convention is a common way to group arc-milestone plotlines separately from story-thread plotlines.
+
+### How to mark a scene as an Arc Point
+
+Open the Scene Details sidebar and check the **Arc Point** checkbox on the Details tab. The scene's frontmatter gets \`arcAnchor: true\`.
+
+### Where Arc Points appear
+
+- **Board cards** \u2014 an orange "\u25C6 Arc Point" badge is shown below the title.
+- **StoryLine subway map** \u2014 Arc Points render as filled diamonds (\u25C6) instead of hollow circles, making them stand out at a glance.
+- **Tooltip** \u2014 hovering a subway-map node includes Arc Point status along with the scene's available subtitle, synopsis, plotlines, and story date/time.
+
+### Filtering
+
+Both the Board and StoryLine views have an **All / Scenes / Arc Points** toggle in the toolbar:
+
+- **All** \u2014 show everything (default).
+- **Scenes** \u2014 show only regular scenes (no Arc Points).
+- **Arc Points** \u2014 show only Arc Points.
+
+Arc Points are included in word counts, stats, and exports just like any other scene. If you prefer to exclude Arc Point scenes from aggregate word counts (Stats view, Manuscript footer), enable **Settings \u2192 Scene Cards \u2192 Exclude Arc Points from word count**. This is on by default. Individual scene cards still show their own word count regardless of this setting.
+
+---
+
+## Convert Note to Scene *(new in 1.9.9)*
+
+Any markdown file in your vault \u2014 a character study, a research note, a stub note that Obsidian created from a broken \`[[wikilink]]\`, or an idea you wrote in a different app and pasted in \u2014 can be promoted to a full StoryLine scene in one click.
+
+Two ways to do it:
+
+- **Command palette** \u2014 open the note, run **"Convert note to scene"**.
+- **File explorer** \u2014 right-click any \`.md\` file and pick **"StoryLine: Convert to scene"**.
+
+StoryLine will:
+
+1. Add the required scene frontmatter (\`type: scene\`, default \`status: idea\`, today's \`created\` date).
+2. Assign the next available sequence number (so the new scene appears at the end of the running order).
+3. Move the file into your project's \`Scenes/\` folder \u2014 or \`Scenes/Act N/\` if the note already declares an act.
+4. Refresh every open view so the scene shows up immediately on the Board, Manuscript, Plot Grid, etc.
+
+Files that are already indexed as scenes are skipped, so the operation is safe to run on anything.
+
+---
+
+## Scene Snapshots
+
+Save point-in-time snapshots of a scene for version tracking:
+
+- **Save Snapshot** \u2014 captures the current state of a scene (frontmatter + body).
+- **View Snapshots** \u2014 browse previous snapshots with timestamps.
+- **Restore** \u2014 revert a scene to any previous snapshot.
+- **Rename continuity** \u2014 renaming or moving a scene also renames its snapshot files, keeping the snapshot history attached to that scene.
+
+Useful for experimenting with rewrites without losing your earlier work.
+
+---
+
+## View Snapshots
+
+Save and restore point-in-time snapshots of your entire project's **view layout** \u2014 corkboard positions, Plot Grid state, and scene ordering \u2014 without affecting scene content.
+
+### What a snapshot captures
+- **Corkboard layout** \u2014 card x/y positions and individual card heights.
+- **Plot Grid state** \u2014 rows, columns, cells, zoom level, styling, and linked scenes.
+- **Scene layout metadata** \u2014 act, chapter, status, POV, and sequence numbers.
+
+### How to use
+1. Click the **clock** icon in the Board or Plotgrid toolbar, or run **Manage View Snapshots** from the command palette.
+2. Click **+** to create a new snapshot. It becomes the active snapshot immediately.
+3. Rearrange your corkboard, edit the Plot Grid, or reorder scenes \u2014 changes are **auto-saved** back to the active snapshot after a 2-second pause.
+4. To compare different layouts, load a different snapshot from the list.
+5. Rename or delete snapshots from the same modal.
+
+### Key details
+- **Free-editing mode** \u2014 when no snapshot is active, changes are saved normally without snapshot tracking.
+- **Per-project** \u2014 each project has its own snapshot history, stored in \`System/Snapshots/\`.
+- **Layout only** \u2014 snapshots do not capture scene prose or frontmatter content. Use **Scene Snapshots** for that.
+
+---
+
+## Scene Templates
+
+Create reusable templates for common scene types:
+
+### Built-in Templates
+- Starter templates for common scene patterns.
+
+### Custom Templates
+1. Set up a scene with your desired default values (status, act, tags, conflict patterns, etc.).
+2. Right-click the scene card and select **Save as Template** from the context menu.
+3. Alternatively, create templates manually in **Settings \u2192 Scene Templates \u2192 Add Template**.
+4. When creating new scenes, choose a template to pre-fill fields.
+
+Templates are stored in settings and available across all projects.
+
+### Default PoV character *(new in 1.10.51)*
+
+If your story never changes point of view, set **Settings \u2192 Scene Cards \u2192 Default PoV character** to your protagonist. Every newly-created scene will then have that character pre-filled as its PoV, saving you a pick on every new scene. Leave it blank to choose the PoV manually each time. This works alongside [Default scene frontmatter](#settings) and [custom field defaults](#custom-field-templates) \u2014 StoryLine's own \`pov\` key wins on conflict.
+
+### Sort suggestions by frequency *(new in 1.10.51)*
+
+Enable **Settings \u2192 Scene Cards \u2192 Sort suggestions by frequency** to make the character and location autocomplete suggestions in the Scene Inspector appear in order of how often each one is already used across your scenes (most-used first, then alphabetically). Off by default (alphabetical only). Handy for large projects where your main character should sit at the top of the list instead of being buried in the middle.
+
+---
+
+## Custom Scene Fields
+
+Define your own metadata fields on every scene \u2014 Story Grid functions, John Truby aspects, beat-sheet labels, genre conventions, "Five Commandments" tags, anything your method needs. This avoids overloading the title or subtitle with structural information.
+
+### Creating a field
+
+Two ways:
+
+1. **Settings \u2192 Custom Scene Fields \u2192 Add Scene Field.**
+2. **Inspector \u2192 Custom Fields section \u2192 click the + button** (creates the field and immediately lets you fill in a value).
+
+You'll be prompted for:
+
+- **Label** \u2014 what shows in the Inspector and on cards (e.g. \`SG Function\`, \`JT Aspect\`, \`Obligatory Scene\`).
+- **Type** \u2014 \`text\`, \`textarea\`, \`dropdown\`, or \`multi-select\`.
+- **Options** \u2014 for dropdown / multi-select: the choices the user can pick (e.g. \`Inciting Incident, Turning Point, Crisis, Climax, Resolution\`).
+- **Placeholder / hint text** (optional).
+- **Top-level YAML key** *(optional, since 1.9.6)* \u2014 when set, the field's value is also written as a real top-level YAML key (in addition to \`universalFields:\`) so it appears in Obsidian's Properties panel, Bases, Dataview and the graph. Auto-suggested from the label; reserved StoryLine keys (\`type\`, \`pov\`, \`act\`, \`chapter\`, \`tags\`, \u2026) are blocked. Leave blank to keep the field inside \`universalFields:\` only. The global toggle lives at **Settings \u2192 Mirror custom fields to top-level YAML**.
+
+Fields can be edited or deleted anytime from either location (pencil / trash icons).
+
+### Where the values appear
+
+- **Inspector** \u2014 every scene gets a "Custom Fields" section listing all defined scene fields, with the appropriate input control (text box, textarea, dropdown, multi-select pills).
+- **Board \u2192 Group by** \u2014 \`dropdown\` and \`multi-select\` fields appear as grouping options in the Kanban board. Multi-select scenes appear in every matching column. Empty values land in \`(empty)\`.
+- **Filter panel** \u2014 \`dropdown\` and \`multi-select\` fields each get their own chip group; toggling chips filters scenes by value.
+- **Scene cards** \u2014 up to three populated dropdown / multi-select values appear as small badges below the card. Hovering any scene card shows a full summary of every populated custom field, regardless of type.
+
+### Where it's stored
+
+- **Values** live in the scene's frontmatter under \`universalFields:\`, keyed by template id. Safe to read or edit by hand.
+- **Templates** live in \`<project>/System/field-templates.json\` along with character custom fields, so they sync with the rest of the project.
+
+### Tips
+
+- Combine with a dedicated plotline tag (e.g. \`love-genre\`) to also get colour-coded visibility for genre conventions on the timeline / Kanban.
+- Keep dropdown options short \u2014 long values are ellipsised on the card badges (the full value is still visible in the hover tooltip and Inspector).
+- Multi-select is the right choice for fields where a single scene can play multiple structural roles (e.g. a scene that is both a *Turning Point* and an *Obligatory Scene*).
+
+---
+
+## Color Coding & Tag Colors
+
+StoryLine color-codes scene cards across all views. Choose a mode in **Settings \u2192 Color Coding**:
+
+| Mode | Behavior |
+|------|----------|
+| **Status** | Colors based on scene status (idea, draft, final, etc.) |
+| **POV** | Each POV character gets a unique color |
+| **Emotion** | Colors mapped to emotional tones |
+| **Act** | Each act gets a distinct color |
+| **Tag** | Cards colored by their first tag's assigned color |
+
+### Color Schemes
+
+StoryLine ships with **16 built-in color schemes** plus a fully custom option:
+
+| Group | Schemes |
+|-------|----------|
+| **Catppuccin** | Latte, Frapp\xE9, Macchiato, Mocha |
+| **Moods** | Spring, Morning, Summer, Dusk, Midnight, Autumn, Ocean, Forest, Sunset, Arctic, Vintage, Neon |
+| **Custom** | Define your own palette in settings |
+
+Each scheme provides 14 colors that are automatically assigned to tags. Select a scheme in **Settings \u2192 Color Coding** \u2014 schemes are displayed as compact cards grouped by family, with a color preview strip and a mood hint.
+
+### Per-Tag Color Overrides
+
+Override individual tag colors without changing the whole scheme:
+
+- **From the Plotlines view** \u2014 click the palette icon next to any plotline header, or right-click and choose "Change color" / "Reset color".
+- **From Settings** \u2014 in the Color Coding section, each tag appears as a compact chip with a color swatch. Click the swatch to pick a custom color; click the \xD7 to reset.
+
+Overrides persist across sessions and take priority over the active scheme.
+
+All color coding is **theme-aware** \u2014 colors automatically adapt to your current Obsidian theme (dark or light mode).
+
+---
+
+## Scene Colors
+
+Assign a custom background color to individual scene cards, independent of the color-coding system.
+
+- **Set color** \u2014 right-click any scene card in Board, Timeline, or Navigator view and choose **Set color**. A color picker opens where you can select any color.
+- **Background tint** \u2014 the color is applied as a subtle background wash (18% blend), so the card text remains readable. On hover, the tint intensifies slightly (26%).
+- **Independent from color-coding** \u2014 the scene color tints the card background, while the left-edge stripe continues to show the active color-coding mode (status, POV, emotion, etc.).
+- **Clear color** \u2014 right-click the card and choose **Clear color** to remove the custom background.
+- **Stored in frontmatter** \u2014 the color is saved as a hex value in the \`color\` field (e.g., \`color: "#FF6B6B"\`).
+
+---
+
+## Plotline HSL Sliders
+
+Fine-tune your plotline color palette without switching schemes. In **Settings \u2192 Plotline Color Scheme**, three sliders let you adjust the entire palette at once:
+
+| Slider | Range | Effect |
+|--------|-------|--------|
+| **Hue Shift** | \u2212180 \u2026 +180 | Rotates all palette colors around the color wheel |
+| **Saturation** | \u2212100 \u2026 +100 | Makes colors more vivid (positive) or muted (negative) |
+| **Lightness** | \u2212100 \u2026 +100 | Makes colors lighter (positive) or darker (negative) |
+
+Changes apply in real time with a live swatch preview. The adjustments stack on top of the active color scheme and per-tag overrides.
+
+---
+
+## Sticky Note Themes
+
+Corkboard sticky notes have their own independent color system. Choose a theme in **Settings \u2192 Sticky Note Colors**:
+
+| Theme | Description |
+|-------|-------------|
+| **Classic** | Warm yellows, pinks, greens, and blues |
+| **Pastel** | Soft, low-saturation tones |
+| **Earth** | Warm browns, olive, terracotta, and sage |
+| **Jewel** | Rich, saturated gemstone colors |
+| **Neon** | Bright, high-energy fluorescent tones |
+| **Mono** | Greyscale neutrals |
+
+Each theme provides 14 colors. Like plotline colors, sticky notes also have **HSL sliders** (hue shift, saturation, lightness) for fine-tuning and **per-note color overrides** \u2014 right-click a sticky note to assign a specific color.
+
+### Font Color
+
+By default, sticky-note text color is derived automatically by darkening the note's background. On similarly-toned backgrounds (e.g. pale yellow text on a pale yellow note) this can be hard to read. You can set an explicit font color in **Settings \u2192 Sticky Note Colors \u2192 Font Color**, with **two independent buckets** so a single global setting stays readable across both bright and dark notes:
+
+- **On light notes** \u2014 text color used on bright note backgrounds (defaults to black).
+- **On dark notes** \u2014 text color used on dark note backgrounds (defaults to white).
+
+The plugin uses the WCAG relative-luminance formula to decide which bucket applies to each note, so a bright yellow note and a dark violet note automatically get the right text color without any per-note configuration. Leave a bucket on "Auto" to keep the background-derived behavior for that brightness.
+
+Both buckets are also reachable from the corkboard note's right-click context menu:
+
+- **Font Color: Light Notes\u2026** \u2014 opens a color picker for the light-background bucket.
+- **Font Color: Dark Notes\u2026** \u2014 opens a color picker for the dark-background bucket.
+- **Font Color: Reset to Auto** \u2014 clears both buckets back to the default (only appears when a custom color is set).
+
+---
+
+## Per-Project Color Overrides
+
+By default, color scheme, HSL adjustments, and sticky note theme are global settings shared across all projects. You can optionally save them per project so each book has its own look.
+
+### Enabling
+
+1. Open **Settings \u2192 Plotline Color Scheme**.
+2. Toggle **Use project-specific colors** (visible only when a project is loaded).
+3. Any changes you make to the color scheme, HSL sliders, or sticky note theme will now be saved into the active project's \`System/plotlines.json\` file.
+
+### Behavior
+
+- **Toggle ON** \u2014 color settings are stored in the project and override the global defaults whenever that project is active.
+- **Toggle OFF** \u2014 removes per-project overrides and restores the global color settings.
+- **Switching projects** \u2014 when you open a project with per-project colors, those colors load automatically. When you open a project without them, the global defaults are restored.
+
+This is useful when you want a dark moody palette for a thriller and bright pastels for a romance, without manually switching schemes every time you change projects.
+
+---
+
+## Timeline Swimlanes
+
+The Timeline View supports a **Swimlane Mode** that organizes scenes into vertical columns:
+
+### Enabling Swimlanes
+
+1. Open the **Timeline View**.
+2. Click the **Swimlanes** toggle button in the toolbar.
+3. Choose a grouping from the **Group By** dropdown:
+
+| Group By | Behavior |
+|----------|----------|
+| **POV** | One swimlane column per POV character |
+| **Character** | One swimlane per character listed on a scene |
+| **Location** | One swimlane per location |
+| **Plotline** | One swimlane per plotline/tag |
+
+### How It Works
+
+- Scenes are placed in a **CSS grid** layout with swimlane columns. For multi-value groups like Character and Plotline, a scene appears in every lane it belongs to.
+- Each column has a **header** showing the group name and scene count.
+- Scenes without a value for the grouping field appear in an "Ungrouped" column.
+- Swimlanes combine with the reading/chronological order toggle \u2014 scenes are sorted within each column by the active order.
+
+This is especially useful for visualizing parallel storylines, tracking character arcs across locations, or analyzing plotline distribution.
+
+---
+
+## Timeline Modes
+
+For stories with non-linear narratives, each scene can declare a **timeline mode** that describes its temporal relationship to the main narrative. This prevents false plot-hole warnings and provides visual indicators throughout the UI.
+
+### Available Modes
+
+| Mode | YAML Value | Description |
+|------|-----------|-------------|
+| Linear | \`linear\` | Default \u2014 scene follows the normal timeline |
+| Flashback | \`flashback\` | Scene depicts past events |
+| Flash Forward | \`flash_forward\` | Scene depicts future events |
+| Parallel | \`parallel\` | Scene runs on a separate parallel timeline |
+| Frame | \`frame\` | Scene is part of a framing narrative |
+| Simultaneous | \`simultaneous\` | Scene happens at the same time as the previous |
+| Time Skip | \`timeskip\` | Scene jumps forward, skipping elapsed time |
+| Dream | \`dream\` | Dream sequence, vision, or hallucination |
+| Mythic | \`mythic\` | Myth, legend, story-within-a-story |
+| Circular | \`circular\` | Scene echoes or returns to an earlier moment |
+
+### Setting Timeline Mode
+
+1. **Inspector** \u2014 open the scene's **Time & Order** modal and select a mode from the dropdown.
+2. **YAML frontmatter** \u2014 set \`timeline_mode: flashback\` (or any value above) directly in the file.
+3. **Timeline strand** \u2014 for \`parallel\` and \`frame\` modes, set \`timeline_strand\` to group related scenes (e.g., \`timeline_strand: "1985"\`).
+
+### How Modes Affect Validation
+
+- **Date order checks** are skipped for flashback, flash_forward, dream, mythic, and circular scenes.
+- **Gap checks** are skipped for timeskip, dream, and mythic scenes.
+- **Intensity drop warnings** are skipped when dream or mythic scenes are involved.
+- **Emotion streak detection** resets at dream/mythic boundaries.
+- **Parallel/frame strands** are validated independently \u2014 each strand group must have internally consistent dates.
+- **Simultaneous scenes** are allowed to share the same date as adjacent scenes.
+
+### Visual Indicators
+
+- **Color-coded badges** appear on scene cards (Board View), timeline entries, swimlane cards, and the Inspector.
+- Each mode has a distinct color (e.g., flashback = purple, parallel = blue, dream = violet, mythic = gold).
+- Strand labels are shown alongside mode badges for parallel/frame scenes.
+- All 10 modes are included in exports (Markdown, JSON, CSV, PDF).
+
+### Narrative Techniques Covered
+
+These 10 modes cover all common non-linear structures:
+
+| Technique | Recommended Mode |
+|-----------|------------------|
+| Flashback / analepsis | \`flashback\` |
+| Flash-forward / prolepsis | \`flash_forward\` |
+| Parallel timelines | \`parallel\` + \`timeline_strand\` |
+| Frame story / nested narrative | \`frame\` + \`timeline_strand\` |
+| Simultaneous action | \`simultaneous\` |
+| Time skip / ellipsis | \`timeskip\` |
+| Dream / vision / hallucination | \`dream\` |
+| Myth / legend / story-within-story | \`mythic\` |
+| Circular narrative | \`circular\` |
+| In medias res | \`flashback\` for backstory scenes |
+| Retrospective narration | \`frame\` for narrator frame |
+| Epistolary non-linearity | \`parallel\` with letter/diary strands |
+| Subjective time distortion | \`dream\` |
+
+---
+
+## Pacing Analysis
+
+The **Stats View** includes a Pacing Analysis panel with two visualizations:
+
+### Average Scene Length by Act
+- A **bar chart** showing the average word count of scenes in each act.
+- Helps identify acts that may be too sparse or too dense.
+- Acts use their custom beat labels if a beat sheet template has been applied.
+
+### Word Count Distribution
+- A **histogram** showing how scene word counts are distributed across your project.
+- Bin ranges (e.g., 0\u2013500, 500\u20131000, \u2026) are automatically calculated.
+- Helps identify if your scenes are consistently sized or if you have outliers.
+
+---
+
+## Writing Sprint
+
+StoryLine includes a built-in writing sprint timer in the **Stats View**:
+
+1. Set your desired sprint duration (click the time to edit).
+2. Click **Start** to begin the countdown.
+3. Write in your scene files \u2014 the timer shows remaining time, live word count, and words-per-minute.
+4. Click **Stop** to end the sprint early, or let the timer run out. Your sprint is recorded with word count, duration, and WPM.
+5. Click **Reset** to cancel without recording.
+
+Completed sprints are saved in a persistent log. The Stats panel shows your sprint history with total sprints, total words, and average WPM.
+
+---
+
+## Relationship Map
+
+The **Characters View** includes a visual relationship map:
+
+- Displays characters as nodes connected by relationship lines.
+ - Relations can be **Two-way** (the default) or one-way. Uncheck **Two-way relationship** when only the source character's relation should be stored.
+ - One-way relations are shown with arrows. Two-way relations are shown as undirected connections.
+- **Six relationship types**, each with a distinct color and line style:
+
+| Type | Color | Line Style |
+|------|-------|------------|
+| Ally | Green | Solid |
+| Enemy | Red | Dashed |
+| Romantic | Pink | Dotted |
+| Family | Orange | Solid |
+| Mentor | Purple | Dash-dot |
+| Other | Grey | Dashed |
+
+- Click a character node to navigate to their profile.
+- **Toggle relationship types** \u2014 click any item in the colour-coded legend at the top of the map to show or hide that relationship type. Hidden types are dimmed in the legend and their edges are removed from the graph; click again to bring them back. Useful for focusing on one kind of connection (e.g. only family ties) at a time.
+- **Zoom** \u2014 scroll the mouse wheel to zoom in/out (cursor-centered).
+- **Pan** \u2014 click and drag the background to pan the view.
+- Helps visualize complex webs of character relationships at a glance.
+
+### Character Relationship Fields
+
+Relationships are populated from the character profile editor:
+
+The Relationships section in a character profile uses structured relation rows. Choose a relation type, select a target character, and use the **Two-way relationship** checkbox when the reverse relation should also be created. Existing relations without a \`twoWay\` value remain two-way for compatibility.
+
+The **Relationship history** section records past or temporary relationship periods without changing the current relationship list. Use **+ add period** for each separate period, including on-and-off relationships between the same characters. Each period has its own role, target, two-way setting, and start/end range.
+
+- **Scene range** uses ordered **From scene** and **To scene** dropdowns. Selected scenes are saved as Obsidian wikilinks; **Custom scene...** is available for scenes that do not exist yet.
+- **Date/time range** shows start and end date/time inputs.
+- An empty end means the period is still active or has no known end.
+- History entries are informational and do not modify current relations or trigger reciprocal synchronization.
+
+Custom Character Roles are available from the Role dropdown. Choose **Custom role...** to enter one or more roles not included in the built-in list.
+
+| Field | Description | Stored As |
+|-------|-------------|-----------|
+| **Allies & Friends** | Trusted companions | \`allies: ["Name", ...]\` |
+| **Enemies & Rivals** | Opponents and conflicts | \`enemies: ["Name", ...]\` |
+| **Romantic** | Love interests, partners, exes | \`romantic: ["Name", ...]\` |
+| **Mentors** | Teachers, guides, role models | \`mentors: ["Name", ...]\` |
+| **Other Connections** | Any other notable relationships | \`otherRelations: ["Name", ...]\` |
+| **Family** | Parsed from the Family free-text field | \`family: "free text"\` |
+
+---
+
+## Story Graph
+
+The **Characters View** includes a **Story Graph** (third tab alongside Overview and Relationship Map).
+
+The Story Graph is an interactive force-directed SVG visualization showing how scenes, characters, locations, and props are interconnected:
+
+### Node Types
+
+| Node | Shape | Color | Source |
+|------|-------|-------|--------|
+| Scene | Rectangle | Purple | Scenes with detected \`[[wikilinks]]\` |
+| Character | Circle | Blue | Characters referenced via wikilinks |
+| Location | Diamond | Green | Locations referenced via wikilinks or character fields |
+| Prop | Hexagon | Pink | \`#hashtags\` in character text fields |
+| Other | Small circle | Orange | Unclassified wikilink targets |
+
+### Edge Types
+
+Edges represent three categories of connections:
+
+1. **Scene \u2194 Entity** \u2014 a scene references a character, location, or entity via \`[[wikilink]]\` in its body text.
+2. **Character \u2194 Character** \u2014 relationship edges (ally, enemy, romantic, family, mentor, other) from character profiles.
+3. **Character \u2192 Prop** \u2014 \`#hashtags\` found in character text fields (appearance, props, habits, etc.).
+4. **Character \u2192 Location** \u2014 from the \`locations\` field or \`#tags\` in the residency field.
+
+### Filter Toggles
+
+The toolbar provides entity-type filter buttons:
+
+- **Characters** \u2014 show/hide character nodes
+- **Locations** \u2014 show/hide location nodes
+- **Other** \u2014 show/hide unclassified nodes
+- **Props** \u2014 show/hide prop hexagons
+- **Relationships** \u2014 show/hide character-to-character relationship edges
+
+### Interaction
+
+- **Drag nodes** \u2014 click and drag any node to reposition it.
+- **Zoom** \u2014 scroll the mouse wheel to zoom in/out (cursor-centered).
+- **Pan** \u2014 click and drag the background to pan the view.
+- **Click a scene node** \u2014 fires the scene select callback.
+- **Legend** \u2014 a color legend shows all node types and relationship edge colors.
+
+> **Note on layout stability *(1.10.51)*:** The Story Graph now uses a cooling schedule (alpha decay) plus collision detection and velocity capping, so it settles smoothly instead of jittering on graphs with many connections. If you have a very large cast, the graph may still take a moment to settle \u2014 drag a few hub nodes to nudge the layout.
+
+### How Links Are Detected
+
+The Story Graph uses the **Link Scanner** to find connections. See [Link Scanner & Detected Links](#link-scanner--detected-links).
+
+---
+
+## Link Scanner & Detected Links
+
+StoryLine includes a **Link Scanner** that automatically extracts \`[[wikilinks]]\` from your scene body text and classifies them:
+
+### How It Works
+
+1. The scanner extracts all \`[[wikilinks]]\` from each scene's Markdown body (below the frontmatter).
+2. Each link is classified against your project's characters, locations, and codex entries:
+   - If the link matches a character name or nickname \u2192 **character**
+   - If the link matches a location name or nickname \u2192 **location**
+   - If the link matches a codex entry name or nickname \u2192 **codex** (with its category)
+   - Otherwise \u2192 **other** (unclassified)
+
+### Where Links Appear
+
+- **Inspector Panel** \u2014 a "Detected Links" section shows all wikilinks found in the selected scene, displayed as typed pills (character / location / codex / other).
+- **Story Graph** \u2014 detected links drive the scene-to-entity edges in the graph visualization.
+- **Referenced By panel** \u2014 cross-entity references are shown on every character, location, and codex detail page (see [Cross-Entity References](#cross-entity-references)).
+
+### Usage Tips
+
+- Write \`[[Character Name]]\`, \`[[Location Name]]\`, or \`[[Codex Entry]]\` naturally in your scene prose or in any entity text field.
+- The scanner runs automatically \u2014 no manual tagging required.
+- Links that don't match any known entity appear as "other" \u2014 you can override their type via the context menu (see [Tag Type Overrides](#tag-type-overrides)).
+
+---
+
+## Cross-Entity References
+
+StoryLine now tracks **cross-entity references** across your entire project. When you mention a character in a location description, or reference a location in a codex entry, StoryLine detects the connection and displays it in a **"Referenced By"** panel on the entity's side panel.
+
+### How It Works
+
+1. Write \`[[Character Name]]\`, \`[[Location Name]]\`, or \`[[Codex Entry]]\` in any text field \u2014 scene prose, character backstory, location descriptions, codex entry fields, etc.
+2. Use \`#tags\` that match entity names (e.g., \`#MagicSword\` will reference a codex entry named "MagicSword").
+3. Plain-text name mentions (without brackets or #) are also detected automatically.
+4. StoryLine scans all entities and scenes and builds a reverse reference index.
+5. Open any character, location, or codex detail page \u2014 the side panel shows a **"Referenced By"** section listing every entity and scene that mentions it.
+
+### What Gets Scanned
+
+| Source | Fields scanned |
+|---|---|
+| **Characters** | Backstory, appearance, personality, motivations, strengths, flaws, fears, belief, misbelief, notes |
+| **Locations** | Description, atmosphere, significance, inhabitants, connected locations, map notes, notes |
+| **Worlds** | Description, geography, culture, politics, magic/technology, beliefs, economy, history, notes |
+| **Codex entries** | All text fields |
+| **Scenes** | Full body text (wikilinks and plain-text matches) **plus** Codex entries tagged via the Scene Inspector (\`codexLinks\` frontmatter) |
+
+### Reference Display
+
+References are grouped by type:
+- **Character** \u2014 other characters that mention this entity
+- **Location** \u2014 locations or worlds that mention it
+- **Codex category name** (e.g., "Items", "Creatures") \u2014 codex entries that mention it
+- **Scene** \u2014 scenes that contain a wikilink or name match
+
+Each reference is a clickable link that opens the source file.
+
+### Tips
+
+- Use \`[[wikilinks]]\` or \`#tags\` for guaranteed detection \u2014 plain-text matching depends on exact name matches.
+- \`#tags\` are matched case-insensitively: \`#magicsword\` will match a codex entry named "MagicSword".
+- The scanner updates every time you open an entity detail page, so new connections appear immediately.
+- Self-references are excluded (a character's own fields won't list itself).
+
+---
+
+## Codex Linking
+
+Link Codex entries directly to scenes, making custom categories (Items, Factions, Creatures, etc.) first-class metadata on your scene cards \u2014 just like Characters and Locations.
+
+### Enabling Categories for the Inspector
+
+1. Open the **Codex** view and click **Manage Categories** (gear icon in the toolbar).
+2. Each category row has an **Inspector** checkbox on the right side.
+3. Check it to make that category appear in the Scene Inspector sidebar.
+4. Click **Save**.
+
+Enabled categories appear as tag-pill input sections in the Inspector, right below the Location field. Each section shows the category icon and label, with autocomplete suggestions pulled from your Codex entries for that category.
+
+### Linking Entries to Scenes
+
+- **From the Inspector** \u2014 type an entry name in the tag-pill input for any enabled Codex category. Autocomplete suggests existing entries. Press Enter to add.
+- **From Detected Links** \u2014 right-click any detected link pill in the "Detected in text" section and choose a Codex category from the context menu. The entry is added to the scene's \`codexLinks\` and removed from the detected links list.
+
+### Where Codex Links Appear
+
+- **Scene Inspector** \u2014 tag-pill inputs for each enabled category.
+- **Plot Grid** \u2014 the "Sync from Scenes" modal includes enabled Codex categories in the "Columns from" dropdown. Sync your grid against Items, Factions, or any custom category. Click a Codex column header to open the entry file.
+- **Frontmatter** \u2014 stored as \`codexLinks\` in scene YAML:
+  \`\`\`yaml
+  codexLinks:
+    items:
+      - Magic Sword
+      - Shield
+    factions:
+      - Rebels
+  \`\`\`
+
+---
+
+## Linking & Matching
+
+The **Linking & Matching** section appears at the bottom of every Character, Location, and Codex entry editor. It controls how the [Link Scanner](#link-scanner--detected-links) matches plain-text mentions of that entity in your scene prose and turns them into detected links.
+
+### Fields
+
+- **Type** *(entryType)* \u2014 an optional sub-type for the entry (e.g., a "Sword" type for an Items entry, or a "Potion" type). Free-text; used for your own organisation.
+- **Aliases** *(aliases)* \u2014 alternative names that should also link to this entry. Comma-separated. For example, a character "Elizabeth Bennet" might have aliases \`Lizzy, Miss Bennet\`. The Link Scanner matches any alias in addition to the primary name.
+- **Case-sensitive matching** *(caseSensitive)* \u2014 when on, the name and aliases only match text with the exact same capitalisation. Off by default (case-insensitive), which is usually what you want for prose. Turn it on for entries whose name is a common word (e.g., a location called "Hope") to avoid matching every occurrence of "hope" in your writing.
+- **Exclude terms** *(excludeTerms)* \u2014 phrases that suppress a match when they appear adjacent to (or overlapping) a potential match. For example, if "The Tower" is a location but you also write "the tower of paperwork", adding \`paperwork\` as an exclude term prevents the latter from being detected as a link. Exclude terms are **contextual**: they only suppress the specific match they overlap, not every mention in the scene.
+
+### How it works
+
+When the Link Scanner runs (on load and after every edit), it scans each scene's body text for occurrences of every entity's name + aliases, respecting the case-sensitivity and exclude-term rules. Matches appear as pills in the **Detected in text** section of the Scene Inspector. You can then promote a detected link to a Codex category, a character, or a location via the right-click menu.
+
+### Where the data lives
+
+The fields are stored in each entity's frontmatter:
+
+\`\`\`yaml
+# In a Codex entry
+aliases: [Lizzy, Miss Bennet]
+caseSensitive: false
+excludeTerms: [paperwork]
+entryType: Sword
+\`\`\`
+
+Characters and Locations use the same fields (Issue #228 extended this section from the Codex to Characters and Locations).
+
+---
+
+## Hide / Show Built-in Fields
+
+Every character, location, and codex detail editor comes with a set of built-in fields (e.g., Fears, Belief, Atmosphere, Significance). If you don't use all of them, you can **hide** the ones you don't need to keep your editor clean.
+
+### How to Hide a Field
+
+1. Open any character, location, or codex detail editor.
+2. **Hover** over a field label \u2014 a small **eye-off icon** appears to the right of the label.
+3. **Click the icon** \u2014 the field disappears from the form.
+
+### How to Show Hidden Fields
+
+1. At the bottom of each category section, a link appears: **"Show N hidden fields"**.
+2. **Click the link** \u2014 the hidden fields expand in a dimmed container with a left border.
+3. You can view and edit data in hidden fields while they're expanded.
+4. The link text changes to **"Hide N hidden fields"** \u2014 click again to collapse.
+
+### How to Unhide a Field
+
+1. Expand the hidden fields using the "Show N hidden fields" link.
+2. **Hover** over the hidden field's label \u2014 an **eye icon** appears.
+3. **Click the eye icon** \u2014 the field is restored to its normal position permanently.
+
+### Details
+
+- The **Name** field can never be hidden.
+- Hidden fields are stored per entity type: \`character\`, \`location\`, or the codex category ID (e.g., \`items\`, \`creatures\`). Hiding "Fears" in Characters does not affect any other view.
+- **Data is never deleted.** Hiding a field only removes it from the UI. The value stays in your frontmatter unchanged and reappears when you unhide the field.
+- Hidden field preferences are saved per project in \`System/custom-sections.json\` and persist across sessions.
+
+#### Hiding entire categories
+
+An eye-off button on each section header lets you hide a whole category in one click, instead of hiding each field individually. Hidden categories are collected into a collapsible **"Show N hidden categories"** toggle at the bottom of the form \u2014 when collapsed, no trace of the hidden categories is visible in the normal flow. Click the toggle to expand, then click the eye button on a hidden category's header to un-hide it.
+
+- Hidden categories are stored per entity type alongside hidden fields.
+- Hiding a category does not delete its data \u2014 values stay in frontmatter and reappear when un-hidden.
+- Applies to Character, Codex, and Location views.
+
+---
+
+## Reordering Fields & Sections
+
+You can change the order of fields inside a section, and the order of sections themselves, in the Character, Codex, and Location detail editors. This lets you put the fields you use most towards the top \u2014 for example, moving the **Hierarchy** section under Locations up so you don't have to scroll past everything else to set a parent.
+
+### Reordering fields within a section
+
+1. Open any character, location, or codex detail editor.
+2. **Hover** over a field label \u2014 small **up/down chevron buttons** (\u2303/\u2304) appear to the right of the label.
+3. Click a chevron to move that field up or down within its section.
+
+Both built-in fields and your [custom (universal) fields](#custom-field-templates) can be reordered, and they interleave freely \u2014 a custom field can sit between two built-in fields.
+
+### Reordering sections
+
+Custom sections you've added (via **+ Add Section** at the bottom of an editor) can be moved between slots:
+
+1. Hover the section header \u2014 up/down chevron buttons appear.
+2. Click to move the whole section earlier or later in the form.
+
+Built-in sections (like Hierarchy under Locations) are fixed in position; if a built-in section sits too low for your workflow, you can hide the sections above it that you don't need (see [Hide / Show Built-in Fields](#hide--show-built-in-fields)) to bring it closer to the top.
+
+### Where the order is saved
+
+Field and section order is saved per project in \`System/field-templates.json\` and persists across sessions. Each category (character, each codex category, location) keeps its own order.
+
+> **Note:** The scene Inspector (Scene Details sidebar) uses a fixed built-in field order. Custom scene fields appear in a "Custom Fields" block after the built-ins. Reordering built-in scene fields is not yet supported.
+
+---
+
+## Tag Type Overrides
+
+When StoryLine auto-classifies \`#hashtags\` or detected \`[[wikilinks]]\`, it may sometimes get the type wrong (e.g., classifying a prop as a location). You can manually override any tag's type:
+
+### How to Override
+
+1. **From the Inspector** \u2014 right-click any detected link pill in the "Detected Links" section.
+2. **From the Characters View** \u2014 right-click any tag pill shown under a character's profile.
+3. A context menu appears with options:
+   - **Prop** \u2014 reclassify as a prop
+   - **Location** \u2014 reclassify as a location
+   - **Character** \u2014 reclassify as a character
+   - **Other** \u2014 reclassify as unclassified
+   - **Codex categories** \u2014 any Codex category enabled for the Inspector appears as an option. Selecting one adds the entity to the scene\u2019s \`codexLinks\` for that category and removes it from the detected links.
+   - **Reset** \u2014 remove the override and revert to auto-classification
+
+### Details
+
+- Overrides are stored in plugin settings and persist across sessions.
+- Overridden tags show a visual indicator (e.g., different styling) so you know they've been manually classified.
+- Overrides affect both the Inspector display and the Story Graph visualization.
+- \`#hashtags\` in **custom fields** are also scanned and can be overridden.
+
+### Character Locations Field
+
+The character profile includes a **Locations** field (right after Residency) for listing story locations the character appears at:
+
+- **Residency** = where they live (static, biographical)
+- **Locations** = places they go in the narrative (dynamic, plot-driven)
+
+Values in the Locations field create character \u2192 location edges in the Story Graph. You can also use \`#hashtags\` inside location entries for tag-based connections.
+
+---
+
+## Export
+
+Export your project in six formats. Access via the **Export** button in the view switcher toolbar (download icon) or \`Ctrl+Shift+E\`.
+
+### Scope Options
+
+| Scope | Description |
+|-------|-------------|
+| **Outline** | Metadata table, summary statistics, character list, location/world list, plotline list, notes |
+| **Manuscript** | Full scene content assembled in act \u2192 chapter \u2192 sequence order |
+
+### Range Exports *(new in 1.10.58)*
+
+To export only part of a manuscript, choose **Scenes** or **Chapters** from the **Content** dropdown:
+
+- **Scenes** \u2014 the input is labelled **Scenes to export** and matches scene \`sequence\` numbers.
+- **Chapters** \u2014 the input is labelled **Chapters to export** and matches numeric \`chapter\` values.
+
+Enter single values and inclusive ranges separated by commas, for example:
+
+\`\`\`text
+1-5, 8, 9, 11, 13-18
+\`\`\`
+
+The selected scenes are exported in the normal act \u2192 chapter \u2192 sequence order. Range exports are available in Markdown, Word, PDF, HTML, CSV, and JSON formats.
+
+### Format Options
+
+| Format | Output |
+|--------|--------|
+| **Markdown (.md)** | Saved to \`ProjectName/Exports/\` folder |
+| **JSON (.json)** | Structured data, saved to \`ProjectName/Exports/\` folder |
+| **CSV (.csv)** | Spreadsheet-ready data, saved to \`ProjectName/Exports/\` folder |
+| **HTML (.html)** | Standalone web page with embedded styles. Works on desktop and mobile |
+| **PDF (.pdf)** | Rendered via the built-in print engine. Desktop only |
+| **DOCX (.docx)** | Word document ready for editors, agents, or print. Works on desktop and mobile |
+
+### Manuscript Options *(new in 1.9.9)*
+
+The export dialog also includes **Include inactive scenes** *(default: off)*. Parked scenes marked inactive are normally hidden from exports; switch this on when you want to include them in a review copy or outline export.
+
+When **Manuscript** is selected the dialog reveals three more toggles:
+
+- **Include scene titles** *(default: on)* \u2014 turn off to omit the \`## Scene Title\` headings between scenes. Produces a clean continuous prose document, ideal for publisher/agent submissions where working titles shouldn't be visible.
+- **Number scenes (Scene 1, Scene 2\u2026)** *(default: off)* \u2014 replaces titles with simple running numbered headings. Mutually exclusive with *Include scene titles*.
+- **Include corkboard notes** *(default: off)* \u2014 visual sticky notes from the Corkboard are normally hidden from every export. Switch this on to include them, e.g. when sharing planning notes with a co-writer.
+
+### Exported Fields
+
+**Outline exports** include all scene metadata:
+
+| Field | MD | JSON | CSV | HTML | PDF | DOCX |
+|-------|:--:|:----:|:---:|:----:|:---:|:----:|
+| Sequence | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| Chronological Order | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| Title | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| Act / Chapter | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| Status | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| POV | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| Location | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| Characters | \u2014 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |
+| Emotion | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| Intensity | \u2713 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |
+| Word Count | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| Target Word Count | \u2014 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |
+| Conflict | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 | \u2713 |
+| Tags | \u2713 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |
+| Story Date / Time | \u2014 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |
+| Notes | \u2713 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |
+| Setup / Payoff | \u2014 | \u2713 | \u2713 | \u2014 | \u2014 | \u2014 |
+
+**Manuscript exports** include: title, act, chapter, sequence, chronological order, and full scene body.
+
+---
+
+## Import (Scrivener)
+
+Import an existing Scrivener project (.scriv) as a new StoryLine project. Desktop only.
+
+### How to Import
+
+1. Open **Settings \u2192 Import** and click **Import .scriv**, or run **Import Scrivener Project** from the command palette.
+2. Select your \`.scriv\` folder in the file picker.
+3. If any top-level Scrivener folders don\u2019t match a known category (Characters, Locations, Research, Notes), a **classification modal** appears asking how each should be imported:
+   - **Codex category** \u2014 creates a new custom Codex category (e.g. \u201CMagic\u201D, \u201CFactions\u201D)
+   - **Notes** / **Research** / **Scenes** \u2014 routes items to the corresponding StoryLine folder
+   - **Skip** \u2014 excludes the folder from import
+4. A new StoryLine project is created with all converted files.
+
+### What Gets Imported
+
+| Scrivener | StoryLine | Details |
+|---|---|---|
+| Draft / Manuscript folder | Scenes | RTF converted to Markdown. Part/chapter folder names written to \`part\` and \`chapter\` frontmatter. |
+| Character Sketches | Characters | Synopsis \u2192 tagline, keywords \u2192 tags, custom metadata \u2192 custom fields |
+| Places / Locations | Locations | Synopsis \u2192 description, keywords \u2192 tags, custom metadata \u2192 custom fields |
+| Research folder | Research | Imported as research notes |
+| Notes / Front Matter / Back Matter | Notes | Plain markdown notes |
+| Unknown folders | User\u2019s choice | Classification modal (see above) |
+| Images & PDFs | Binary files | Copied to vault with a companion .md that embeds them |
+| Labels | Tags | Scrivener label \u2192 tag |
+| Status | Status | Mapped to StoryLine\u2019s 6-stage pipeline (idea \u2192 outlined \u2192 draft \u2192 written \u2192 revised \u2192 final) |
+| Custom metadata | Custom fields | Field definitions are read from the project; values written to \`custom:\` in frontmatter |
+| Include in Compile | \`compile\` field | Items marked as non-compiled get \`compile: false\` |
+
+### Supported Formats
+
+- **Scrivener 3** (Mac & Windows) \u2014 fully supported
+- **Scrivener 2** (Mac) / **1.9** (Windows) \u2014 supported (file layout: \`Files/Docs/\`)
+- **Scrivener 1.x** (Mac, \`binder.scrivproj\` format) \u2014 **not supported**. Open the project in Scrivener 3 to convert it first.
+
+### Tips
+
+- The importer reads RTF files and converts formatting (bold, italic, paragraphs, Unicode). Complex RTF features like tables or embedded images within RTF are not converted.
+- A summary notice shows how many scenes, characters, locations, research notes, files, and warnings were produced.
+- Warnings are listed for any items that had no content file (e.g. from sync corruption or missing data).
+
+---
+
+## Custom Field Templates
+
+Define your own reusable fields for characters, locations, and scenes. If the built-in fields don't cover everything you need, custom field templates let you add any fields you want \u2014 and they'll appear automatically in every character, location, or scene editor.
+
+### How to Use
+
+1. Open **Settings \u2192 Field Templates**.
+2. Click **Add Field** and give it a name (e.g., "Blood Type", "Languages Spoken", "Theme Song").
+3. Choose whether the field applies to **Characters**, **Locations**, **Scenes**, or a combination.
+4. The new field appears in every matching editor under the **Custom Fields** section.
+5. Fill in values as needed \u2014 empty fields are hidden from exports.
+
+### Field Types
+
+| Type | Description |
+|------|-------------|
+| **Text** | Single-line text input. |
+| **Textarea** | Multi-line text block with auto-grow. |
+| **Dropdown** | Single-select dropdown with predefined options. |
+| **Multi-select (tags)** | Pick multiple values displayed as removable pills. |
+
+### Multi-select Fields
+
+The multi-select type is ideal for traits, themes, categories, or any field where multiple items apply:
+
+- **Manual options** \u2014 Define a list of options in the field template (same as dropdown).
+- **Folder source** \u2014 Optionally enter a vault folder path (e.g., \`World/Traits\`). All \`.md\` note names in that folder become selectable options, merged with any manual options.
+- **Free entry** \u2014 Type a custom value and press Enter to add it even if it's not in the predefined list.
+- **Storage** \u2014 Values are saved as a YAML list in frontmatter (\`universalFields\`), making them queryable from Obsidian Bases and Dataview.
+
+Custom field data is stored in the entity's frontmatter under the \`universalFields\` key. For scenes, custom fields appear in the Inspector between the intensity slider and setup/payoff sections.
+
+Custom sections on Characters, Locations, and Codex entries use the same basic field types. Fields inside those user-created sections can be edited in place, reordered with the chevrons, moved to another custom section with the move icon, and configured with a folder source for dropdown or multi-select choices.
+
+> **Per-project:** Custom sections, codex category definitions, enabled codex categories, and custom location types are stored per project in \`System/custom-sections.json\` \u2014 they do not carry over between unrelated writing projects. Universal field templates (the ones added via the **+** button on a section header) are also per-project, stored in \`System/field-templates.json\`.
+
+---
+
+## Image Galleries
+
+Characters and locations support image galleries for storing reference art, concept images, maps, mood boards, or any visual material.
+
+### Adding Images
+
+1. Open a character or location detail editor.
+2. Scroll to the **Gallery** section (below the portrait).
+3. Click **Add Image** to import from your computer or choose an existing vault image.
+4. Add an optional **caption** to describe each image.
+5. Up to **10 images** per character or location.
+
+### Browsing
+
+- Use the **carousel** arrows to browse through images in the detail panel.
+- Click any image to open it in a **floating lightbox**.
+
+### Lightbox
+
+- The lightbox is a floating window you can **drag** around and **resize**.
+- **Zoom** in and out with the scroll wheel \u2014 zoom level is remembered per image.
+- Navigate between gallery images using the arrow buttons.
+- Close with the \xD7 button or by clicking outside.
+
+Images are saved into the \`<Project>/Images/\` folder, with automatic deduplication.
+
+---
+
+## Additional Source Folders
+
+By default, StoryLine only scans files inside your project's folder structure (Scenes, Codex/Characters, Codex/Locations, etc.). The **Additional Source Folders** feature lets you point StoryLine at any other folder **inside your vault** so it can pick up entities stored elsewhere \u2014 for example, a \`Shared Universe/Characters\` folder that sits outside a specific project but should still appear in the Codex.
+
+> **Folders must be inside your Obsidian vault.** Obsidian's plugin API is sandboxed to the vault: it can only read files that live inside the vault folder. A folder on your desktop or in \`C:\\Users\\\u2026\\Documents\` (outside the vault) cannot be scanned. If you want to use notes from outside the vault, move or copy them into the vault first.
+
+### How It Works
+
+1. Open **Settings \u2192 Advanced**.
+2. Expand the **Additional Source Folders (Experimental)** section.
+3. Type or browse for a vault folder and click **Add**.
+4. StoryLine recursively scans the folder and every \`.md\` file inside. Each file is automatically routed to the correct manager based on its frontmatter \`type:\` field:
+
+| \`type:\` value | Routed to |
+|---|---|
+| \`scene\` | Scene Manager |
+| \`character\` | Character Manager |
+| \`location\` | Location Manager |
+| \`world\` | Location Manager (as a world) |
+| Any codex category id | Codex Manager |
+
+5. Entities from additional folders appear alongside your project's own entities in all views.
+
+### Important Notes
+
+- \u26A0 **Experimental** \u2014 back up your files before linking external folders. Files in linked folders may be modified when you edit entities in StoryLine views.
+- **Folders must be inside the vault** \u2014 Obsidian cannot access files outside the vault. If you enter an absolute OS path (e.g. \`C:\\Users\\\u2026\\MyFolder\` on Windows or \`/Users/\u2026/MyFolder\` on macOS), StoryLine automatically converts it to a vault-relative path on save. If the path doesn't resolve to a folder inside the vault, the scan is silently skipped.
+- Works with **any folder structure** \u2014 files don't need to be organized by type. StoryLine reads the \`type:\` field in each file's frontmatter to determine what it is.
+- Folder paths are stored as **vault-relative** (e.g., \`Shared Universe/Characters\` or \`Book 2/Scenes\`). Leading/trailing slashes and Windows backslashes are normalized automatically.
+- The folder browser provides **autocomplete** \u2014 start typing and it suggests matching vault folders.
+- Adding or removing a folder triggers an **immediate re-scan** and view refresh, so newly linked entities appear right away (no project switch or reload needed).
+- Remove a folder by clicking the \xD7 button next to it in the settings.
+- Additional source folders are scanned after the main project folders, so project files take priority when there are duplicates.
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| \`Ctrl+Shift+1\` | Switch to Board view |
+| \`Ctrl+Shift+2\` | Switch to Plotgrid view |
+| \`Ctrl+Shift+3\` | Switch to Timeline view |
+| \`Ctrl+Shift+4\` | Switch to Plotlines view |
+| \`Ctrl+Shift+5\` | Switch to Characters view |
+| \`Ctrl+Shift+6\` | Switch to Stats view |
+| \`Ctrl+Shift+7\` | Switch to Locations view |
+| \`Ctrl+Shift+N\` | Quick-add a new scene |
+| \`Ctrl+Shift+E\` | Export project |
+| \`Ctrl+Z\` | Undo last scene change |
+| \`Ctrl+Shift+Z\` | Redo last scene change |
+
+All shortcuts can be customized in Obsidian's **Settings \u2192 Hotkeys**.
+
+---
+
+## Settings
+
+Open **Settings \u2192 StoryLine** to configure:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| StoryLine Root | Root folder for all projects | \`StoryLine\` |
+| Default Status | Status for new scenes | \`idea\` |
+| Auto-generate Sequence | Auto-number new scenes | On |
+| Default Target Word Count | Word count goal per scene | \`800\` |
+| Daily Word Goal | Daily writing target (rings + sparkline) | \`1000\` |
+| Weekly Word Goal | Weekly writing target (Mon \u2192 today) | \`7000\` |
+| Monthly Word Goal | Monthly writing target (day 1 \u2192 today) | \`30000\` |
+| Project Word Goal | Word count goal for the whole project | \`80000\` |
+| Custom Location Types | User-defined types (Planet, Star System, Galaxy, \u2026) for the Location Type dropdown | \u2014 |
+| Default View | Which view opens first | \`Board\` |
+| Color Coding | Card color mode (status / POV / emotion / act / tag) | \`status\` |
+| Color Scheme | Choose from 16 palettes (Catppuccin + Moods) or custom | \`mocha\` |
+| Tag Color Overrides | Per-tag color overrides shown as compact chips | \u2014 |
+| Show Word Counts | Display word counts on cards | On |
+| Compact Card View | Smaller cards with less detail | Off |
+| Formatting Toolbar | Show/hide the formatting toolbar in scene editors and Manuscript view | On |
+| Plot Hole Detection | Enable the Validator engine | On |
+| Scene Templates | Custom scene templates for quick scene creation | \u2014 |
+| Additional Source Folders | Extra vault folders to scan for entities (experimental) | None |
+
+---
+
+## Project Management
+
+StoryLine supports **multiple projects** in the same vault.
+
+### Creating a Project
+1. Command palette \u2192 **Create New StoryLine Project**.
+2. Enter a project title.
+3. StoryLine creates the folder structure automatically.
+
+### Switching Projects
+1. Command palette \u2192 **Open/Switch StoryLine Project**.
+2. Select the project from the dropdown.
+
+### Forking a Project
+Create a copy of an existing project (useful for alternate drafts or backups):
+1. Command palette \u2192 **Fork Current StoryLine Project**.
+2. Enter a new title. All scenes are duplicated.
+
+### Deleting a Project
+Permanently delete the active project and everything inside its folder (scenes, codex, notes, research, and project settings):
+1. Switch to the project you want to delete.
+2. Command palette \u2192 **Delete Current StoryLine Project**.
+3. A warning modal lists everything that will be removed. **Type the project title** to enable the Delete button, then click **Delete permanently**.
+
+The project folder is moved to your system trash (or Obsidian's \`.trash\` folder, depending on your **Settings \u2192 Files & Links \u2192 Deleted files** preference). If the project belongs to a series, it is also removed from \`series.json\`. If it was the active project, StoryLine switches to another project automatically.
+
+> **Why this matters:** StoryLine discovers projects by scanning the vault for \`type: storyline\` markdown files. Simply deleting a folder from Obsidian's file explorer can leave the \`.md\` file in \`.trash/\` (or have it restored by a sync plugin), which causes the project to reappear. The Delete command trashes the folder through Obsidian's API and re-scans, so the project is gone for good.
+
+---
+
+## Series Mode
+
+Series Mode lets you group multiple book projects into a **series** with a shared Codex. Characters, locations, and any custom categories are stored once at the series level and automatically available in every book.
+
+### Creating a Series
+1. Open the project you want to use as the first book.
+2. **From Settings:** Go to **Settings \u2192 Project Management** and click **Create Series\u2026**.
+   *Or from the command palette:* **Create Series from Current Project**.
+3. Enter a series name.
+4. StoryLine creates a series folder, moves your book into it, migrates the Codex to the series level, and writes a \`series.json\` manifest.
+
+### Adding a Book to an Existing Series
+1. Open the project you want to add.
+2. Command palette \u2192 **Add Current Project to Series**.
+3. Pick a series from the dropdown (StoryLine scans for folders containing \`series.json\`).
+4. The book folder moves into the series folder and its Codex entries are merged into the shared Codex. Duplicate filenames are skipped.
+
+You can also add books from the **Series Management Modal** \u2014 open it from **Settings \u2192 Project Management \u2192 Manage Series\u2026** or the "Manage Series\u2026" button in the Open Project modal. Each series card has an "Add book" dropdown at the bottom.
+
+### Removing a Book from a Series
+1. Open a project that belongs to a series.
+2. Command palette \u2192 **Remove Current Project from Series**.
+3. The shared Codex is copied into a local Codex inside the book folder, and the book moves out of the series folder.
+
+### Renaming a Book
+Go to **Settings \u2192 Project Management** and click **Rename\u2026**. This renames the project file, its folder, updates the frontmatter title, and updates the series manifest if the book belongs to a series.
+
+### Managing Series
+Open the **Series Management Modal** from **Settings \u2192 Project Management \u2192 Manage Series\u2026** or the "Manage Series\u2026" button in the Open Project modal. From here you can:
+- Rename a series (also renames the folder on disk).
+- Reorder books within a series using the arrow buttons.
+- Rename individual books.
+- Add standalone books to the series.
+- Remove books from the series (moves the book out of the series folder; the book is kept as a standalone project).
+- **Delete a book permanently** (**trash** icon) \u2014 trashes the book's folder and removes it from the series. A type-to-confirm warning modal is shown first.
+
+### How It Works
+- When a project has a \`seriesId\` in its frontmatter, all Codex paths (Characters, Locations, custom categories) resolve to the **series-level** Codex folder instead of the book-local one.
+- All existing views \u2014 Characters, Locations, Codex Hub, Relationship Map, Story Graph, Link Scanner \u2014 work transparently with the shared Codex.
+- The project selector toolbar shows a **series badge** (library icon + series name) when the active project belongs to a series.
+- **Settings \u2192 Project Management** provides buttons for Rename book, Create series, and Manage series \u2014 everything is accessible without the command palette.
+
+### Mixing Book-Only and Series-Shared Entities
+
+By default every character, world, and location in a series Codex is visible to every book. From v1.9.5 you can fine-tune this per entity:
+
+- **Right-click a character card** in the Characters view, or a world / location row in the Locations view, to open the context menu.
+- **Promote to series (shared)** \u2014 moves the file from the book's local \`Codex/Characters\` (or \`Codex/Locations\`) folder into the shared series-level folder.
+- **Demote to project (book-only)** \u2014 moves a series-shared entity back into the current book's local Codex folder. Other books in the series no longer see it.
+- **Restrict to \u201C<book>\u201D only** \u2014 keeps the file in the shared Codex but adds a \`books:\` frontmatter list so the entity is treated as appearing only in the listed book.
+- **Add to / Remove from \u201C<book>\u201D** \u2014 toggle membership for the active book.
+- **Share across all books** \u2014 clears the \`books:\` list, restoring \u201Cappears everywhere\u201D behavior.
+
+The **All books / Showing: <book>** chip in the Characters and Locations search rows hides entries that aren't in the current book. Worlds remain visible if any of their child locations are in the current book, so you can still drill in.
+
+Wikilinks reference characters and locations **by name** (not by file path), so promoting / demoting never breaks references in scenes.
+
+#### \`books:\` frontmatter format
+
+\`\`\`yaml
+---
+type: character
+name: Aria Vance
+books:
+  - The Sunken City
+  - The Iron Crown
+---
+\`\`\`
+
+- Missing or empty \`books:\` \u2192 entity appears in every book in the series (default).
+- Non-empty \`books:\` \u2192 entity appears only in the listed books.
+
+### Pre-flight Checks
+Before any migration, StoryLine verifies that Obsidian's **"Automatically update internal links"** setting is enabled. This ensures all \`[[wikilinks]]\` remain valid when files move between folders. If the setting is off, the migration is blocked with a notice.
+
+### Series Folder Layout
+\`\`\`
+StoryLine/
+  My Series/
+    series.json              \u2190 Series manifest (name, book order)
+    Codex/                   \u2190 Shared across all books
+      Characters/
+      Locations/
+      [Custom]/
+    Book One.md
+    Book One/
+      Scenes/
+      System/
+    Book Two.md
+    Book Two/
+      Scenes/
+      System/
+\`\`\`
+
+> **Rule:** A solo book has a local Codex. A series book uses the series Codex by default. From v1.9.5, series books may additionally keep book-only entities in their per-project \`Codex/Characters\` and \`Codex/Locations\` folders \u2014 use the right-click **Promote / Demote** actions to move entities between scopes.
+
+---
+
+## File Structure
+
+StoryLine organizes your vault like this:
+
+\`\`\`
+YourVault/
+  StoryLine/                      \u2190 Root folder (configurable)
+    My Novel.md                   \u2190 Project file
+    My Novel/                     \u2190 Project folder
+      Scenes/                     \u2190 Scene files (Markdown with frontmatter)
+        01 - The Beginning.md
+        02 - The Chase.md
+        ...
+      Codex/                      \u2190 Codex hub folder
+        Characters/               \u2190 Character profiles (Markdown with frontmatter)
+        Locations/                \u2190 Location & world profiles
+          Eryndor.md              \u2190 World file
+          Eryndor/                \u2190 Locations in this world
+            The Iron Citadel.md
+            Port Veyra.md
+        Props/                    \u2190 Example custom category
+        Factions/                 \u2190 Example custom category
+      System/                     \u2190 Per-project settings (auto-managed)
+        settings.json             \u2190 Tag colors, aliases, overrides
+        plotgrid.json             \u2190 Plotgrid layout data
+        board.json                \u2190 Corkboard positions
+        tracker.json              \u2190 Writing tracker history
+      Exports/                    \u2190 Exported files (MD, JSON, CSV, HTML, PDF, DOCX)
+    Another Book.md               \u2190 Another project
+    Another Book/
+      Scenes/
+      ...
+\`\`\`
+
+Existing projects with Characters and Locations at the top level (outside Codex/) continue to work \u2014 StoryLine detects the old layout automatically.
+
+Scene files are standard Markdown \u2014 you can edit them directly in Obsidian's editor, and StoryLine reads the frontmatter automatically.
+
+---
+
+## Tips & Workflow
+
+1. **Start with the Board View** \u2014 create scenes as ideas, then outline and draft them.
+2. **Use acts and chapters** to structure your story. Add empty act/chapter columns from the Board toolbar so you can see gaps.
+3. **Apply a beat sheet** \u2014 use Save the Cat, 3-Act, or Hero's Journey templates for instant structure scaffolding.
+4. **Tag your plotlines** \u2014 assign tags like \`romance\`, \`mystery\`, \`character-arc\` to track storylines across the Plotlines View. Assign colors to tags for instant visual identification.
+5. **Set up POV and characters** early \u2014 the Characters View and Relationship Map become more useful as you add character metadata.
+6. **Use the intensity field** (-10 to +10) to plan your emotional arc. The Stats View graphs this as a tension curve.
+7. **Use chronological order** if your story has flashbacks or non-linear timelines. Toggle between reading and chronological order in the Timeline View.
+17. **Set timeline modes** for non-linear scenes \u2014 flashbacks, dreams, parallel timelines, etc. This suppresses false plot-hole warnings and adds visual badges.
+8. **Check Stats regularly** \u2014 the plot hole detector and pacing analysis catch structural issues early.
+9. **Save filter presets** for your common views (e.g., "Act 1 only", "Unfinished scenes", "Anna's POV").
+10. **Use scene notes** for editorial comments \u2014 they export with your outline but stay separate from manuscript text.
+11. **Save snapshots** before major rewrites \u2014 you can always restore a previous version.
+12. **Export outlines** to share with beta readers or editors without sharing your vault. CSV exports open directly in Excel/Sheets.
+13. **Use \`Ctrl+Z\`** freely \u2014 undo tracks all scene changes within the session.
+14. **Use writing sprints** to stay focused \u2014 the built-in timer in Stats View keeps you on track.
+15. **Scene content is just Markdown** \u2014 use headings, links, callouts, and any Obsidian feature inside your scenes.
+16. **Enable swimlanes** in the Timeline for a bird's-eye view of parallel storylines by POV, location, or tag.
+
+---
+
+## License
+
+MIT
+
+---
+
+*StoryLine \u2014 Transform your vault into a powerful book planning tool.*
 `;var nc=class extends _r.ItemView{constructor(t,e){super(t),this.plugin=e,this.renderComponent=new _r.Component}getViewType(){return Ri}getDisplayText(){return"StoryLine help"}getIcon(){return"help-circle"}async onOpen(){let t=this.containerEl.children[1];t.empty(),await this.mountInto(t)}async onClose(){this.renderComponent.unload()}async mountInto(t){this.renderComponent.load(),t.addClass("storyline-help-container"),await this.renderHelp(t)}async renderHelp(t){let e=oN;if(!e){t.createEl("p",{text:"Help content is unavailable.",cls:"storyline-help-error"});return}let n=t.createDiv("storyline-help-toolbar"),i=n.createSpan({cls:"storyline-help-pdf-status",attr:{"aria-live":"polite"}}),a=n.createEl("button",{text:"PDF",cls:"storyline-help-pdf-button",attr:{"aria-label":"Export help as PDF"}}),o=t.createDiv("storyline-help-content markdown-rendered");await _r.MarkdownRenderer.render(this.app,e,o,"",this.renderComponent),a.addEventListener("click",()=>{this.exportPdf(o,a,i)}),o.querySelectorAll('a[href^="#"]').forEach(s=>{s.addEventListener("click",c=>{c.preventDefault();let l=s.getAttribute("href");if(!l)return;let d=l.slice(1),u=o.querySelector(`[data-heading="${this.headingToDataAttr(d)}"]`)||o.querySelector(`#${CSS.escape(d)}`);u&&u.scrollIntoView({behavior:"smooth",block:"start"})})})}async exportPdf(t,e,n){e.disabled=!0,n.setText("Preparing PDF..."),new _r.Notice("Preparing help PDF...");try{await new Promise(p=>window.setTimeout(p,0));let i=this.plugin.manifest.version,a=new Date().toLocaleString();n.setText("Preparing print layout...");let o=t.cloneNode(!0);o.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach(p=>{let h=p,m=this.headingToSlug(h.textContent||"");m&&(h.id=m)});let s=`<!DOCTYPE html>
 <html lang="en">
 <head>
