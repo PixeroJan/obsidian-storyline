@@ -2,26 +2,20 @@ name: Release
 
 # Builds main.js, manifest.json, and styles.css on Ubuntu (matching the
 # Obsidian community plugin scanner's environment) and attaches them to a
-# GitHub Release whenever a tag matching the version pattern is pushed.
+# GitHub Release when manually dispatched with a version.
 #
 # Usage:
-#   1. Bump manifest.json / package.json / package-lock.json / versions.json
-#   2. Commit and push to main
-#   3. git tag 1.10.55 && git push origin 1.10.55
-#   4. The workflow builds on Linux and publishes the release automatically.
+#   1. Copy the updated plugin files into the local GitHub repository.
+#   2. Commit and push those files with GitHub Desktop.
+#   3. Run this workflow manually and enter the release version.
+#   4. The workflow bumps version files, builds on Linux, creates the tag,
+#      and publishes the release assets.
 
 on:
-  push:
-    tags:
-      # Matches tags like 1.10.55, 1.9.0, 2.0.1 — plain semver, no leading "v".
-      - "[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
-    # Manual trigger from the Actions tab — enter the version to release.
-    # The workflow bumps manifest.json / package.json / package-lock.json /
-    # versions.json, commits, tags, builds, and publishes in one go.
     inputs:
       version:
-        description: "Version to release (e.g. 1.10.56)"
+        description: "Version to release (e.g. 1.10.77)"
         required: true
         type: string
 
@@ -35,41 +29,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          # Need full history + write access for the version-bump commit.
+          # Need full history + write access for the version and release commit.
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve release version
         id: rel
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${GITHUB_REF_NAME}"
+          VERSION="$INPUT_VERSION"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release version: $VERSION"
+            exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Releasing version $VERSION"
 
-      - name: Bump version files (manual dispatch only)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          VERSION="${{ steps.rel.outputs.version }}"
-          # manifest.json
-          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('manifest.json'));m.version='$VERSION';fs.writeFileSync('manifest.json',JSON.stringify(m,null,2)+'\n')"
-          # package.json
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version='$VERSION';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
-          # package-lock.json — sync root package version
-          node -e "const fs=require('fs');const l=JSON.parse(fs.readFileSync('package-lock.json'));l.version='$VERSION';if(l.packages&&l.packages[''])l.packages[''].version='$VERSION';fs.writeFileSync('package-lock.json',JSON.stringify(l,null,2)+'\n')"
-          # versions.json — add/overwrite the entry with the current minAppVersion
-          node -e "const fs=require('fs');const readJson=f=>JSON.parse(fs.readFileSync(f,'utf8').replace(/^\\uFEFF/,''));const m=readJson('manifest.json');const v=readJson('versions.json');v['$VERSION']=m.minAppVersion;fs.writeFileSync('versions.json',JSON.stringify(v,null,2)+'\n')"
-          # Keep the versioned files in the build workspace. The release
-          # action creates the remote tag and release after the build.
-
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 20.19.1
           cache: npm
+
+      - name: Pin npm
+        run: npm install --global npm@10.8.2
+
+      - name: Verify release metadata
+        env:
+          RELEASE_VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const version = process.env.RELEASE_VERSION;
+          const read = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+          const manifest = read('manifest.json');
+          const packageJson = read('package.json');
+          const lock = read('package-lock.json');
+          const lockRoot = lock.packages && lock.packages[''];
+          const actual = {
+            manifest: manifest.version,
+            package: packageJson.version,
+            lock: lock.version,
+            lockRoot: lockRoot && lockRoot.version,
+          };
+          if (Object.values(actual).some(value => value !== version)) {
+            console.error(`Release ${version} does not match release metadata: ${JSON.stringify(actual)}`);
+            process.exit(1);
+          }
+          if (!fs.existsSync('versions.json') || read('versions.json')[version] !== manifest.minAppVersion) {
+            console.error(`versions.json does not contain the expected entry for ${version}`);
+            process.exit(1);
+          }
+          NODE
 
       - name: Install dependencies (exact lockfile)
         run: npm ci
@@ -82,6 +94,24 @@ jobs:
           test -f main.js      || { echo "main.js missing";  exit 1; }
           test -f manifest.json || { echo "manifest.json missing"; exit 1; }
           test -f styles.css    || { echo "styles.css missing"; exit 1; }
+          sha256sum main.js
+
+      - name: Commit version and build output
+        env:
+          RELEASE_VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json package.json package-lock.json versions.json main.js
+          git commit -m "Release $RELEASE_VERSION"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Create release tag
+        env:
+          RELEASE_VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          git tag "$RELEASE_VERSION"
+          git push origin "$RELEASE_VERSION"
 
       - name: Create / update GitHub Release with build assets
         uses: softprops/action-gh-release@v2
@@ -97,3 +127,4 @@ jobs:
             manifest.json
             styles.css
           fail_on_unmatched_files: true
+          overwrite_files: true

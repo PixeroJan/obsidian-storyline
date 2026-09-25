@@ -280,7 +280,7 @@ export default class SceneCardsPlugin extends Plugin {
                 // Re-initialize scene index now that the active project is set.
                 // Views that opened before bootstrapProjects may have scanned a
                 // fallback folder and found no scenes.
-                await this.sceneManager.initialize();
+                await this.sceneManager.initialize(true);
                 // Migrate legacy data from data.json into project frontmatter
                 await this.migrateProjectDataFromSettings();
                 // Load per-project data from System/ files (tagColors, aliases, etc.)

@@ -6,6 +6,12 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.78
+
+### Bug Fixes
+
+- **Scenes missing after startup view restoration** *([#290](https://github.com/PixeroJan/obsidian-storyline/issues/290))* — The scene index is now forcibly rebuilt after the active project is restored, preventing an early fallback scan from caching an empty scene list.
+
 ## Version 1.10.77
 
 ### Bug Fixes
