@@ -5387,7 +5387,6 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     padding: 16px;
     overflow-y: auto;
     flex: 1;
-    max-width: 700px;
 }
 
 .stats-section {
@@ -5529,6 +5528,7 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     border: 1px solid var(--sc-card-border);
     border-radius: var(--sc-radius);
     margin-bottom: 16px;
+    display: inline-block;
 }
 .stats-sprint-duration-row {
     display: flex;
@@ -5677,6 +5677,7 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     flex-wrap: wrap;
     gap: 16px;
     margin: 12px 0 4px;
+    justify-content: center;
 }
 
 .stats-ring {
@@ -5722,8 +5723,8 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 .stats-sprint-spark-row {
     display: flex;
     align-items: flex-end;
-    gap: 4px;
-    height: 60px;
+    gap: 16px;
+    height: 130px;
 }
 
 .stats-sprint-spark-col {
@@ -5737,7 +5738,6 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 
 .stats-sprint-spark-bar {
     width: 100%;
-    max-width: 20px;
     background: var(--sc-accent);
     border-radius: 2px 2px 0 0;
     min-height: 2px;
@@ -5790,7 +5790,7 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 .pacing-dist-chart {
     display: flex;
     align-items: flex-end;
-    gap: 4px;
+    gap: 16px;
     height: 130px;
     padding: 8px 0;
     border-bottom: 2px solid var(--background-modifier-border);
@@ -5807,7 +5807,6 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 
 .pacing-dist-bar {
     width: 100%;
-    max-width: 40px;
     background: var(--sl-info, #2196F3);
     border-radius: 3px 3px 0 0;
     min-height: 2px;
@@ -5996,7 +5995,6 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 
 .stats-history-bar {
     width: 100%;
-    max-width: 18px;
     border-radius: 2px 2px 0 0;
     min-height: 2px;
     transition: height 0.3s;
