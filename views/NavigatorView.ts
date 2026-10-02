@@ -49,6 +49,7 @@ export class NavigatorView extends ItemView {
     private sortMode: NavSortMode = 'reading';
     private filterText = '';
     private plotlineFilter: string | null = null;
+    private chapterFilter: string | null = null;
     private pinnedScenes: Set<string> = new Set();
     private collapsedActs: Set<string> = new Set();
     private collapsedChapters: Set<string> = new Set();
@@ -59,10 +60,14 @@ export class NavigatorView extends ItemView {
     private chipRow: HTMLElement | null = null;
     private chipToggle: HTMLElement | null = null;
     private chipSection: HTMLElement | null = null;
+    private chapterToggle: HTMLElement | null = null;
+    private chapterSection: HTMLElement | null = null;
+    private chapterRow: HTMLElement | null = null;
     private progressBar: HTMLElement | null = null;
     private progressLabel: HTMLElement | null = null;
     private sortBtn: HTMLElement | null = null;
     private chipsExpanded = false;
+    private chaptersExpanded = false;
 
     constructor(leaf: WorkspaceLeaf, plugin: SceneCardsPlugin, sceneManager: SceneManager) {
         super(leaf);
@@ -154,6 +159,23 @@ export class NavigatorView extends ItemView {
         this.chipRow = this.chipSection.createDiv('sl-nav-plotline-list');
         this.chipRow.setCssStyles({ display: 'none' });
 
+        // ── Chapter filter (independent from Manuscript filters) ──
+        this.chapterSection = container.createDiv('sl-nav-chip-section');
+        this.chapterToggle = this.chapterSection.createDiv('sl-nav-chip-toggle');
+        const chapterToggleIcon = this.chapterToggle.createSpan('sl-nav-chip-toggle-icon');
+        chapterToggleIcon.textContent = '▸';
+        const chapterToggleLabel = this.chapterToggle.createSpan('sl-nav-chip-toggle-label');
+        chapterToggleLabel.textContent = 'Chapters';
+        this.chapterToggle.addEventListener('click', () => {
+            this.chaptersExpanded = !this.chaptersExpanded;
+            chapterToggleIcon.textContent = this.chaptersExpanded ? '▾' : '▸';
+            if (this.chapterRow) {
+                this.chapterRow.setCssStyles({ display: this.chaptersExpanded ? '' : 'none' });
+            }
+        });
+        this.chapterRow = this.chapterSection.createDiv('sl-nav-plotline-list');
+        this.chapterRow.setCssStyles({ display: 'none' });
+
         // ── Scene list ──
         this.listEl = container.createDiv('sl-nav-list');
 
@@ -175,6 +197,7 @@ export class NavigatorView extends ItemView {
      */
     refresh(): void {
         this.renderChips();
+        this.renderChapterFilter();
         this.renderList();
         this.renderProgress();
     }
@@ -252,6 +275,49 @@ export class NavigatorView extends ItemView {
         }
     }
 
+    private renderChapterFilter(): void {
+        if (!this.chapterRow || !this.chapterSection || !this.chapterToggle) return;
+        this.chapterRow.empty();
+
+        const chapters = this.sceneManager.queryService.getUniqueValues('chapter');
+        if (chapters.length === 0) {
+            this.chapterSection.setCssStyles({ display: 'none' });
+            return;
+        }
+        this.chapterSection.setCssStyles({ display: '' });
+
+        const toggleLabel = this.chapterToggle.querySelector('.sl-nav-chip-toggle-label');
+        if (toggleLabel) {
+            toggleLabel.textContent = this.chapterFilter
+                ? `Chapter: ${this.chapterFilter}`
+                : `Chapters (${chapters.length})`;
+        }
+        this.chapterToggle.toggleClass('has-filter', this.chapterFilter !== null);
+
+        const allRow = this.chapterRow.createDiv('sl-nav-plotline-item');
+        if (!this.chapterFilter) allRow.addClass('is-active');
+        allRow.createSpan({ cls: 'sl-nav-plotline-name', text: 'All' });
+        allRow.addEventListener('click', () => {
+            this.chapterFilter = null;
+            this.renderChapterFilter();
+            this.renderList();
+        });
+
+        for (const chapter of chapters) {
+            const row = this.chapterRow.createDiv('sl-nav-plotline-item');
+            if (this.chapterFilter === chapter) row.addClass('is-active');
+            row.createSpan({ cls: 'sl-nav-plotline-name', text: `Chapter ${chapter}` });
+            const count = this.sceneManager.getAllScenes()
+                .filter(s => !s.corkboardNote && !s.inactive && String(s.chapter) === chapter).length;
+            row.createSpan({ text: String(count), cls: 'sl-nav-plotline-count' });
+            row.addEventListener('click', () => {
+                this.chapterFilter = this.chapterFilter === chapter ? null : chapter;
+                this.renderChapterFilter();
+                this.renderList();
+            });
+        }
+    }
+
     // ────────────────────────────────────────────────────────
     // Scene list
     // ────────────────────────────────────────────────────────
@@ -265,6 +331,11 @@ export class NavigatorView extends ItemView {
         // Plotline filter
         if (this.plotlineFilter) {
             scenes = scenes.filter(s => s.tags?.includes(this.plotlineFilter!));
+        }
+
+        // Navigator chapter filtering is intentionally independent from Manuscript.
+        if (this.chapterFilter) {
+            scenes = scenes.filter(s => s.chapter !== undefined && String(s.chapter) === this.chapterFilter);
         }
 
         // Text filter
@@ -281,7 +352,9 @@ export class NavigatorView extends ItemView {
 
         if (scenes.length === 0) {
             const empty = this.listEl.createDiv('sl-nav-empty');
-            empty.textContent = this.filterText ? 'No matching scenes' : 'No scenes yet';
+            empty.textContent = this.filterText || this.plotlineFilter || this.chapterFilter
+                ? 'No matching scenes'
+                : 'No scenes yet';
             return;
         }
 

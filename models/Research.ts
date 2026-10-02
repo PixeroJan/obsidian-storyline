@@ -1,40 +1,35 @@
- 
-/**
- * Research post data model.
- *
- * Each research post is a markdown file in the project's Research/ folder
- * with YAML frontmatter containing type, researchType, and tags.
- */
+/** Types and display metadata for StoryLine research posts. */
 
 export type ResearchType = 'note' | 'webclip' | 'image' | 'question';
 
 export interface ResearchPost {
+    /** Vault-relative path of the research note or linked file. */
     filePath: string;
+    /** Display title. */
     title: string;
-    /** The kind of research entry */
+    /** Research post kind. */
     researchType: ResearchType;
-    /** Free-form tags for filtering */
+    /** User-assigned tags. */
     tags: string[];
-    /** Body markdown content (below frontmatter) */
+    /** Markdown body or linked-file description. */
     body: string;
-    /** Source URL for webclips */
+    /** Source URL for web clips. */
     sourceUrl?: string;
-    /** Whether a "question" type is resolved */
+    /** Whether a question has been resolved. */
     resolved?: boolean;
-    /** True if this is a linked vault note (not stored in Research/) */
-    isLinked?: boolean;
-    /** ISO date string */
+    /** ISO creation timestamp. */
     created: string;
-    /** ISO date string */
+    /** ISO modification timestamp. */
     modified: string;
-    /** Sub-folder name within Research/ (empty for root-level posts). */
+    /** True when the post represents a note linked from elsewhere in the vault. */
+    isLinked?: boolean;
+    /** Relative Research subfolder used for display grouping. */
     subfolder?: string;
 }
 
 export const RESEARCH_TYPE_CONFIG: Record<ResearchType, { label: string; icon: string }> = {
-    note: { label: 'Note', icon: 'file-text' },
-    webclip: { label: 'Web Clip', icon: 'globe' },
-    image: { label: 'Image', icon: 'image' },
-    question: { label: 'Question', icon: 'help-circle' },
+    note: { label: 'Notes', icon: 'file-text' },
+    webclip: { label: 'Web Clips', icon: 'globe' },
+    image: { label: 'Images', icon: 'image' },
+    question: { label: 'Questions', icon: 'help-circle' },
 };
- 

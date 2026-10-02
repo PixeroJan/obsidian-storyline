@@ -33,6 +33,7 @@ import { attachTooltip } from '../components/Tooltip';
 import { renderCodexCategoryTabs } from '../components/CodexCategoryTabs';
 import { attachCodexVisualGroupReorder, getCodexVisualGroups, openCodexVisualGroupManager } from '../components/CodexVisualGroupManager';
 import type { CodexVisualGroup } from '../settings';
+import { isSectionCollapsed, rememberSectionState } from '../settings';
 
 /**
  * Location View — hierarchical World → Location browser with inline editing.
@@ -47,6 +48,7 @@ export class LocationView extends ItemView {
     private selectedItem: string | null = null; // filePath of selected world/location
     private rootContainer: HTMLElement | null = null;
     private collapsedSections: Set<string> = new Set();
+    private sectionStateOverrides = new Map<string, boolean>();
     private collapsedTreeNodes: Set<string> = new Set();
     private autoSaveTimer: number | null = null;
     /** The draft waiting to be saved (if any) */
@@ -65,6 +67,22 @@ export class LocationView extends ItemView {
     private sortBy: 'name' | 'modified' | 'created' | 'type' | 'manual' = 'name';
     private groupingMode: 'none' | 'named' = 'none';
     private activeVisualGroupId = '';
+
+    private isSectionCollapsed(key: string): boolean {
+        const override = this.sectionStateOverrides.get(key);
+        if (override !== undefined) return override;
+        return isSectionCollapsed(this.plugin.settings, key, this.collapsedSections.has(key));
+    }
+
+    private toggleSection(key: string): boolean {
+        const collapsed = !this.isSectionCollapsed(key);
+        this.sectionStateOverrides.set(key, collapsed);
+        if (collapsed) this.collapsedSections.add(key);
+        else this.collapsedSections.delete(key);
+        rememberSectionState(this.plugin.settings, key, collapsed);
+        if (this.plugin.settings.sectionDefaultState === 'remember') void this.plugin.saveSettings();
+        return collapsed;
+    }
     /**
      * When true and the active project belongs to a series, the tree hides
      * worlds and locations whose `books[]` field excludes the current book.
@@ -1110,7 +1128,7 @@ export class LocationView extends ItemView {
         draft: WorldOrLocation
     ): void {
         const section = parent.createDiv('location-section');
-        const isCollapsed = this.collapsedSections.has(category.title);
+        const isCollapsed = this.isSectionCollapsed(category.title);
 
         const sectionHeader = section.createDiv('location-section-header');
         const chevron = sectionHeader.createSpan('location-section-chevron');
@@ -1195,12 +1213,10 @@ export class LocationView extends ItemView {
         sectionHeader.addEventListener('click', (e) => {
             if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
             if ((e.target as HTMLElement).closest('.character-section-hide-cat-btn')) return;
-            if (this.collapsedSections.has(category.title)) {
-                this.collapsedSections.delete(category.title);
+            if (!this.toggleSection(category.title)) {
                 sectionBody.setCssStyles({ display: '' });
                 obsidian.setIcon(chevron, 'chevron-down');
             } else {
-                this.collapsedSections.add(category.title);
                 sectionBody.setCssStyles({ display: 'none' });
                 obsidian.setIcon(chevron, 'chevron-right');
             }
@@ -1290,7 +1306,7 @@ export class LocationView extends ItemView {
         draft: WorldOrLocation,
     ): void {
         const section = parent.createDiv('location-section is-category-hidden');
-        const isCollapsed = this.collapsedSections.has(category.title);
+        const isCollapsed = this.isSectionCollapsed(category.title);
 
         const sectionHeader = section.createDiv('location-section-header');
         const chevron = sectionHeader.createSpan('location-section-chevron');
@@ -1324,12 +1340,10 @@ export class LocationView extends ItemView {
         if (isCollapsed) sectionBody.setCssStyles({ display: 'none' });
         sectionHeader.addEventListener('click', (e) => {
             if ((e.target as HTMLElement).closest('.character-section-hide-cat-btn')) return;
-            if (this.collapsedSections.has(category.title)) {
-                this.collapsedSections.delete(category.title);
+            if (!this.toggleSection(category.title)) {
                 sectionBody.setCssStyles({ display: '' });
                 obsidian.setIcon(chevron, 'chevron-down');
             } else {
-                this.collapsedSections.add(category.title);
                 sectionBody.setCssStyles({ display: 'none' });
                 obsidian.setIcon(chevron, 'chevron-right');
             }
@@ -1399,6 +1413,11 @@ export class LocationView extends ItemView {
                 (draft as unknown as Record<string, unknown>)[field.key] = cb.checked;
                 this.scheduleSave(draft);
             });
+            return;
+        }
+
+        if (field.entityRef) {
+            this.renderEntityReferenceField(row, field, draft);
             return;
         }
 
@@ -1483,6 +1502,51 @@ export class LocationView extends ItemView {
                     this.checkLocationRename(draft, input);
                 });
             }
+        }
+    }
+
+    private renderEntityReferenceField(
+        row: HTMLElement,
+        field: LocationFieldDef,
+        draft: WorldOrLocation,
+    ): void {
+        const record = draft as unknown as Record<string, unknown>;
+        const raw = record[field.key];
+        const selected = (Array.isArray(raw) ? raw : coerceString(raw).split(','))
+            .map(value => coerceString(value).replace(/^\[\[(?:[^\]|]+\|)?([^\]]+)\]\]$/, '$1').trim())
+            .filter(Boolean);
+        const entityNames = field.entityRef === 'character'
+            ? this.plugin.characterManager.getAllCharacters().map(character => character.name)
+            : this.locationManager.getAllLocations().map(location => location.name);
+        const names = Array.from(new Set([...entityNames, ...selected])).sort((a, b) => a.localeCompare(b));
+        const select = row.createEl('select', {
+            cls: 'location-field-input dropdown storyline-entity-select',
+            attr: { 'aria-label': field.label, size: field.multiSelect ? '4' : '1' },
+        });
+        select.multiple = !!field.multiSelect;
+        for (const name of names) {
+            const option = select.createEl('option', { text: name, value: name });
+            option.selected = selected.includes(name);
+        }
+        select.addEventListener('change', () => {
+            const values = Array.from(select.selectedOptions).map(option => option.value);
+            record[field.key] = field.multiSelect ? values : (values[0] || '');
+            this.scheduleSave(draft);
+            this.renderEntityLinks(row, values);
+        });
+        this.renderEntityLinks(row, selected);
+    }
+
+    private renderEntityLinks(row: HTMLElement, values: string[]): void {
+        row.querySelector('.storyline-entity-links')?.remove();
+        if (values.length === 0) return;
+        const links = row.createDiv('storyline-entity-links');
+        for (const value of values) {
+            const link = links.createEl('a', { text: value, cls: 'storyline-entity-link' });
+            link.addEventListener('click', event => {
+                event.preventDefault();
+                void this.app.workspace.openLinkText(value, '', false);
+            });
         }
     }
 
@@ -1795,7 +1859,7 @@ export class LocationView extends ItemView {
     private renderCustomFields(parent: HTMLElement, draft: WorldOrLocation): void {
         const section = parent.createDiv('location-section');
         const title = 'Custom Fields';
-        const isCollapsed = this.collapsedSections.has(title);
+        const isCollapsed = this.isSectionCollapsed(title);
 
         const sectionHeader = section.createDiv('location-section-header');
         const chevron = sectionHeader.createSpan('location-section-chevron');
@@ -1808,12 +1872,10 @@ export class LocationView extends ItemView {
         if (isCollapsed) sectionBody.setCssStyles({ display: 'none' });
 
         sectionHeader.addEventListener('click', () => {
-            if (this.collapsedSections.has(title)) {
-                this.collapsedSections.delete(title);
+            if (!this.toggleSection(title)) {
                 sectionBody.setCssStyles({ display: '' });
                 obsidian.setIcon(chevron, 'chevron-down');
             } else {
-                this.collapsedSections.add(title);
                 sectionBody.setCssStyles({ display: 'none' });
                 obsidian.setIcon(chevron, 'chevron-right');
             }
@@ -1903,6 +1965,8 @@ export class LocationView extends ItemView {
             sections,
             builtinSectionCount,
             collapsedSections: this.collapsedSections,
+            isSectionCollapsed: (key) => this.isSectionCollapsed(key),
+            toggleSection: (key) => { this.toggleSection(key); },
             collapseKeyPrefix: 'location',
             cssPrefix: 'location',
             scheduleSave: (d) => this.scheduleSave(d),
@@ -2486,7 +2550,7 @@ export class LocationView extends ItemView {
         const gallery = draft.gallery ?? [];
 
         // Collapsible header with add button
-        const isCollapsed = this.collapsedSections.has(SECTION_KEY);
+        const isCollapsed = this.isSectionCollapsed(SECTION_KEY);
         const header = wrapper.createDiv('character-gallery-header');
         const chevron = header.createSpan('location-section-chevron');
         obsidian.setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
@@ -2530,12 +2594,10 @@ export class LocationView extends ItemView {
 
         header.addEventListener('click', (e) => {
             if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
-            if (this.collapsedSections.has(SECTION_KEY)) {
-                this.collapsedSections.delete(SECTION_KEY);
+            if (!this.toggleSection(SECTION_KEY)) {
                 body.setCssStyles({ display: '' });
                 obsidian.setIcon(chevron, 'chevron-down');
             } else {
-                this.collapsedSections.add(SECTION_KEY);
                 body.setCssStyles({ display: 'none' });
                 obsidian.setIcon(chevron, 'chevron-right');
             }

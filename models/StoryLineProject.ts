@@ -1,5 +1,5 @@
  
-import { FilterPreset } from './Scene';
+import { FilterPreset, SceneFilter, SortConfig } from './Scene';
 
 /**
  * Represents a StoryLine project file.
@@ -62,6 +62,10 @@ export interface StoryLineProject {
     chapterDescriptions: Record<number, string>;
     /** Saved filter presets (persisted in project frontmatter) */
     filterPresets: FilterPreset[];
+    /** Last active Manuscript filter (persisted in project frontmatter) */
+    manuscriptFilter?: SceneFilter;
+    /** Last Manuscript sort (persisted in project frontmatter) */
+    manuscriptSort?: SortConfig;
     /** Corkboard free-position layout (scene file path -> coordinates + layer order + optional height) */
     corkboardPositions: Record<string, { x: number; y: number; z?: number; h?: number }>;
 

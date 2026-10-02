@@ -3,6 +3,7 @@ import { Character, CharacterRelation, CharacterRelationCategory, CHARACTER_FIEL
 import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel } from './FieldTemplateService';
 import { App, TFile, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { coerceString } from '../utils/narrow';
+import { MetadataParser, toWikilink } from './MetadataParser';
 
 /**
  * Manages character .md files — loading, saving, creating, and deleting
@@ -222,11 +223,16 @@ export class CharacterManager {
             if (key === 'name') continue; // already set above
             const val = character[key];
             if (val !== undefined && val !== null && val !== '' && !(Array.isArray(val) && val.length === 0)) {
-                fm[key] = val;
+                fm[key] = key === 'locations'
+                    ? (Array.isArray(val) ? val : [val]).map(value => toWikilink(coerceString(value))).filter(Boolean)
+                    : val;
             } else {
                 delete fm[key]; // Remove empty fields to keep frontmatter clean
             }
         }
+        const aliases = this.parseStringList(character.nickname);
+        if (aliases?.length) fm.aliases = aliases;
+        else if (character.nickname === undefined || character.nickname === '') delete fm.aliases;
         // Clean up legacy keys
         delete fm['coreBeliefs'];
         delete fm['romanticHistory'];
@@ -348,13 +354,13 @@ export class CharacterManager {
             tagline: safeFm.tagline,
             image: safeFm.image,
             gallery: this.parseGallery(safeFm.gallery),
-            nickname: safeFm.nickname,
+            nickname: safeFm.nickname || this.parseStringList(safeFm.aliases)?.join(', '),
             age: safeFm.age != null ? String(safeFm.age) : undefined,
             role: safeFm.role,
             roles: normalizeRoleEntries(safeFm.roles),
             occupation: safeFm.occupation,
             residency: safeFm.residency,
-            locations: this.parseStringList(safeFm.locations),
+            locations: this.parseEntityList(safeFm.locations),
             family: safeFm.family,
             appearance: safeFm.appearance,
             distinguishingFeatures: safeFm.distinguishingFeatures,
@@ -435,6 +441,12 @@ export class CharacterManager {
             .map((s: string) => s.trim())
             .filter(Boolean);
         return parsed.length ? parsed : undefined;
+    }
+
+    private parseEntityList(value: unknown): string[] | undefined {
+        return this.parseStringList(value)
+            ?.map(item => MetadataParser.cleanWikilink(item) ?? item)
+            .filter(Boolean);
     }
 
     private parseRelations(value: unknown): CharacterRelation[] | undefined {

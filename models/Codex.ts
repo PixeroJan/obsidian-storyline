@@ -71,6 +71,10 @@ export interface CodexFieldDef {
     characterRef?: boolean;
     /** If true, render an on/off toggle (value stored as boolean) */
     toggle?: boolean;
+    /** Populate the field from another StoryLine entity type. */
+    entityRef?: 'location' | 'character' | 'codex';
+    /** Allow more than one linked entity in the field. */
+    multiSelect?: boolean;
 }
 
 export interface CodexFieldCategory {
@@ -124,8 +128,8 @@ export const ITEMS_CATEGORIES: CodexFieldCategory[] = [
         title: 'Ownership',
         icon: 'user',
         fields: [
-            { key: 'owner', label: 'Owner', placeholder: 'Current owner or bearer', characterRef: true },
-            { key: 'previousOwners', label: 'Previous Owners', placeholder: 'Past owners, how it changed hands', characterRef: true },
+            { key: 'owner', label: 'Owner', placeholder: 'Current owner or bearer', characterRef: true, entityRef: 'character' },
+            { key: 'previousOwners', label: 'Previous Owners', placeholder: 'Past owners, how it changed hands', characterRef: true, entityRef: 'character', multiSelect: true },
         ],
     },
     {
@@ -219,7 +223,7 @@ export const LORE_CATEGORIES: CodexFieldCategory[] = [
         icon: 'bookmark',
         fields: [
             { key: 'significance', label: 'Significance', placeholder: 'Impact on the world or story', multiline: true },
-            { key: 'relatedEntries', label: 'Related Entries', placeholder: 'Connected people, places, items' },
+            { key: 'relatedEntries', label: 'Related Entries', placeholder: 'Connected people, places, items', entityRef: 'codex', multiSelect: true },
         ],
     },
 ];

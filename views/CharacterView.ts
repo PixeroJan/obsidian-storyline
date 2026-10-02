@@ -18,6 +18,7 @@ import {
 } from '../components/CustomSectionsRenderer';
 import type { UniversalFieldTemplate } from '../services/FieldTemplateService';
 import { formatActChapterPrefix } from '../utils/actChapter';
+import { coerceString } from '../utils/narrow';
 
 import type SceneCardsPlugin from '../main';
 
@@ -25,11 +26,11 @@ import { attachTooltip } from '../components/Tooltip';
 import { renderCodexCategoryTabs } from '../components/CodexCategoryTabs';
 import { attachCodexVisualGroupReorder, getCodexVisualGroups, openCodexVisualGroupManager } from '../components/CodexVisualGroupManager';
 import type { CodexVisualGroup } from '../settings';
+import { isSectionCollapsed, rememberSectionState } from '../settings';
 import { ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf } from 'obsidian';
 import { CHARACTER_CATEGORIES, CHARACTER_ROLES, Character, CharacterFieldDef, CharacterRelation, CharacterRelationCategory, RELATION_CATEGORIES, RELATION_TYPES_BY_CATEGORY, RelationHistoryEntry, RoleEntry, TagType, computeReciprocalUpdates, extractCharacterLocationTags, extractCharacterProps, getPrimaryRole, getRoleDisplay, getRoleList, normalizeCharacterRelations, normalizeRelationHistory } from '../models/Character';
 import { CHARACTER_VIEW_TYPE } from '../constants';
 import { Scene, isWrittenLikeStatus, resolveStatusCfg } from '../models/Scene';
-import { coerceString } from '../utils/narrow';
 
 /**
  * Character View - rich character cards with full profile editing.
@@ -44,6 +45,7 @@ export class CharacterView extends ItemView {
     private selectedCharacter: string | null = null;   // file path of selected character
     private rootContainer: HTMLElement | null = null;
     private collapsedSections: Set<string> = new Set();
+    private sectionStateOverrides = new Map<string, boolean>();
     private autoSaveTimer: number | null = null;
     /** The draft waiting to be saved (if any) */
     private pendingSaveDraft: Character | null = null;
@@ -83,6 +85,22 @@ export class CharacterView extends ItemView {
     private clearPortaledDropdowns(): void {
         for (const el of this._portaledDropdowns) { try { el.remove(); } catch { /* noop */ } }
         this._portaledDropdowns = [];
+    }
+
+    private isSectionCollapsed(key: string): boolean {
+        const override = this.sectionStateOverrides.get(key);
+        if (override !== undefined) return override;
+        return isSectionCollapsed(this.plugin.settings, key, this.collapsedSections.has(key));
+    }
+
+    private toggleSection(key: string): boolean {
+        const collapsed = !this.isSectionCollapsed(key);
+        this.sectionStateOverrides.set(key, collapsed);
+        if (collapsed) this.collapsedSections.add(key);
+        else this.collapsedSections.delete(key);
+        rememberSectionState(this.plugin.settings, key, collapsed);
+        if (this.plugin.settings.sectionDefaultState === 'remember') void this.plugin.saveSettings();
+        return collapsed;
     }
 
     constructor(leaf: WorkspaceLeaf, plugin: SceneCardsPlugin, sceneManager: SceneManager) {
@@ -400,7 +418,8 @@ export class CharacterView extends ItemView {
             fileCharacters.sort((a, b) => {
                 const rankA = this.getCharacterVisualGroup(a, visualGroups);
                 const rankB = this.getCharacterVisualGroup(b, visualGroups);
-                return (groupRank.get(rankA?.id) ?? visualGroups.length) - (groupRank.get(rankB?.id) ?? visualGroups.length)
+                return (rankA ? groupRank.get(rankA.id) ?? visualGroups.length : visualGroups.length)
+                    - (rankB ? groupRank.get(rankB.id) ?? visualGroups.length : visualGroups.length)
                     || a.name.toLowerCase().localeCompare(b.name.toLowerCase());
             });
         }
@@ -563,7 +582,7 @@ export class CharacterView extends ItemView {
         });
 
         // Role badges — supports string or string[] (issue #72 Tier 1)
-        const roleList = getRoleList(char.role);
+        const roleList = getRoleList(char);
         if (roleList.length) {
             const wrap = card.createDiv('character-role-badges');
             for (const r of roleList) {
@@ -601,7 +620,7 @@ export class CharacterView extends ItemView {
 
         // Short description snippet — per-character tagline field selector, with auto fallback
         const taglineKey = char.tagline; // a field key like 'personality', 'occupation', etc.
-        const autoSnippet = char.personality || char.occupation || getRoleDisplay(char.role) || '';
+        const autoSnippet = char.personality || char.occupation || getRoleDisplay(char) || '';
         // Issue #233 discussion — support custom (universal) fields as the
         // tagline source. Universal-field tagline keys are stored with the
         // `uf:` prefix so they never collide with built-in field keys.
@@ -1157,7 +1176,7 @@ export class CharacterView extends ItemView {
         draft: Character
     ): void {
         const section = parent.createDiv('character-section');
-        const isCollapsed = this.collapsedSections.has(category.title);
+        const isCollapsed = this.isSectionCollapsed(category.title);
 
         // Section header (clickable to collapse)
         const sectionHeader = section.createDiv('character-section-header');
@@ -1241,12 +1260,10 @@ export class CharacterView extends ItemView {
         sectionHeader.addEventListener('click', (e) => {
             // Ignore clicks on the add-field button
             if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
-            if (this.collapsedSections.has(category.title)) {
-                this.collapsedSections.delete(category.title);
+            if (!this.toggleSection(category.title)) {
                 sectionBody.setCssStyles({ display: '' });
                 obsidian.setIcon(chevron, 'chevron-down');
             } else {
-                this.collapsedSections.add(category.title);
                 sectionBody.setCssStyles({ display: 'none' });
                 obsidian.setIcon(chevron, 'chevron-right');
             }
@@ -1259,7 +1276,7 @@ export class CharacterView extends ItemView {
 
         // Render fields in user-defined merged order (built-in + universal).
         const universalFields = this.plugin.fieldTemplates.getBySection(category.title, 'character');
-        const fieldMap = new Map(visibleFields.map(f => [f.key, f]));
+        const fieldMap = new Map<string, CharacterFieldDef>(visibleFields.map(f => [f.key, f]));
         const tplMap = new Map(universalFields.map(t => [t.id, t]));
         const builtInKeys = visibleFields.map(f => f.key);
         const merged = this.plugin.fieldTemplates.getMergedOrder(category.title, 'character', builtInKeys);
@@ -1342,7 +1359,7 @@ export class CharacterView extends ItemView {
         draft: Character
     ): void {
         const section = parent.createDiv('character-section is-category-hidden');
-        const isCollapsed = this.collapsedSections.has(category.title);
+        const isCollapsed = this.isSectionCollapsed(category.title);
 
         const sectionHeader = section.createDiv('character-section-header');
         const chevron = sectionHeader.createSpan('character-section-chevron');
@@ -1377,12 +1394,10 @@ export class CharacterView extends ItemView {
         if (isCollapsed) sectionBody.setCssStyles({ display: 'none' });
         sectionHeader.addEventListener('click', (e) => {
             if ((e.target as HTMLElement).closest('.character-section-hide-cat-btn')) return;
-            if (this.collapsedSections.has(category.title)) {
-                this.collapsedSections.delete(category.title);
+            if (!this.toggleSection(category.title)) {
                 sectionBody.setCssStyles({ display: '' });
                 obsidian.setIcon(chevron, 'chevron-down');
             } else {
-                this.collapsedSections.add(category.title);
                 sectionBody.setCssStyles({ display: 'none' });
                 obsidian.setIcon(chevron, 'chevron-right');
             }
@@ -1393,7 +1408,7 @@ export class CharacterView extends ItemView {
         const hiddenKeys = this.plugin.settings.hiddenFields['character'] ?? [];
         const visibleFields = category.fields.filter(f => !hiddenKeys.includes(f.key));
         const universalFields = this.plugin.fieldTemplates.getBySection(category.title, 'character');
-        const fieldMap = new Map(visibleFields.map(f => [f.key, f]));
+        const fieldMap = new Map<string, CharacterFieldDef>(visibleFields.map(f => [f.key, f]));
         const tplMap = new Map(universalFields.map(t => [t.id, t]));
         const builtInKeys = visibleFields.map(f => f.key);
         const merged = this.plugin.fieldTemplates.getMergedOrder(category.title, 'character', builtInKeys);
@@ -1442,6 +1457,11 @@ export class CharacterView extends ItemView {
                     this.renderCharacterDetail(this.rootContainer);
                 }
             });
+        }
+
+        if (field.entityRef) {
+            this.renderEntityReferenceField(row, field, draft);
+            return;
         }
 
         // Coerce array shapes (e.g. role: string[]) to a comma-separated string
@@ -1589,6 +1609,51 @@ export class CharacterView extends ItemView {
                     this.checkCharacterRename(draft, input);
                 });
             }
+        }
+    }
+
+    private renderEntityReferenceField(
+        row: HTMLElement,
+        field: CharacterFieldDef,
+        draft: Character,
+    ): void {
+        const record = draft as unknown as Record<string, unknown>;
+        const raw = record[field.key];
+        const selected = (Array.isArray(raw) ? raw : coerceString(raw).split(','))
+            .map(value => coerceString(value).replace(/^\[\[(?:[^\]|]+\|)?([^\]]+)\]\]$/, '$1').trim())
+            .filter(Boolean);
+        const entityNames = field.entityRef === 'location'
+            ? this.plugin.locationManager.getAllLocations().map(location => location.name)
+            : this.characterManager.getAllCharacters().map(character => character.name);
+        const names = Array.from(new Set([...entityNames, ...selected])).sort((a, b) => a.localeCompare(b));
+        const select = row.createEl('select', {
+            cls: 'character-field-input dropdown storyline-entity-select',
+            attr: { 'aria-label': field.label, size: field.multiSelect ? '4' : '1' },
+        });
+        select.multiple = !!field.multiSelect;
+        for (const name of names) {
+            const option = select.createEl('option', { text: name, value: name });
+            option.selected = selected.includes(name);
+        }
+        select.addEventListener('change', () => {
+            const values = Array.from(select.selectedOptions).map(option => option.value);
+            record[field.key] = field.multiSelect ? values : (values[0] || '');
+            this.scheduleSave(draft);
+            this.renderEntityLinks(row, values);
+        });
+        this.renderEntityLinks(row, selected);
+    }
+
+    private renderEntityLinks(row: HTMLElement, values: string[]): void {
+        row.querySelector('.storyline-entity-links')?.remove();
+        if (values.length === 0) return;
+        const links = row.createDiv('storyline-entity-links');
+        for (const value of values) {
+            const link = links.createEl('a', { text: value, cls: 'storyline-entity-link' });
+            link.addEventListener('click', event => {
+                event.preventDefault();
+                void this.app.workspace.openLinkText(value, '', false);
+            });
         }
     }
 
@@ -1902,20 +1967,7 @@ export class CharacterView extends ItemView {
 
         const list = container.createDiv('character-role-history-list');
 
-        const persist = () => {
-            const cleaned: RoleEntry[] = [];
-            for (const e of (draft.roles || [])) {
-                const role = String(e.role || '').trim();
-                if (!role) continue;
-                const out: RoleEntry = { role };
-                if (e.from && e.from.trim()) out.from = e.from.trim();
-                if (e.plotline && e.plotline.trim()) out.plotline = e.plotline.trim();
-                if (e.book && e.book.trim()) out.book = e.book.trim();
-                cleaned.push(out);
-            }
-            draft.roles = cleaned;
-            this.scheduleSave(draft);
-        };
+        const persist = () => this.scheduleSave(draft);
 
         const renderRows = () => {
             list.empty();
@@ -2526,7 +2578,7 @@ export class CharacterView extends ItemView {
     private renderCustomFields(parent: HTMLElement, draft: Character): void {
         const section = parent.createDiv('character-section');
         const title = 'Custom Fields';
-        const isCollapsed = this.collapsedSections.has(title);
+        const isCollapsed = this.isSectionCollapsed(title);
 
         const sectionHeader = section.createDiv('character-section-header');
         const chevron = sectionHeader.createSpan('character-section-chevron');
@@ -2539,12 +2591,10 @@ export class CharacterView extends ItemView {
         if (isCollapsed) sectionBody.setCssStyles({ display: 'none' });
 
         sectionHeader.addEventListener('click', () => {
-            if (this.collapsedSections.has(title)) {
-                this.collapsedSections.delete(title);
+            if (!this.toggleSection(title)) {
                 sectionBody.setCssStyles({ display: '' });
                 obsidian.setIcon(chevron, 'chevron-down');
             } else {
-                this.collapsedSections.add(title);
                 sectionBody.setCssStyles({ display: 'none' });
                 obsidian.setIcon(chevron, 'chevron-right');
             }
@@ -2637,6 +2687,8 @@ export class CharacterView extends ItemView {
             sections,
             builtinSectionCount: CHARACTER_CATEGORIES.length,
             collapsedSections: this.collapsedSections,
+            isSectionCollapsed: (key) => this.isSectionCollapsed(key),
+            toggleSection: (key) => { this.toggleSection(key); },
             collapseKeyPrefix: 'character',
             cssPrefix: 'character',
             scheduleSave: (d) => this.scheduleSave(d),
@@ -2658,7 +2710,7 @@ export class CharacterView extends ItemView {
         const gallery = draft.gallery ?? [];
 
         // Collapsible header with add button
-        const isCollapsed = this.collapsedSections.has(SECTION_KEY);
+        const isCollapsed = this.isSectionCollapsed(SECTION_KEY);
         const header = wrapper.createDiv('character-gallery-header');
         const chevron = header.createSpan('character-section-chevron');
         obsidian.setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
@@ -2698,12 +2750,10 @@ export class CharacterView extends ItemView {
 
         header.addEventListener('click', (e) => {
             if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
-            if (this.collapsedSections.has(SECTION_KEY)) {
-                this.collapsedSections.delete(SECTION_KEY);
+            if (!this.toggleSection(SECTION_KEY)) {
                 body.setCssStyles({ display: '' });
                 obsidian.setIcon(chevron, 'chevron-down');
             } else {
-                this.collapsedSections.add(SECTION_KEY);
                 body.setCssStyles({ display: 'none' });
                 obsidian.setIcon(chevron, 'chevron-right');
             }

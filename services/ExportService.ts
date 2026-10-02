@@ -395,7 +395,8 @@ export class ExportService {
         if (loc.description) lines.push(`${loc.description}  `);
         if (loc.atmosphere) lines.push(`**Atmosphere:** ${loc.atmosphere}  `);
         if (loc.significance) lines.push(`**Significance:** ${loc.significance}  `);
-        if (loc.inhabitants) lines.push(`**Inhabitants:** ${loc.inhabitants}  `);
+        const inhabitants = Array.isArray(loc.inhabitants) ? loc.inhabitants.join(', ') : loc.inhabitants;
+        if (inhabitants) lines.push(`**Inhabitants:** ${inhabitants}  `);
         if (loc.parent) lines.push(`**Inside:** ${loc.parent}  `);
         lines.push('');
     }

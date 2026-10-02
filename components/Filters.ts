@@ -28,12 +28,16 @@ export class FiltersComponent {
         onChange: (filter: SceneFilter, sort: SortConfig) => void,
         plugin: SceneCardsPlugin,
         onFocusModeChange?: FocusModeCallback,
+        initialFilter?: SceneFilter,
+        initialSort?: SortConfig,
     ) {
         this.container = container;
         this.sceneManager = sceneManager;
         this.onChange = onChange;
         this.plugin = plugin ?? null;
         this.onFocusModeChange = onFocusModeChange;
+        this.currentFilter = initialFilter ? JSON.parse(JSON.stringify(initialFilter)) as SceneFilter : {};
+        this.currentSort = initialSort ? { ...initialSort } : { field: 'sequence', direction: 'asc' };
     }
 
     /**
@@ -57,6 +61,7 @@ export class FiltersComponent {
                 placeholder: 'Search scenes...',
             }
         });
+        searchInput.value = this.currentFilter.searchText ?? '';
         searchInput.addEventListener('input', () => {
             this.currentFilter.searchText = searchInput.value || undefined;
             this.emitChange();
@@ -92,6 +97,7 @@ export class FiltersComponent {
         });
         const dirIcon = dirBtn.createSpan();
         obsidian.setIcon(dirIcon, 'arrow-down-up');
+        dirBtn.toggleClass('is-desc', this.currentSort.direction === 'desc');
         dirBtn.addEventListener('click', () => {
             this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
             // Optionally rotate the icon or visually indicate direction
@@ -146,6 +152,7 @@ export class FiltersComponent {
         });
         const filterIcon = toggleBtn.createSpan();
         obsidian.setIcon(filterIcon, 'list-filter');
+        this.updateFilterToggle(toggleBtn);
         toggleBtn.addEventListener('click', () => {
             this.visible = !this.visible;
             filterPanel.setCssStyles({ display: this.visible ? 'block' : 'none' });
@@ -172,6 +179,7 @@ export class FiltersComponent {
                     cls: 'story-line-chip',
                     text: status.charAt(0).toUpperCase() + status.slice(1),
                 });
+                if (this.currentFilter.status?.includes(status)) chip.addClass('active');
                 chip.addEventListener('click', () => {
                     if (!this.currentFilter.status) this.currentFilter.status = [];
                     const idx = this.currentFilter.status.indexOf(status);
@@ -197,6 +205,7 @@ export class FiltersComponent {
                     cls: 'story-line-chip',
                     text: getActDisplayLabel(act),
                 });
+                if (this.currentFilter.act?.map(String).includes(act)) chip.addClass('active');
                 chip.addEventListener('click', () => {
                     if (!this.currentFilter.act) this.currentFilter.act = [];
                     const idx = this.currentFilter.act.map(String).indexOf(act);
@@ -205,6 +214,32 @@ export class FiltersComponent {
                         chip.removeClass('active');
                     } else {
                         this.currentFilter.act.push(act);
+                        chip.addClass('active');
+                    }
+                    this.emitChange();
+                });
+            });
+        }
+
+        // Chapter filter
+        const chapterValues = this.sceneManager.queryService.getUniqueValues('chapter');
+        if (chapterValues.length > 0) {
+            new Setting(panel).setName('Chapter');
+            const chapterContainer = panel.createDiv('story-line-filter-chips');
+            chapterValues.forEach(chapter => {
+                const chip = chapterContainer.createEl('button', {
+                    cls: 'story-line-chip',
+                    text: `Chapter ${chapter}`,
+                });
+                if (this.currentFilter.chapter?.map(String).includes(chapter)) chip.addClass('active');
+                chip.addEventListener('click', () => {
+                    if (!this.currentFilter.chapter) this.currentFilter.chapter = [];
+                    const idx = this.currentFilter.chapter.map(String).indexOf(chapter);
+                    if (idx >= 0) {
+                        this.currentFilter.chapter.splice(idx, 1);
+                        chip.removeClass('active');
+                    } else {
+                        this.currentFilter.chapter.push(chapter);
                         chip.addClass('active');
                     }
                     this.emitChange();
@@ -222,6 +257,7 @@ export class FiltersComponent {
                     cls: 'story-line-chip',
                     text: pov,
                 });
+                if (this.currentFilter.pov?.includes(pov)) chip.addClass('active');
                 chip.addEventListener('click', () => {
                     if (!this.currentFilter.pov) this.currentFilter.pov = [];
                     const idx = this.currentFilter.pov.indexOf(pov);
@@ -428,8 +464,11 @@ export class FiltersComponent {
                 });
                 chip.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
-                    this.sceneManager.removeFilterPreset(idx);
+                    const deletingActivePreset = JSON.stringify(this.currentFilter) === JSON.stringify(preset.filter);
+                    void this.sceneManager.removeFilterPreset(idx);
+                    if (deletingActivePreset) this.currentFilter = {};
                     this.render();
+                    this.emitChange();
                     new Notice(`Deleted preset "${preset.name}"`);
                 });
             });
@@ -448,7 +487,19 @@ export class FiltersComponent {
     }
 
     private emitChange(): void {
+        const toggleBtn = this.container.querySelector('.story-line-filter-toggle');
+        if (toggleBtn) this.updateFilterToggle(toggleBtn);
         this.onChange(this.currentFilter, this.currentSort);
+    }
+
+    private updateFilterToggle(toggleBtn: HTMLElement): void {
+        const activeCount = Object.values(this.currentFilter).filter(value =>
+            value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0)
+        ).length;
+        toggleBtn.toggleClass('has-filter', activeCount > 0);
+        toggleBtn.setAttribute('title', activeCount > 0
+            ? `Show/hide filters (${activeCount} active)`
+            : 'Show/hide filters');
     }
 
     getFilter(): SceneFilter {

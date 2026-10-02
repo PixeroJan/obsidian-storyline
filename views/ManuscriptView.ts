@@ -45,6 +45,7 @@ export class ManuscriptView extends ItemView {
     private filtersComponent: FiltersComponent | null = null;
     private currentFilter: SceneFilter = {};
     private currentSort: SortConfig = { field: 'sequence', direction: 'asc' };
+    private manuscriptStateSaveTimer: number | null = null;
     private focusObserver: IntersectionObserver | null = null;
     private lazyObserver: IntersectionObserver | null = null;
     private embeddedLeaves: Map<string, WorkspaceLeaf> = new Map();
@@ -101,6 +102,12 @@ export class ManuscriptView extends ItemView {
         super(leaf);
         this.plugin = plugin;
         this.sceneManager = sceneManager;
+        this.currentFilter = sceneManager.activeProject?.manuscriptFilter
+            ? JSON.parse(JSON.stringify(sceneManager.activeProject.manuscriptFilter)) as SceneFilter
+            : {};
+        this.currentSort = sceneManager.activeProject?.manuscriptSort
+            ? { ...sceneManager.activeProject.manuscriptSort }
+            : { field: 'sequence', direction: 'asc' };
         this._plainText = plugin.settings.manuscriptPlainText !== false;
     }
 
@@ -134,6 +141,7 @@ export class ManuscriptView extends ItemView {
         // variable so the next ManuscriptView instance can restore it.
         this.captureCurrentState();
         this.captureAndPersistState();
+        this.flushManuscriptViewState();
         this.detachAllEmbedded();
         this.focusObserver?.disconnect();
         this.lazyObserver?.disconnect();
@@ -218,9 +226,13 @@ export class ManuscriptView extends ItemView {
             (filter, sort) => {
                 this.currentFilter = filter;
                 this.currentSort = sort;
+                this.scheduleManuscriptViewStateSave();
                 this.renderManuscript();
             },
-            this.plugin
+            this.plugin,
+            undefined,
+            this.currentFilter,
+            this.currentSort,
         );
         this.filtersComponent.render();
 
@@ -347,6 +359,24 @@ export class ManuscriptView extends ItemView {
     /** Build a cache key from the current filter + sort configuration */
     private computeFilterKey(): string {
         return JSON.stringify(this.currentFilter) + '|' + JSON.stringify(this.currentSort);
+    }
+
+    private scheduleManuscriptViewStateSave(): void {
+        if (this.manuscriptStateSaveTimer !== null) {
+            window.clearTimeout(this.manuscriptStateSaveTimer);
+        }
+        this.manuscriptStateSaveTimer = window.setTimeout(() => {
+            this.manuscriptStateSaveTimer = null;
+            void this.sceneManager.saveManuscriptViewState(this.currentFilter, this.currentSort);
+        }, 500);
+    }
+
+    private flushManuscriptViewState(): void {
+        if (this.manuscriptStateSaveTimer !== null) {
+            window.clearTimeout(this.manuscriptStateSaveTimer);
+            this.manuscriptStateSaveTimer = null;
+        }
+        void this.sceneManager.saveManuscriptViewState(this.currentFilter, this.currentSort);
     }
 
     private async renderManuscript(): Promise<void> {

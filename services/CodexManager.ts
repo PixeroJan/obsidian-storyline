@@ -2,6 +2,8 @@
 import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel } from './FieldTemplateService';
 import { App, TFile, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { CodexCategoryDef, CodexEntry, getBuiltinCodexCategory, withLinkingSection } from '../models/Codex';
+import { coerceString } from '../utils/narrow';
+import { MetadataParser, toWikilink } from './MetadataParser';
 
 /**
  * Manages generic Codex entries — loading, saving, creating, and deleting
@@ -292,11 +294,18 @@ export class CodexManager {
             const val = entry[key];
             if (val !== undefined && val !== null && val !== '' &&
                 !(Array.isArray(val) && val.length === 0)) {
-                fm[key] = val;
+                const field = catDef?.categories.flatMap(category => category.fields).find(def => def.key === key);
+                fm[key] = field?.entityRef
+                    ? (Array.isArray(val) ? val : [val]).map(value => toWikilink(String(value))).filter(Boolean)
+                    : key === 'aliases'
+                        ? this.parseList(val)
+                        : val;
             } else {
                 delete fm[key];
             }
         }
+
+        if (entry.aliases) fm.aliases = this.parseList(entry.aliases);
 
         // Series-ready: books list
         if (entry.books && entry.books.length > 0) {
@@ -424,17 +433,36 @@ export class CodexManager {
                 safeFm.universalFields && typeof safeFm.universalFields === 'object' ? safeFm.universalFields as Record<string, unknown> : undefined,
             ) as Record<string, string | string[]> | undefined,
             books: Array.isArray(safeFm.books) ? safeFm.books.map(String) : undefined,
+            aliases: this.parseList(safeFm.aliases)?.join(', '),
         };
 
         // Load all standard field values
         for (const key of catDef.fieldKeys) {
             if (key === 'name' || key === 'image' || key === 'gallery') continue;
             if (safeFm[key] !== undefined && safeFm[key] !== null) {
-                entry[key] = safeFm[key];
+                const field = catDef.categories.flatMap(category => category.fields).find(def => def.key === key);
+                entry[key] = key === 'aliases'
+                    ? this.parseList(safeFm[key]).join(', ')
+                    : field?.entityRef
+                    ? this.parseEntityValue(safeFm[key])
+                    : safeFm[key];
             }
         }
 
         return entry;
+    }
+
+    private parseList(value: unknown): string[] {
+        if (Array.isArray(value)) return value.map(item => coerceString(item)).map(item => item.trim()).filter(Boolean);
+        if (value == null || value === '') return [];
+        return coerceString(value).split(/[\n,]/).map(item => item.trim()).filter(Boolean);
+    }
+
+    private parseEntityValue(value: unknown): string | string[] {
+        const values = this.parseList(value)
+            .map(item => MetadataParser.cleanWikilink(item) ?? item)
+            .filter(Boolean);
+        return values.length === 1 ? values[0] : values;
     }
 
     private extractFrontmatter(content: string): Record<string, unknown> | null {

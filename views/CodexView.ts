@@ -3,6 +3,8 @@ import { App, ItemView, WorkspaceLeaf, Modal, Setting, Notice, TFile } from 'obs
 import * as obsidian from 'obsidian';
 import type SceneCardsPlugin from '../main';
 import type { CodexVisualGroup } from '../settings';
+import { isSectionCollapsed, rememberSectionState } from '../settings';
+import { coerceString } from '../utils/narrow';
 import { SceneManager } from '../services/SceneManager';
 import { CodexManager } from '../services/CodexManager';
 import { CodexEntry, CodexCategoryDef, CodexFieldCategory, CodexFieldDef, BUILTIN_CODEX_CATEGORIES, makeCustomCodexCategory, CODEX_ICON_OPTIONS } from '../models/Codex';
@@ -49,8 +51,25 @@ export class CodexView extends ItemView {
     private activeVisualGroupId = '';
     /** Sections collapsed in detail view */
     private collapsedSections: Set<string> = new Set();
+    private sectionStateOverrides = new Map<string, boolean>();
     /** Search filter text */
     private searchText: string = '';
+
+    private isSectionCollapsed(key: string): boolean {
+        const override = this.sectionStateOverrides.get(key);
+        if (override !== undefined) return override;
+        return isSectionCollapsed(this.plugin.settings, key, this.collapsedSections.has(key));
+    }
+
+    private toggleSection(key: string): boolean {
+        const collapsed = !this.isSectionCollapsed(key);
+        this.sectionStateOverrides.set(key, collapsed);
+        if (collapsed) this.collapsedSections.add(key);
+        else this.collapsedSections.delete(key);
+        rememberSectionState(this.plugin.settings, key, collapsed);
+        if (this.plugin.settings.sectionDefaultState === 'remember') void this.plugin.saveSettings();
+        return collapsed;
+    }
 
     private formatFieldValue(value: unknown): string {
         if (value == null) return '';
@@ -778,7 +797,7 @@ export class CodexView extends ItemView {
         catDef: CodexCategoryDef,
     ): void {
         const sectionKey = `${catDef.id}-${cat.title}`;
-        const isCollapsed = this.collapsedSections.has(sectionKey);
+        const isCollapsed = this.isSectionCollapsed(sectionKey);
 
         const section = container.createDiv('codex-section');
         const sectionHeader = section.createDiv('codex-section-header');
@@ -786,11 +805,7 @@ export class CodexView extends ItemView {
             // Ignore clicks on the add-field / hide-category buttons
             if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
             if ((e.target as HTMLElement).closest('.character-section-hide-cat-btn')) return;
-            if (this.collapsedSections.has(sectionKey)) {
-                this.collapsedSections.delete(sectionKey);
-            } else {
-                this.collapsedSections.add(sectionKey);
-            }
+            this.toggleSection(sectionKey);
             if (this.rootContainer) this.renderView(this.rootContainer);
         });
 
@@ -959,17 +974,13 @@ export class CodexView extends ItemView {
         catDef: CodexCategoryDef,
     ): void {
         const sectionKey = `${catDef.id}-${cat.title}`;
-        const isCollapsed = this.collapsedSections.has(sectionKey);
+        const isCollapsed = this.isSectionCollapsed(sectionKey);
 
         const section = parent.createDiv('codex-section is-category-hidden');
         const sectionHeader = section.createDiv('codex-section-header');
         sectionHeader.addEventListener('click', (e) => {
             if ((e.target as HTMLElement).closest('.character-section-hide-cat-btn')) return;
-            if (this.collapsedSections.has(sectionKey)) {
-                this.collapsedSections.delete(sectionKey);
-            } else {
-                this.collapsedSections.add(sectionKey);
-            }
+            this.toggleSection(sectionKey);
             if (this.rootContainer) this.renderView(this.rootContainer);
         });
 
@@ -1027,7 +1038,7 @@ export class CodexView extends ItemView {
         sectionTitle?: string,
         builtInKeys?: string[],
     ): void {
-        const { key, label, placeholder, multiline, characterRef, toggle } = field;
+        const { key, label, placeholder, multiline, entityRef, toggle } = field;
         const row = container.createDiv('codex-field-row');
         const labelEl = row.createEl('label', { cls: 'codex-field-label', text: label });
 
@@ -1078,41 +1089,8 @@ export class CodexView extends ItemView {
             return;
         }
 
-        if (characterRef) {
-            // Render a character dropdown
-            const select = row.createEl('select', { cls: 'codex-field-input dropdown' });
-            select.createEl('option', { text: placeholder || 'Select character…', value: '' });
-
-            const characterEntries = this.plugin.characterManager
-                .getAllCharacters()
-                .sort((a, b) => a.name.localeCompare(b.name));
-            const characters = characterEntries.map(character => character.name);
-            const visualGroups = this.plugin.settings.codexVisualGroups?.character ?? [];
-            const groupedNames = new Set<string>();
-
-            for (const group of visualGroups) {
-                const groupEntries = characterEntries.filter(character => group.entryPaths.includes(character.filePath));
-                if (groupEntries.length === 0) continue;
-                const optionGroup = select.createEl('optgroup', { attr: { label: group.name } });
-                for (const character of groupEntries) {
-                    groupedNames.add(character.name);
-                    const opt = optionGroup.createEl('option', { text: character.name, value: character.name });
-                    if (currentValue === character.name) opt.selected = true;
-                }
-            }
-            for (const name of characters.filter(character => !groupedNames.has(character))) {
-                const opt = select.createEl('option', { text: name, value: name });
-                if (currentValue === name) opt.selected = true;
-            }
-            // If current value is set but not in characters list, keep it
-            if (currentValue && !characters.includes(currentValue)) {
-                const opt = select.createEl('option', { text: currentValue, value: currentValue });
-                opt.selected = true;
-            }
-            select.addEventListener('change', () => {
-                draft[key] = select.value;
-                this.scheduleSave(draft);
-            });
+        if (entityRef) {
+            this.renderEntityReferenceField(row, field, draft);
         } else if (multiline) {
             const textarea = row.createEl('textarea', {
                 cls: 'codex-field-textarea',
@@ -1160,6 +1138,53 @@ export class CodexView extends ItemView {
                     }
                 });
             }
+        }
+    }
+
+    private renderEntityReferenceField(
+        row: HTMLElement,
+        field: CodexFieldDef,
+        draft: CodexEntry,
+    ): void {
+        const raw = draft[field.key];
+        const selected = (Array.isArray(raw) ? raw : coerceString(raw).split(','))
+            .map(value => coerceString(value).replace(/^\[\[(?:[^\]|]+\|)?([^\]]+)\]\]$/, '$1').trim())
+            .filter(Boolean);
+        const entityNames = field.entityRef === 'character'
+            ? this.plugin.characterManager.getAllCharacters().map(character => character.name)
+            : field.entityRef === 'location'
+                ? this.plugin.locationManager.getAllLocations().map(location => location.name)
+                : this.codexManager.getAllEntries().map(entry => entry.name);
+        const names = Array.from(new Set([...entityNames, ...selected])).sort((a, b) => a.localeCompare(b));
+        const select = row.createEl('select', {
+            cls: 'codex-field-input dropdown storyline-entity-select',
+            attr: { 'aria-label': field.label, size: field.multiSelect ? '4' : '1' },
+        });
+        select.multiple = !!field.multiSelect;
+        if (!field.multiSelect) select.createEl('option', { text: field.placeholder || 'Select entry', value: '' });
+        for (const name of names) {
+            const option = select.createEl('option', { text: name, value: name });
+            option.selected = selected.includes(name);
+        }
+        select.addEventListener('change', () => {
+            const values = Array.from(select.selectedOptions).map(option => option.value).filter(Boolean);
+            draft[field.key] = field.multiSelect ? values : (values[0] || '');
+            this.scheduleSave(draft);
+            this.renderEntityLinks(row, values);
+        });
+        this.renderEntityLinks(row, selected);
+    }
+
+    private renderEntityLinks(row: HTMLElement, values: string[]): void {
+        row.querySelector('.storyline-entity-links')?.remove();
+        if (values.length === 0) return;
+        const links = row.createDiv('storyline-entity-links');
+        for (const value of values) {
+            const link = links.createEl('a', { text: value, cls: 'storyline-entity-link' });
+            link.addEventListener('click', event => {
+                event.preventDefault();
+                void this.app.workspace.openLinkText(value, '', false);
+            });
         }
     }
 
@@ -1472,7 +1497,7 @@ export class CodexView extends ItemView {
         const chevron = header.createSpan({ cls: 'codex-section-chevron' });
 
         const sectionKey = 'custom-fields';
-        const isCollapsed = this.collapsedSections.has(sectionKey);
+        const isCollapsed = this.isSectionCollapsed(sectionKey);
         obsidian.setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
 
         const icon = header.createSpan({ cls: 'codex-section-icon' });
@@ -1480,11 +1505,7 @@ export class CodexView extends ItemView {
         header.createSpan({ cls: 'codex-section-title', text: 'Custom Fields' });
 
         header.addEventListener('click', () => {
-            if (this.collapsedSections.has(sectionKey)) {
-                this.collapsedSections.delete(sectionKey);
-            } else {
-                this.collapsedSections.add(sectionKey);
-            }
+            this.toggleSection(sectionKey);
             if (this.rootContainer) this.renderView(this.rootContainer);
         });
 
@@ -1599,6 +1620,8 @@ export class CodexView extends ItemView {
             sections,
             builtinSectionCount,
             collapsedSections: this.collapsedSections,
+            isSectionCollapsed: (key) => this.isSectionCollapsed(key),
+            toggleSection: (key) => { this.toggleSection(key); },
             collapseKeyPrefix: `codex::${draft.type}`,
             cssPrefix: 'codex',
             scheduleSave: (d) => this.scheduleSave(d),
@@ -1624,7 +1647,7 @@ export class CodexView extends ItemView {
         const chevron = header.createSpan({ cls: 'codex-section-chevron' });
 
         const sectionKey = 'books';
-        const isCollapsed = this.collapsedSections.has(sectionKey);
+        const isCollapsed = this.isSectionCollapsed(sectionKey);
         obsidian.setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
 
         const icon = header.createSpan({ cls: 'codex-section-icon' });
@@ -1632,11 +1655,7 @@ export class CodexView extends ItemView {
         header.createSpan({ cls: 'codex-section-title', text: 'Appears In (Books)' });
 
         header.addEventListener('click', () => {
-            if (this.collapsedSections.has(sectionKey)) {
-                this.collapsedSections.delete(sectionKey);
-            } else {
-                this.collapsedSections.add(sectionKey);
-            }
+            this.toggleSection(sectionKey);
             if (this.rootContainer) this.renderView(this.rootContainer);
         });
 
@@ -1679,7 +1698,7 @@ export class CodexView extends ItemView {
         const gallery = draft.gallery ?? [];
 
         // Collapsible header with add button
-        const isCollapsed = this.collapsedSections.has(SECTION_KEY);
+        const isCollapsed = this.isSectionCollapsed(SECTION_KEY);
         const header = wrapper.createDiv('character-gallery-header');
         const chevron = header.createSpan('location-section-chevron');
         obsidian.setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
@@ -1711,12 +1730,10 @@ export class CodexView extends ItemView {
 
         header.addEventListener('click', (e) => {
             if ((e.target as HTMLElement).closest('.character-section-add-field-btn')) return;
-            if (this.collapsedSections.has(SECTION_KEY)) {
-                this.collapsedSections.delete(SECTION_KEY);
+            if (!this.toggleSection(SECTION_KEY)) {
                 body.setCssStyles({ display: '' });
                 obsidian.setIcon(chevron, 'chevron-down');
             } else {
-                this.collapsedSections.add(SECTION_KEY);
                 body.setCssStyles({ display: 'none' });
                 obsidian.setIcon(chevron, 'chevron-right');
             }

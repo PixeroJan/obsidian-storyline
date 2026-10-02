@@ -615,7 +615,7 @@ export default class SceneCardsPlugin extends Plugin {
             id: 'import-scrivener',
             name: 'Import Scrivener project',
             callback: async () => {
-                const { ScrivenerImporter } = await import('./services/ScrivenerImporter');
+                const { ScrivenerImporter, pickScrivenerDestination } = await import('./services/ScrivenerImporter');
                 if (!ScrivenerImporter.isAvailable()) {
                     new Notice('Scrivener import is only available on desktop.');
                     return;
@@ -638,10 +638,18 @@ export default class SceneCardsPlugin extends Plugin {
                 if (!scrivPath.endsWith('.scriv')) {
                     new Notice('Please select a .scriv folder.'); return;
                 }
+                let destination: string | undefined;
+                try {
+                    destination = await pickScrivenerDestination(this.app);
+                } catch (err: unknown) {
+                    new Notice('Import cancelled: ' + (err instanceof Error ? err.message : String(err)));
+                    return;
+                }
+                if (!destination) return;
                 new Notice('Importing Scrivener project…');
                 try {
                     const importer = new ScrivenerImporter(this.app, this);
-                    const r = await importer.import(scrivPath);
+                    const r = await importer.import(scrivPath, destination);
                     const parts = [`${r.scenesImported} scenes`, `${r.charactersImported} characters`, `${r.locationsImported} locations`];
                     if (r.filesImported > 0) parts.push(`${r.filesImported} files`);
                     new Notice(`Imported "${r.projectTitle}": ${parts.join(', ')}`, 8000);

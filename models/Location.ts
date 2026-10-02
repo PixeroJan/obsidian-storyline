@@ -125,9 +125,9 @@ export interface StoryLocation extends LocationBase {
     /** Significance to story */
     significance?: string;
     /** Key inhabitants or characters often present here */
-    inhabitants?: string;
+    inhabitants?: string | string[];
     /** Connected or nearby locations */
-    connectedLocations?: string;
+    connectedLocations?: string | string[];
     /** Map notes, coordinates, spatial info */
     mapNotes?: string;
 }
@@ -151,6 +151,10 @@ export interface LocationFieldDef {
     /** When true, render an on/off checkbox instead of a text input
      *  (e.g. case-sensitive matching). Stored as a boolean. */
     toggle?: boolean;
+    /** Populate the field from another StoryLine entity type. */
+    entityRef?: 'location' | 'character' | 'codex';
+    /** Allow more than one linked entity in the field. */
+    multiSelect?: boolean;
 }
 
 /** Categories for World editing */
@@ -245,14 +249,14 @@ export const LOCATION_CATEGORIES: LocationFieldCategory[] = [
         title: 'People',
         icon: 'users',
         fields: [
-            { key: 'inhabitants', label: 'Inhabitants', placeholder: 'Key inhabitants or characters often present', multiline: true },
+            { key: 'inhabitants', label: 'Inhabitants', placeholder: 'Key characters often present', entityRef: 'character', multiSelect: true },
         ],
     },
     {
         title: 'Connections',
         icon: 'link',
         fields: [
-            { key: 'connectedLocations', label: 'Connected Locations', placeholder: 'Nearby or linked locations' },
+            { key: 'connectedLocations', label: 'Connected Locations', placeholder: 'Nearby or linked locations', entityRef: 'location', multiSelect: true },
             { key: 'mapNotes', label: 'Map Notes', placeholder: 'Coordinates, spatial relationships, layout notes', multiline: true },
         ],
     },

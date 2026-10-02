@@ -247,6 +247,7 @@ A Scrivenings-style continuous document view that presents your entire story as 
 - **Plain Text toggle** — hides wiki-link styling, tag `#` prefixes, and external-link URLs so the text reads like clean prose. Defaults to ON for first-time users; the toolbar remembers your last choice (ON or OFF) across view switches and Obsidian restarts.
 - **Lock Links toggle** — makes internal links and tags non-editable. The cursor skips over link and tag text, preventing accidental changes while you write around them. Default: ON.
 - **Filter support** — use the same filter bar as other views to narrow down which scenes appear.
+- **Filters and remembered scope** — filter by status, act, chapter, POV, characters, locations, tags, custom scene fields, or search text. The active filter and sort are remembered per project, and the filter button stays marked while any filter is active. Saved presets include these selections.
 - **Word count footer** — total scene count and aggregate word count displayed at the bottom.
 - **Lazy loading** — editors are mounted on demand as you scroll, keeping memory usage low even for large projects.
 - **Navigator integration** — clicking a scene in the Navigator scrolls the manuscript to that scene instead of opening a new file.
@@ -278,6 +279,9 @@ A dedicated character management system with rich profiles. Characters are acces
   - **Relationships** — allies, enemies, romantic, mentors, other connections.
   - **Character Arc** — starting state, desired arc, ending state.
   - **Custom Fields** — add your own key/value pairs for anything else.
+- **Role History** — record successive roles for a character with optional scene or date/time ranges. Each period can target another character, use a two-way or one-way relationship, and be edited without losing the existing history.
+- **Remembered section state** — section defaults can be set to expanded, collapsed, or remembered so the editor reopens in the state you prefer.
+- **Linked locations** — choose existing Location or World entries for a character's locations; selected entries are stored as wikilinks and open from the profile.
 - **Portrait area** — circular portrait (96×96 px) at the top of the editor. Click to add or change the image. Hover shows "Add image" / "Change image" label.
 - **Image gallery** — add up to 10 reference images with captions. Browse them in a carousel below the portrait, or open any image in a floating lightbox you can resize and drag around. See [Image Galleries](#image-galleries).
 - **Image picker** — choose to import an image from your computer (saved into `<Project>/Images/`), pick an existing vault image, or remove the current image.
@@ -314,6 +318,8 @@ A hierarchical worldbuilding and location management system. Locations are acces
 #### Detail Editor
 - **World profiles** have eight collapsible sections: Overview, Geography & Environment, Culture & Society, Politics & Power, Magic & Technology, Beliefs & Mythology, Economy & Trade, History & Lore.
 - **Location profiles** have five sections: Overview, Atmosphere & Description, Story Significance, Connected Locations, and a Hierarchy section with World and Parent dropdowns.
+- **Remembered section state** — section defaults can be set to expanded, collapsed, or remembered.
+- **Linked entities** — choose existing Characters for inhabitants and existing Locations or Worlds for connected locations. Selected entries are stored as wikilinks and remain clickable.
 - **Nicknames / Aliases** — Both worlds and locations now support a **Nickname / Alias** field (comma-separated). The Link Scanner uses these to match alternative names in your prose, so writing "The Citadel" will link to a location whose nickname includes it.
 - **Portrait area** — rectangular portrait (120×80 px) at the top of the detail editor. Click to add or change the image.
 - **Image gallery** — add up to 10 images with captions. Browse via carousel or open in a floating lightbox. See [Image Galleries](#image-galleries).
@@ -338,6 +344,8 @@ The Codex is a unified hub that brings Characters, Locations, and custom categor
 - **Inspector toggle** — In the Manage Categories modal, each category has an **Inspector** checkbox. When enabled, that category appears as a tag-pill section in the Scene Inspector sidebar, letting you link Codex entries to scenes just like Characters and Locations. Linked entries are stored in the scene’s `codexLinks` frontmatter field.
 - **Search** — A search bar at the top of the hub filters across all entries, including Characters and Locations.
 - **Visual groups** — use the group button to create named, display-only groups for the active Codex category. Drag entries into bordered groups, reorder entries within a group, and drag group headers to reorder the groups. Groups are saved per project and do not move files or change frontmatter. Empty groups remain available as drop targets.
+- **Linked entity fields** — where available, owner, previous owner, and related-entry fields can select existing Characters, Locations, or Codex entries. Values are stored as wikilinks and open the linked profile.
+- **Remembered section state** — detail sections support expanded, collapsed, or remembered defaults.
 - **Back navigation** — From any detail page, click the back arrow to return to the Codex hub.
 - **Change detection** — When a codex entry's content has been modified since it was last reviewed, an amber warning banner appears on the detail page listing all scenes that reference the entry. Click any scene name to open it. Click **"Mark as reviewed"** to clear the warning and update the stored digest. Digests are stored per-project in `System/codex-digests.json`.
 - **Backward compatible** — Existing projects that have Characters and Locations folders at the top level (outside Codex/) continue to work without any changes.
@@ -360,9 +368,11 @@ These rules are applied by the Link Scanner when it scans scene bodies for plain
 ### Stats View
 
 A statistics dashboard organized into eight collapsible sections. Click any section header to expand or collapse it.
+Section defaults can be set to expanded, collapsed, or remembered so the dashboard reopens with the sections arranged to your preference.
 
 #### 1. Overview (open by default)
 - **Word count progress** — actual vs. project goal with a progress bar.
+- **Sticky note exclusion** — corkboard sticky notes are excluded from scene totals, word/character totals, progress calculations, and Stats breakdowns.
 - **Estimated reading time** — calculated from total words.
 - **Pace projection** — words per day needed to hit your goal, with an estimated completion date.
 
@@ -424,7 +434,7 @@ A statistics dashboard organized into eight collapsible sections. Click any sect
 A compact sidebar panel for quick scene navigation without leaving your current view.
 
 #### Toolbar
-- **Search** — type to filter scenes by title.
+- **Search** — type to filter scenes by title, POV, or plotline tags.
 - **Sort** — multiple modes: Reading order (by act, default), **By chapter** *(since 1.10.14, groups scenes under collapsible chapter headers, acts hidden)*, Chronological, Status, Recently Modified, Word Count, and Title (A–Z).
 - **Scene Details** — a button that opens the Scene Details Sidebar in the right panel (see below).
 
@@ -433,6 +443,11 @@ A compact sidebar panel for quick scene navigation without leaving your current 
 - Each plotline shows a **color dot** (matching your color scheme) and a **scene count**.
 - Click a plotline to filter scenes to only those tagged with it. Click again to clear.
 
+#### Chapter Filter
+- A separate collapsible section lists chapters with scene counts.
+- Click a chapter to show only its scenes; click **All** or the active chapter again to clear it.
+- Navigator filtering is independent from Manuscript filtering.
+
 #### Scene List
 - Scenes grouped by **act** with collapsible act headers.
 - Each row shows: sequence number, title, status badge, and word count.
@@ -440,7 +455,7 @@ A compact sidebar panel for quick scene navigation without leaving your current 
 - Click a scene to select it in the main view. Right-click for a context menu: pin/unpin and change status.
 
 #### Progress Bar
-- A bottom bar showing overall word count progress toward your project goal.
+- A bottom bar showing overall progress toward your project goal using the selected words or characters unit.
 
 #### Auto-Open
 - The Navigator opens automatically when a project loads (configurable via **Settings → Auto-open Navigator**).
@@ -610,10 +625,12 @@ Click any scene card to open the **Inspector Panel** on the right side. It provi
 
 ## Filtering & Presets
 
-All views support filtering by:
+The shared scene filter panel used by Board, Timeline, Plotgrid, and Manuscript supports:
 
 - **Active state** — show active scenes, all scenes, or inactive scenes only
 - **Status** (idea, outlined, draft, written, revised, final)
+- **Act** and **Chapter**
+- **POV**
 - **Characters** — filter by character presence
 - **Locations** — filter by location
 - **Tags** — filter by plotline/theme tags
@@ -1620,11 +1637,12 @@ Import an existing Scrivener project (.scriv) as a new StoryLine project. Deskto
 
 1. Open **Settings → Import** and click **Import .scriv**, or run **Import Scrivener Project** from the command palette.
 2. Select your `.scriv` folder in the file picker.
-3. If any top-level Scrivener folders don’t match a known category (Characters, Locations, Research, Notes), a **classification modal** appears asking how each should be imported:
+3. Choose the destination folder for the new StoryLine project. For a series import, choose the series destination; each imported book is created beneath it.
+4. If any top-level Scrivener folders don’t match a known category (Characters, Locations, Research, Notes), a **classification modal** appears asking how each should be imported:
    - **Codex category** — creates a new custom Codex category (e.g. “Magic”, “Factions”)
    - **Notes** / **Research** / **Scenes** — routes items to the corresponding StoryLine folder
    - **Skip** — excludes the folder from import
-4. A new StoryLine project is created with all converted files.
+5. A new StoryLine project is created with all converted files. Source content is validated before any project is created, so invalid or unavailable imports do not leave empty projects behind.
 
 ### What Gets Imported
 

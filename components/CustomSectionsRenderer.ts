@@ -98,6 +98,9 @@ export interface CustomSectionsHost<TDraft extends { custom?: Record<string, str
     builtinSectionCount: number;
     /** Set tracking which section bodies are currently collapsed. */
     collapsedSections: Set<string>;
+    /** Resolve and update section state when the host has configurable defaults. */
+    isSectionCollapsed?: (key: string) => boolean;
+    toggleSection?: (key: string) => void;
     /**
      * Namespaces the collapsed-section keys so sections from different views
      * (or different codex categories) never collide.
@@ -366,7 +369,9 @@ function renderOneSection<T extends { custom?: Record<string, string> }>(
         const chevron = header.createSpan({ cls: chevronLabel });
 
         const sectionKey = `custom-section::${collapseKeyPrefix}::${sec.title}`;
-        const isCollapsed = collapsedSections.has(sectionKey);
+        const isCollapsed = host.isSectionCollapsed
+            ? host.isSectionCollapsed(sectionKey)
+            : collapsedSections.has(sectionKey);
         setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
 
         const icon = header.createSpan({ cls: iconLabel });
@@ -477,11 +482,9 @@ function renderOneSection<T extends { custom?: Record<string, string> }>(
         });
 
         header.addEventListener('click', () => {
-            if (collapsedSections.has(sectionKey)) {
-                collapsedSections.delete(sectionKey);
-            } else {
-                collapsedSections.add(sectionKey);
-            }
+            if (host.toggleSection) host.toggleSection(sectionKey);
+            else if (collapsedSections.has(sectionKey)) collapsedSections.delete(sectionKey);
+            else collapsedSections.add(sectionKey);
             host.requestRerender();
         });
 

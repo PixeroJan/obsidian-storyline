@@ -7,6 +7,7 @@ import type { WritingTracker } from '../services/WritingTracker';
 
 import { STATS_VIEW_TYPE } from '../constants';
 import { applyMobileClass } from '../components/MobileAdapter';
+import { isSectionCollapsed, rememberSectionState } from '../settings';
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import { Scene, getStatusOrder, resolveStatusCfg } from '../models/Scene';
 import { getActDisplayLabel } from '../utils/actChapter';
@@ -38,6 +39,7 @@ export class StatsView extends ItemView {
     private proseCache: { readability: ReadabilityResult; wordFreq: [string, number][]; allWordFreq: [string, number][] } | null = null;
     private echoCache: { echoes: EchoCluster[]; perScene: SceneEchoReport[] } | null = null;
     private sprintTimerId: number | null = null;
+    private sectionStateOverrides = new Map<string, boolean>();
 
     constructor(leaf: WorkspaceLeaf, plugin: SceneCardsPlugin, sceneManager: SceneManager) {
         super(leaf);
@@ -144,7 +146,16 @@ export class StatsView extends ItemView {
         renderFn: (body: HTMLElement) => void,
     ): void {
         const details = parent.createEl('details', { cls: 'stats-collapsible' });
-        if (defaultOpen) details.setAttribute('open', '');
+        const stateKey = `stats::${title}`;
+        const override = this.sectionStateOverrides.get(stateKey);
+        const collapsed = override ?? isSectionCollapsed(this.plugin.settings, stateKey, !defaultOpen);
+        if (!collapsed) details.setAttribute('open', '');
+        details.addEventListener('toggle', () => {
+            const nextCollapsed = !details.open;
+            this.sectionStateOverrides.set(stateKey, nextCollapsed);
+            rememberSectionState(this.plugin.settings, stateKey, nextCollapsed);
+            if (this.plugin.settings.sectionDefaultState === 'remember') void this.plugin.saveSettings();
+        });
         const summary = details.createEl('summary', { cls: 'stats-collapsible-summary' });
         const iconEl = summary.createSpan({ cls: 'stats-collapsible-icon' });
         obsidian.setIcon(iconEl, icon);

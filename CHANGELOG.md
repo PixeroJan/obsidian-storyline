@@ -6,6 +6,21 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.79
+
+### Bug Fixes
+
+- **Scrivener import destinations** — Imports now validate source content before creating a project and let users choose the destination folder for single-book and series imports.
+- **Character Role History editing** *([#293](https://github.com/PixeroJan/obsidian-storyline/issues/293))* — Role history edits now persist correctly, and structured role data renders consistently.
+- **Responsive Role History and Stats layout** *([#294](https://github.com/PixeroJan/obsidian-storyline/issues/294))* — Role History and Statistics layouts now use available panel width without clipping.
+- **Manuscript filter state and presets** *([#299](https://github.com/PixeroJan/obsidian-storyline/issues/299))* — Active Manuscript filters and sorting now persist per project, status/act/chapter/POV selections remain visually synchronized after preset use or rerenders, and deleting the active preset clears its filter instead of leaving a hidden filter applied.
+
+### Improvements
+
+- **Remembered section states** *([#296](https://github.com/PixeroJan/obsidian-storyline/issues/296))* — Character, Location, Codex, and Stats sections support expanded, collapsed, and remembered defaults.
+- **Linked entity fields** *([#297](https://github.com/PixeroJan/obsidian-storyline/issues/297))* — Character locations, location inhabitants and connections, and Codex references can be selected from existing entities, opened as clickable links, and stored as wikilinks. Nicknames and aliases are also mapped to native `aliases` frontmatter.
+- **Chapter filtering in Manuscript and Navigator** *([#299](https://github.com/PixeroJan/obsidian-storyline/issues/299))* — The shared filter panel now includes chapters, and Navigator has its own independent chapter filter with scene counts. Navigator does not mirror Manuscript’s active filter state.
+
 ## Version 1.10.78
 
 ### Bug Fixes

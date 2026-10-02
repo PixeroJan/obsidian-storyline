@@ -482,6 +482,8 @@ export class SceneManager implements ISceneStore {
                 actDescriptions: {},
                 chapterDescriptions: {},
                 filterPresets: [],
+                manuscriptFilter: {},
+                manuscriptSort: { field: 'sequence', direction: 'asc' },
                 corkboardPositions: {},
             };
 
@@ -769,6 +771,10 @@ export class SceneManager implements ISceneStore {
                 actDescriptions: (fm.actDescriptions && typeof fm.actDescriptions === 'object') ? Object.fromEntries(Object.entries(fm.actDescriptions).map(([k, v]) => [Number(k), String(v)])) : {},
                 chapterDescriptions: (fm.chapterDescriptions && typeof fm.chapterDescriptions === 'object') ? Object.fromEntries(Object.entries(fm.chapterDescriptions).map(([k, v]) => [Number(k), String(v)])) : {},
                 filterPresets: Array.isArray(fm.filterPresets) ? fm.filterPresets : [],
+                manuscriptFilter: fm.manuscriptFilter && typeof fm.manuscriptFilter === 'object' ? fm.manuscriptFilter as SceneFilter : {},
+                manuscriptSort: fm.manuscriptSort && typeof fm.manuscriptSort === 'object'
+                    ? fm.manuscriptSort as SortConfig
+                    : { field: 'sequence', direction: 'asc' },
                 corkboardPositions: {},
                 seriesId: fm.seriesId || undefined,
                 bookId: typeof fm.bookId === 'string' ? fm.bookId : undefined,
@@ -2398,6 +2404,20 @@ export class SceneManager implements ISceneStore {
         await this.saveProjectFrontmatter(this._activeProject);
     }
 
+    /** Persist the active Manuscript filter and sort for the current project. */
+    async saveManuscriptViewState(filter: SceneFilter, sort: SortConfig): Promise<void> {
+        if (!this._activeProject) return;
+
+        const hasFilter = Object.values(filter).some(value =>
+            value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0)
+        );
+        this._activeProject.manuscriptFilter = hasFilter
+            ? JSON.parse(JSON.stringify(filter)) as SceneFilter
+            : {};
+        this._activeProject.manuscriptSort = { ...sort };
+        await this.saveProjectFrontmatter(this._activeProject);
+    }
+
     /** Get persisted corkboard positions from System/board.json */
     getCorkboardPositions(): Record<string, { x: number; y: number; z?: number; h?: number }> {
         // Return the in-memory cache (populated by loadCorkboardPositions)
@@ -2565,6 +2585,17 @@ export class SceneManager implements ISceneStore {
             existingFm.filterPresets = project.filterPresets;
         } else {
             delete existingFm.filterPresets;
+        }
+
+        if (project.manuscriptFilter && Object.keys(project.manuscriptFilter).length > 0) {
+            existingFm.manuscriptFilter = project.manuscriptFilter;
+        } else {
+            delete existingFm.manuscriptFilter;
+        }
+        if (project.manuscriptSort && (project.manuscriptSort.field !== 'sequence' || project.manuscriptSort.direction !== 'asc')) {
+            existingFm.manuscriptSort = project.manuscriptSort;
+        } else {
+            delete existingFm.manuscriptSort;
         }
 
         // corkboardPositions no longer stored in frontmatter — lives in System/board.json

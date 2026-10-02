@@ -39,6 +39,7 @@ interface NodeFsModule {
 interface NodePathModule {
     join(...parts: string[]): string;
     basename(path: string, ext?: string): string;
+    relative(from: string, to: string): string;
 }
 
 // Node modules — only available on desktop
@@ -51,6 +52,39 @@ const fs: NodeFsModule | undefined = nodeRequire
 const nodePath: NodePathModule | undefined = nodeRequire
     ? (nodeRequire('path') as NodePathModule)
     : undefined;
+
+/** Pick an existing vault folder and return its vault-relative path. */
+export async function pickScrivenerDestination(app: App): Promise<string | null> {
+    const win = window as unknown as { require?: NodeRequire };
+    let remote: { dialog: { showOpenDialog: (opts: unknown) => Promise<{ canceled: boolean; filePaths?: string[] }> } } | undefined;
+    try {
+        remote = win.require?.('@electron/remote') as typeof remote;
+    } catch {
+        try {
+            remote = (win.require?.('electron') as { remote: typeof remote })?.remote;
+        } catch {
+            // Fall through to the common desktop-only error below.
+        }
+    }
+    if (!remote || !nodePath) {
+        throw new Error('Could not access the folder dialog. Desktop only.');
+    }
+
+    const vaultRoot = (app.vault.adapter as unknown as { getBasePath?: () => string }).getBasePath?.();
+    if (!vaultRoot) throw new Error('Could not determine the active vault folder.');
+
+    const result = await remote.dialog.showOpenDialog({
+        title: 'Choose StoryLine import destination',
+        properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths?.length) return null;
+
+    const relative = normalizePath(nodePath.relative(vaultRoot, result.filePaths[0]));
+    if (!relative || relative === '.' || relative === '..' || relative.startsWith('../')) {
+        throw new Error('Choose a folder inside the active vault (not the vault root).');
+    }
+    return relative;
+}
 
 // ────────────────────────────────────────────────────
 //  Interfaces
@@ -817,8 +851,13 @@ export class ScrivenerImporter {
     /**
      * Import a .scriv project.
      * @param scrivPath Absolute path to the .scriv folder on disk.
+     * @param destinationRoot Vault-relative folder under which the imported
+     * project or series should be created.
      */
-    async import(scrivPath: string): Promise<ImportResult> {
+    async import(
+        scrivPath: string,
+        destinationRoot = this.plugin.settings.storyLineRoot,
+    ): Promise<ImportResult> {
         if (!fs || !nodePath) {
             throw new Error('Scrivener import is only available on desktop.');
         }
@@ -906,6 +945,28 @@ export class ScrivenerImporter {
             }
         }
 
+        // Validate every leaf before creating any vault files. Scrivener can
+        // contain binder metadata without synced document contents; importing
+        // those items would create a misleading empty project.
+        const flatItems = this.flattenBinder(binder);
+        const isContainer = (t: string) => /^(Folder|DraftFolder|ResearchFolder|TrashFolder)$/i.test(t);
+        const importableItems = flatItems.filter(it =>
+            it.binderType !== 'trash' &&
+            !isContainer(it.type) &&
+            it.children.length === 0,
+        );
+        const missingContent = importableItems
+            .filter(item => !this.findContentFile(scrivPath, item.uuid))
+            .map(item => `"${item.title}" (UUID: ${item.uuid})`);
+        if (missingContent.length > 0) {
+            const preview = missingContent.slice(0, 5).join(', ');
+            const suffix = missingContent.length > 5 ? `, and ${missingContent.length - 5} more` : '';
+            throw new Error(
+                `Import stopped: ${missingContent.length} item(s) have no content file: ${preview}${suffix}. `
+                + 'Sync or remove those items in Scrivener, then try again.',
+            );
+        }
+
         const result: ImportResult = {
             projectTitle: safeName,
             scenesImported: 0,
@@ -943,7 +1004,7 @@ export class ScrivenerImporter {
 
         if (isSeries) {
             // ── 3a. Create series structure ──
-            const root = this.plugin.settings.storyLineRoot;
+            const root = destinationRoot;
             const seriesFolder = normalizePath(`${root}/${safeName}`);
             const adapter = this.app.vault.adapter;
 
@@ -1014,7 +1075,7 @@ export class ScrivenerImporter {
             new Notice(`Creating series "${projectTitle}" with ${bookFolders.length} books…`, 3000);
         } else {
             // ── 3b. Single-book project ──
-            const project = await this.plugin.sceneManager.createProject(safeName);
+            const project = await this.plugin.sceneManager.createProject(safeName, '', destinationRoot);
             lastProject = project;
             folders = {
                 sceneFolder: project.sceneFolder,
@@ -1034,8 +1095,6 @@ export class ScrivenerImporter {
         }
 
         // ── 4. Walk the binder and import items ──
-        const flatItems = this.flattenBinder(binder);
-        const isContainer = (t: string) => /^(Folder|DraftFolder|ResearchFolder|TrashFolder)$/i.test(t);
         const total = flatItems.filter(it => !isContainer(it.type) && it.children.length === 0 && it.binderType !== 'trash').length;
         let processed = 0;
         let sceneIndex = 0;  // running counter for single-book scene ordering
@@ -1651,7 +1710,9 @@ export class ScrivenerImporter {
         // Copy binary into vault
         const binaryVaultPath = await this.uniquePath(normalizePath(`${targetFolder}/${safeFileName}`));
         const data = fs.readFileSync(sourcePath);
-        await this.app.vault.createBinary(binaryVaultPath, data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+        const binaryData = new ArrayBuffer(data.byteLength);
+        new Uint8Array(binaryData).set(data);
+        await this.app.vault.createBinary(binaryVaultPath, binaryData);
 
         // For images and PDFs: create a companion markdown note that embeds/links it
         if (EMBEDDABLE_EXTENSIONS.has(ext)) {

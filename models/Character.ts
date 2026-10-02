@@ -237,6 +237,10 @@ export interface CharacterFieldDef {
     /** When true, render an on/off checkbox instead of a text input
      *  (e.g. case-sensitive matching). Stored as a boolean. */
     toggle?: boolean;
+    /** Populate the field from another StoryLine entity type. */
+    entityRef?: 'location' | 'character' | 'codex';
+    /** Allow more than one linked entity in the field. */
+    multiSelect?: boolean;
 }
 
 /**
@@ -622,7 +626,7 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
             { key: 'role', label: 'Role in Story', placeholder: 'Protagonist, antagonist, mentor, sidekick…' },
             { key: 'occupation', label: 'Occupation', placeholder: 'Current job, income level, career history' },
             { key: 'residency', label: 'Residency', placeholder: 'Where they are from and where they currently live', multiline: true },
-            { key: 'locations', label: 'Locations', placeholder: 'Story locations they appear at (e.g. The Tavern, Castle Ruins)' },
+            { key: 'locations', label: 'Locations', placeholder: 'Story locations they appear at', entityRef: 'location', multiSelect: true },
         ],
     },
     {

@@ -6,6 +6,7 @@ import {
     WORLD_FIELD_KEYS, LOCATION_FIELD_KEYS,
 } from '../models/Location';
 import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel } from './FieldTemplateService';
+import { MetadataParser, toWikilink } from './MetadataParser';
 
 /**
  * Manages world & location .md files — loading, saving, creating, deleting.
@@ -115,7 +116,7 @@ export class LocationManager {
                 name: fmEff.name || basename,
                 image: fmEff.image,
                 gallery: this.parseGallery(fmEff.gallery),
-                nickname: fmEff.nickname,
+                nickname: fmEff.nickname || this.parseStringList(fmEff.aliases)?.join(', '),
                 description: fmEff.description,
                 geography: fmEff.geography,
                 culture: fmEff.culture,
@@ -152,15 +153,15 @@ export class LocationManager {
                 name: fmEff.name || basename,
                 image: fmEff.image,
                 gallery: this.parseGallery(fmEff.gallery),
-                nickname: fmEff.nickname,
+                nickname: fmEff.nickname || this.parseStringList(fmEff.aliases)?.join(', '),
                 locationType: fmEff.locationType,
                 world: fmEff.world,
                 parent: fmEff.parent,
                 description: fmEff.description,
                 atmosphere: fmEff.atmosphere,
                 significance: fmEff.significance,
-                inhabitants: fmEff.inhabitants,
-                connectedLocations: fmEff.connectedLocations,
+                inhabitants: this.parseEntityValue(fmEff.inhabitants),
+                connectedLocations: this.parseEntityValue(fmEff.connectedLocations),
                 mapNotes: fmEff.mapNotes,
                 books: this.parseStringList(fmEff.books),
                 booksById: this.parseStringList(fmEff.booksById),
@@ -367,11 +368,17 @@ export class LocationManager {
             if (key === 'name') continue;
             const val = (item as unknown as Record<string, unknown>)[key];
             if (val !== undefined && val !== null && val !== '' && !(Array.isArray(val) && val.length === 0)) {
-                fm[key] = val;
+                fm[key] = key === 'inhabitants' || key === 'connectedLocations'
+                    ? (Array.isArray(val) ? val : [val]).map(value => toWikilink(String(value))).filter(Boolean)
+                    : val;
             } else {
                 delete fm[key];
             }
         }
+
+        const aliases = this.parseStringList(item.nickname);
+        if (aliases?.length) fm.aliases = aliases;
+        else if (item.nickname === undefined || item.nickname === '') delete fm.aliases;
 
         if (item.custom && Object.keys(item.custom).length > 0) {
             fm.custom = item.custom;
@@ -478,6 +485,14 @@ export class LocationManager {
         if (!str) return undefined;
         const parsed = str.split(',').map(s => s.trim()).filter(Boolean);
         return parsed.length ? parsed : undefined;
+    }
+
+    private parseEntityValue(value: unknown): string | string[] | undefined {
+        const values = this.parseStringList(value)
+            ?.map(item => MetadataParser.cleanWikilink(item) ?? item)
+            .filter(Boolean);
+        if (!values?.length) return undefined;
+        return values.length === 1 ? values[0] : values;
     }
 
     private async ensureFolder(folderPath: string): Promise<void> {

@@ -726,6 +726,11 @@ export interface SceneCardsSettings {
      */
     autoHideViewLabels?: boolean;
 
+    /** Default state for collapsible editor and Stats sections. */
+    sectionDefaultState: SectionDefaultState;
+    /** Remembered collapsed state keyed by view and section identifier. */
+    sectionCollapsedStates: Record<string, boolean>;
+
     // DOCX export settings (adapted from ToWord plugin)
     docxSettings: SLDocxSettings;
 
@@ -925,6 +930,33 @@ export interface SceneCardsSettings {
     exportSceneSeparatorCustom?: string;
 }
 
+export type SectionDefaultState = 'expanded' | 'collapsed' | 'remember';
+
+/** Resolve a section's initial state without changing legacy view behavior. */
+export function isSectionCollapsed(
+    settings: Pick<SceneCardsSettings, 'sectionDefaultState' | 'sectionCollapsedStates'>,
+    key: string,
+    legacyFallback = false,
+): boolean {
+    if (settings.sectionDefaultState === 'remember' && key in (settings.sectionCollapsedStates || {})) {
+        return settings.sectionCollapsedStates[key];
+    }
+    if (settings.sectionDefaultState === 'collapsed') return true;
+    if (settings.sectionDefaultState === 'expanded') return false;
+    return legacyFallback;
+}
+
+/** Store an explicit section state when the user chose Remember last state. */
+export function rememberSectionState(
+    settings: Pick<SceneCardsSettings, 'sectionDefaultState' | 'sectionCollapsedStates'>,
+    key: string,
+    collapsed: boolean,
+): void {
+    if (settings.sectionDefaultState !== 'remember') return;
+    if (!settings.sectionCollapsedStates) settings.sectionCollapsedStates = {};
+    settings.sectionCollapsedStates[key] = collapsed;
+}
+
 /**
  * Default settings
  */
@@ -1004,6 +1036,8 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     manuscriptPlainText: true,
     hideToolbarTitle: true,
     autoHideViewLabels: true,
+    sectionDefaultState: 'expanded',
+    sectionCollapsedStates: {},
 
     docxSettings: { ...SL_DEFAULT_DOCX_SETTINGS },
 
@@ -1184,6 +1218,20 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                     this.plugin.updateToolbarVisibility();
                 }));
+
+        new Setting(generalBody)
+            .setName('Default section state')
+            .setDesc('Choose whether character, location, codex, and stats sections start expanded, collapsed, or remember their last state.')
+            .addDropdown(dropdown => {
+                dropdown.addOption('expanded', 'Expanded');
+                dropdown.addOption('collapsed', 'Collapsed');
+                dropdown.addOption('remember', 'Remember last state');
+                dropdown.setValue(this.plugin.settings.sectionDefaultState ?? 'expanded');
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.sectionDefaultState = value as SectionDefaultState;
+                    await this.plugin.saveSettings();
+                });
+            });
 
         const sceneBody = createSettingsSection('Writing', true);
 
@@ -3493,7 +3541,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
 
     /** Open a folder picker and run the Scrivener import. */
     private async pickAndImportScrivener(): Promise<void> {
-        const { ScrivenerImporter } = await import('./services/ScrivenerImporter');
+        const { ScrivenerImporter, pickScrivenerDestination } = await import('./services/ScrivenerImporter');
         if (!ScrivenerImporter.isAvailable()) {
             new Notice('Scrivener import is only available on desktop.');
             return;
@@ -3534,10 +3582,13 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             return;
         }
 
+        const destination = await pickScrivenerDestination(this.app);
+        if (!destination) return;
+
         new Notice('Importing Scrivener project…');
 
         const importer = new ScrivenerImporter(this.app, this.plugin);
-        const importResult = await importer.import(scrivPath);
+        const importResult = await importer.import(scrivPath, destination);
 
         // Summary notice
         const lines = [
