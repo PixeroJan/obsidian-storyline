@@ -103,15 +103,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifest.json package.json package-lock.json versions.json main.js
-          git commit -m "Release $RELEASE_VERSION"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          if git diff --cached --quiet; then
+            echo "No release file changes to commit."
+          else
+            git commit -m "Release $RELEASE_VERSION"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
 
       - name: Create release tag
         env:
           RELEASE_VERSION: ${{ steps.rel.outputs.version }}
         run: |
-          git tag "$RELEASE_VERSION"
-          git push origin "$RELEASE_VERSION"
+          git tag -f "$RELEASE_VERSION"
+          git push --force origin "refs/tags/$RELEASE_VERSION"
 
       - name: Create / update GitHub Release with build assets
         uses: softprops/action-gh-release@v2
