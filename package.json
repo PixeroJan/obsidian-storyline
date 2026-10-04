@@ -39,7 +39,7 @@
     "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",
     "lucide": "^0.336.0",
-    "markdown-it": "^14.1.1",
+    "markdown-it": "^14.3.2",
     "markdown-it-emoji": "^3.0.0",
     "markdown-it-mark": "^4.0.0",
     "pdf-lib": "^1.17.1"
