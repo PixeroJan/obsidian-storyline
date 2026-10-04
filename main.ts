@@ -132,7 +132,11 @@ export default class SceneCardsPlugin extends Plugin {
                 const previous = position > line.from ? view.state.sliceDoc(position - 1, position) : '';
                 const openingContext = position === line.from || !previous || /[\s([\]{}—–-]/.test(previous);
                 const [open, close] = getQuotePair(this.settings.quoteStyle);
-                view.dispatch(view.state.replaceSelection(open === close || openingContext ? open : close));
+                const selection = view.state.selection.main;
+                const replacement = selection.from !== selection.to
+                    ? `${open}${view.state.sliceDoc(selection.from, selection.to)}${close}`
+                    : (open === close || openingContext ? open : close);
+                view.dispatch(view.state.replaceSelection(replacement));
                 event.preventDefault();
                 return true;
             },
@@ -1236,7 +1240,7 @@ export default class SceneCardsPlugin extends Plugin {
         'tagColors', 'tagTypeOverrides', 'characterAliases', 'ignoredCharacters',
         'writingTrackerData', 'useProjectColors', 'plotlineDescriptions',
         // Legacy plotgrid data stored directly in data.json (before file-based storage)
-        'rows', 'columns', 'cells', 'zoom', 'stickyHeaders',
+        'rows', 'columns', 'cells', 'zoom', 'stickyHeaders', 'labelColumnWidth', 'collapsedSections',
         // Legacy / per-project keys that don't belong in global settings
         'filterPresets',
         // Issue #236 — custom sections, codex categories, and location types
@@ -2264,11 +2268,12 @@ export default class SceneCardsPlugin extends Plugin {
      */
     async loadActiveProjectEntities(): Promise<void> {
         const adapter = this.app.vault.adapter;
+        this.characterManager.setManualAliases(this.settings.characterAliases);
 
         const locFolder = this.sceneManager.getLocationFolder();
         if (locFolder) await this.locationManager.loadAll(locFolder);
         const charFolder = this.sceneManager.getCharacterFolder();
-        if (charFolder) await this.characterManager.loadCharacters(charFolder);
+        if (charFolder) await this.characterManager.loadCharacters(charFolder, this.settings.characterAliases);
 
         // Series mode: also scan the per-project Codex folder for book-only
         // characters and locations.
@@ -2285,6 +2290,7 @@ export default class SceneCardsPlugin extends Plugin {
                     this.characterManager.addFile(content, fp);
                 } catch { /* skip unreadable */ }
             }
+            await this.characterManager.reconcileAliasFiles([localCharFolder], this.settings.characterAliases);
         }
 
         const localLocFolder = this.sceneManager.getProjectLocalLocationFolder();
@@ -2913,6 +2919,8 @@ export default class SceneCardsPlugin extends Plugin {
                         if (raw.cells && typeof raw.cells === 'object') pgData.cells = raw.cells;
                         if (raw.zoom !== undefined) pgData.zoom = raw.zoom;
                         if (raw.stickyHeaders !== undefined) pgData.stickyHeaders = raw.stickyHeaders;
+                        if (raw.labelColumnWidth !== undefined) pgData.labelColumnWidth = raw.labelColumnWidth;
+                        if (raw.collapsedSections !== undefined) pgData.collapsedSections = raw.collapsedSections;
                         await adapter.write(pgPath, JSON.stringify(pgData, null, 2));
                     }
                 } catch (e) {

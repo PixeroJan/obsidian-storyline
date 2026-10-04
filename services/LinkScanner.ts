@@ -317,9 +317,9 @@ export class LinkScanner {
             }
 
             if ((c as unknown as Record<string, unknown>).nickname) {
-                // Support multiple comma-separated nicknames
+                // Support comma-, semicolon-, and line-separated nicknames
                 const nicknames = String((c as unknown as Record<string, unknown>).nickname)
-                    .split(',')
+                    .split(/[,;\n]/)
                     .map((n: string) => n.trim())
                     .filter(Boolean);
                 for (const nick of nicknames) {
@@ -345,9 +345,9 @@ export class LinkScanner {
             // Issue #228 — Linking & Matching rules for locations.
             const lRule = buildRule(l as unknown as Record<string, unknown>);
             registerRule(l.name.toLowerCase(), l.name, lRule);
-            // Support comma-separated nicknames for locations
+            // Support comma-, semicolon-, and line-separated nicknames for locations
             if (l.nickname) {
-                const nicks = String(l.nickname).split(',').map(n => n.trim()).filter(Boolean);
+                const nicks = String(l.nickname).split(/[,;\n]/).map(n => n.trim()).filter(Boolean);
                 for (const nick of nicks) {
                     const nickLower = nick.toLowerCase();
                     this.locNames.add(nickLower);
@@ -361,9 +361,9 @@ export class LinkScanner {
             // Issue #228 — Linking & Matching rules for worlds.
             const wRule = buildRule(w as unknown as Record<string, unknown>);
             registerRule(w.name.toLowerCase(), w.name, wRule);
-            // Support comma-separated nicknames for worlds
+            // Support comma-, semicolon-, and line-separated nicknames for worlds
             if (w.nickname) {
-                const nicks = String(w.nickname).split(',').map(n => n.trim()).filter(Boolean);
+                const nicks = String(w.nickname).split(/[,;\n]/).map(n => n.trim()).filter(Boolean);
                 for (const nick of nicks) {
                     const nickLower = nick.toLowerCase();
                     this.locNames.add(nickLower);
@@ -411,10 +411,10 @@ export class LinkScanner {
                         if (caseSensitive) this.codexCaseSensitiveNames.push(alias);
                     }
                 }
-                // Support comma-separated nicknames for codex entries
+                // Support comma-, semicolon-, and line-separated nicknames for codex entries
                 const nick = (entry as unknown as Record<string, unknown>).nickname;
                 if (nick && typeof nick === 'string') {
-                    const nicks = String(nick).split(',').map(n => n.trim()).filter(Boolean);
+                    const nicks = String(nick).split(/[,;\n]/).map(n => n.trim()).filter(Boolean);
                     for (const n of nicks) {
                         const nLower = n.toLowerCase();
                         if (!this.charNames.has(nLower) && !this.locNames.has(nLower)) {

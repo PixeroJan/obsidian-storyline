@@ -5,6 +5,7 @@ import type SceneCardsPlugin from '../main';
 import { resolveTagColor, getPlotlineHSL, resolveStickyNoteColors, resolveStickyNoteFontColor } from '../settings';
 import type { SceneManager } from '../services/SceneManager';
 import { formatActChapterPrefix } from '../utils/actChapter';
+import { parseSceneLocations } from '../services/MetadataParser';
 import { ColorCodingMode, Scene, SceneStatus, TIMELINE_MODE_ICONS, TIMELINE_MODE_LABELS, formatSceneLength, getStatusOrder, resolveStatusCfg } from '../models/Scene';
 
 /**
@@ -186,11 +187,11 @@ export class SceneCardComponent {
             if (scanResult && scanResult.links.length > 0) {
                 // Count only links NOT already in frontmatter
                 const fmChars = new Set((scene.characters || []).map(c => c.toLowerCase()));
-                const fmLoc = scene.location?.toLowerCase();
+                const fmLocs = new Set(parseSceneLocations(scene.location).map(location => location.toLowerCase()));
                 const novelCount = scanResult.links.filter(l => {
                     const key = l.name.toLowerCase();
                     if (l.type === 'character' && fmChars.has(key)) return false;
-                    if (l.type === 'location' && key === fmLoc) return false;
+                    if (l.type === 'location' && fmLocs.has(key)) return false;
                     return true;
                 }).length;
                 if (novelCount > 0) {

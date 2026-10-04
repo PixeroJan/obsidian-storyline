@@ -93,6 +93,23 @@ function wrapArray(arr: unknown): unknown {
         .filter((s): s is string => !!s);
 }
 
+/** Parse the existing scalar location field as a comma-separated list. */
+export function parseSceneLocations(value: unknown): string[] {
+    const rawValues = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
+    return rawValues
+        .flatMap(item => String(item).split(','))
+        .map(item => MetadataParser.cleanWikilink(item))
+        .filter((item): item is string => !!item);
+}
+
+function formatSceneLocations(value: unknown): string | undefined {
+    const locations = parseSceneLocations(value);
+    if (locations.length === 0) return undefined;
+    return _writeSceneFieldsAsWikilinks
+        ? locations.map(location => toWikilink(location)).filter((location): location is string => !!location).join(', ')
+        : locations.join(', ');
+}
+
 /**
  * Parses frontmatter from markdown content and extracts Scene data
  */
@@ -128,7 +145,7 @@ export class MetadataParser {
             chronologicalOrder: frontmatter.chronologicalOrder ?? (frontmatter.chronological_order as number | undefined),
             pov: this.cleanWikilink(frontmatter.pov),
             characters: this.parseCharacters(frontmatter.characters),
-            location: this.cleanWikilink(frontmatter.location),
+            location: parseSceneLocations(frontmatter.location).join(', ') || undefined,
             timeline: frontmatter.timeline,
             storyDate: this.normalizeFrontmatterString(frontmatter.storyDate ?? frontmatter.story_date),
             storyTime: this.normalizeFrontmatterString(frontmatter.storyTime ?? frontmatter.story_time),
@@ -278,6 +295,12 @@ export class MetadataParser {
                 }
                 continue;
             }
+            if (key === 'location') {
+                const formatted = formatSceneLocations(value);
+                if (formatted) frontmatter[key] = formatted;
+                else delete frontmatter[key];
+                continue;
+            }
             if (value !== undefined) {
                 if ((SCENE_LINK_FIELDS_SCALAR as readonly string[]).includes(key)) {
                     frontmatter[key] = wrapScalar(value);
@@ -330,7 +353,7 @@ export class MetadataParser {
         if (scene.chronologicalOrder !== undefined) fm.chronologicalOrder = scene.chronologicalOrder;
         if (scene.pov) fm.pov = wrapScalar(scene.pov);
         if (scene.characters?.length) fm.characters = wrapArray(scene.characters);
-        if (scene.location) fm.location = wrapScalar(scene.location);
+        if (scene.location) fm.location = formatSceneLocations(scene.location);
         if (scene.timeline) fm.timeline = scene.timeline;
         if (scene.storyDate) fm.storyDate = scene.storyDate;
         if (scene.storyTime) fm.storyTime = scene.storyTime;

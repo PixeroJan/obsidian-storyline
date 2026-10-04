@@ -3,7 +3,8 @@ import * as obsidian from 'obsidian';
 import type SceneCardsPlugin from '../main';
 import { SceneManager } from '../services/SceneManager';
 import { Scene, getStatusOrder, resolveStatusCfg } from '../models/Scene';
-import { renderAutocompleteInput } from './InlineSuggest';
+import { renderAutocompleteInput, renderTagPillInput } from './InlineSuggest';
+import { parseSceneLocations } from '../services/MetadataParser';
 
 /**
  * Lightweight "Info" side panel — a planning-focused mini Inspector.
@@ -198,13 +199,14 @@ export class InfoPanelComponent {
         const row = this.container.createDiv('sl-info-row');
         row.createSpan({ cls: 'sl-info-label', text: 'Location' });
         const field = row.createDiv('sl-info-field');
-        renderAutocompleteInput({
+        renderTagPillInput({
             container: field,
-            value: scene.location || '',
+            values: parseSceneLocations(scene.location),
             getSuggestions: () => this.getLocationNames(),
-            onChange: async (val) => {
-                await this.sceneManager.updateScene(scene.filePath, { location: val });
-                scene.location = val;
+            onChange: async (values) => {
+                const value = values.join(', ');
+                await this.sceneManager.updateScene(scene.filePath, { location: value || undefined });
+                scene.location = value || undefined;
             },
             placeholder: 'Search locations…',
         });

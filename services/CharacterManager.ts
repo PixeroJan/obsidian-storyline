@@ -12,6 +12,7 @@ import { MetadataParser, toWikilink } from './MetadataParser';
 export class CharacterManager {
     private app: App;
     private characters: Map<string, Character> = new Map();
+    private manualAliases: Record<string, string> = {};
 
     constructor(app: App) {
         this.app = app;
@@ -22,7 +23,8 @@ export class CharacterManager {
      * Uses the vault adapter (filesystem) for reliable discovery of
      * externally-created or synced files.
      */
-    async loadCharacters(folderPath: string): Promise<Character[]> {
+    async loadCharacters(folderPath: string, manualAliases?: Record<string, string>): Promise<Character[]> {
+        if (manualAliases) this.manualAliases = { ...manualAliases };
         this.characters.clear();
         const adapter = this.app.vault.adapter;
         if (!await adapter.exists(folderPath)) return [];
@@ -45,7 +47,13 @@ export class CharacterManager {
             }
         }
 
+        await this.reconcileAliasFiles([folderPath]);
+
         return this.getAllCharacters();
+    }
+
+    setManualAliases(manualAliases?: Record<string, string>): void {
+        this.manualAliases = { ...(manualAliases || {}) };
     }
 
     /**
@@ -78,7 +86,7 @@ export class CharacterManager {
      * Get all loaded characters sorted by name.
      */
     getAllCharacters(): Character[] {
-        return Array.from(this.characters.values()).sort((a, b) =>
+        return this.deduplicateCharacters(Array.from(this.characters.values())).sort((a, b) =>
             a.name.toLowerCase().localeCompare(b.name.toLowerCase())
         );
     }
@@ -95,19 +103,9 @@ export class CharacterManager {
      * Checks full name, nickname(s), and first name.
      */
     findByName(name: string): Character | undefined {
-        const lower = name.toLowerCase();
-        for (const char of this.characters.values()) {
-            if (char.name.toLowerCase() === lower) return char;
-            // Check nickname(s) — supports comma-separated
-            if (char.nickname) {
-                const nicks = char.nickname.split(',').map(n => n.trim().toLowerCase()).filter(Boolean);
-                if (nicks.includes(lower)) return char;
-            }
-            // Check first name (first word of full name)
-            const firstName = char.name.split(/\s+/)[0];
-            if (firstName && firstName.toLowerCase() === lower) return char;
-        }
-        return undefined;
+        const lower = MetadataParser.cleanWikilink(name)?.toLowerCase() || name.trim().toLowerCase();
+        const canonical = this.buildAliasMap().get(lower);
+        return this.getAllCharacters().find(char => char.name.toLowerCase() === (canonical || lower));
     }
 
     /**
@@ -119,9 +117,12 @@ export class CharacterManager {
      * @param manualAliases  Optional user-defined alias → canonical mappings
      *                       (from plugin settings.characterAliases).
      */
-    buildAliasMap(manualAliases?: Record<string, string>): Map<string, string> {
+    buildAliasMap(
+        manualAliases: Record<string, string> = this.manualAliases,
+        sourceCharacters: Character[] = Array.from(this.characters.values()),
+    ): Map<string, string> {
         const aliasMap = new Map<string, string>();
-        const allChars = this.getAllCharacters();
+        const allChars = sourceCharacters;
 
         // Count first-name usage to avoid ambiguity
         const firstNameCount = new Map<string, number>();
@@ -130,15 +131,18 @@ export class CharacterManager {
             if (first) firstNameCount.set(first, (firstNameCount.get(first) || 0) + 1);
         }
 
+        // Register every canonical profile first so a nickname-named duplicate
+        // cannot overwrite the canonical target when aliases are applied.
+        for (const char of allChars) {
+            aliasMap.set(char.name.toLowerCase(), char.name);
+        }
+
         for (const char of allChars) {
             const canonical = char.name;
 
-            // Full name
-            aliasMap.set(canonical.toLowerCase(), canonical);
-
             // Nicknames
             if (char.nickname) {
-                const nicks = char.nickname.split(',').map(n => n.trim()).filter(Boolean);
+                const nicks = char.nickname.split(/[,;\n]/).map(n => n.trim()).filter(Boolean);
                 for (const nick of nicks) {
                     aliasMap.set(nick.toLowerCase(), canonical);
                 }
@@ -159,6 +163,32 @@ export class CharacterManager {
         }
 
         return aliasMap;
+    }
+
+    private deduplicateCharacters(characters: Character[]): Character[] {
+        const aliasMap = this.buildAliasMap(this.manualAliases, characters);
+        const canonicalNames = new Set(characters.map(char => char.name.toLowerCase()));
+        return characters.filter((char) => {
+            const canonical = aliasMap.get(char.name.toLowerCase());
+            return !canonical || canonical.toLowerCase() === char.name.toLowerCase()
+                || !canonicalNames.has(canonical.toLowerCase());
+        });
+    }
+
+    async reconcileAliasFiles(folderPaths: string[], manualAliases?: Record<string, string>): Promise<void> {
+        if (manualAliases) this.manualAliases = { ...manualAliases };
+        const characters = Array.from(this.characters.values());
+        const aliasMap = this.buildAliasMap(this.manualAliases, characters);
+        const canonicalNames = new Set(characters.map(char => char.name.toLowerCase()));
+        for (const character of characters) {
+            const canonical = aliasMap.get(character.name.toLowerCase());
+            if (!canonical || canonical.toLowerCase() === character.name.toLowerCase()
+                || !canonicalNames.has(canonical.toLowerCase())) continue;
+            if (!folderPaths.some(folderPath => character.filePath.startsWith(folderPath + '/'))) continue;
+            const file = this.app.vault.getAbstractFileByPath(normalizePath(character.filePath));
+            if (file instanceof TFile) await this.app.fileManager.trashFile(file);
+            this.characters.delete(character.filePath);
+        }
     }
 
     /**
@@ -437,7 +467,7 @@ export class CharacterManager {
         const str = coerceString(value);
         if (!str) return undefined;
         const parsed = str
-            .split(',')
+            .split(/[,;\n]/)
             .map((s: string) => s.trim())
             .filter(Boolean);
         return parsed.length ? parsed : undefined;

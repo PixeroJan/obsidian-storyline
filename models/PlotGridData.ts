@@ -52,5 +52,7 @@ export interface PlotGridData {
     cells: Record<string, CellData>;
     zoom: number;
     stickyHeaders?: boolean;
+    labelColumnWidth?: number;
+    collapsedSections?: Record<string, boolean>;
 }
 /* eslint-enable @typescript-eslint/no-redundant-type-constituents -- end of file-wide suppression block opened at line 1 */

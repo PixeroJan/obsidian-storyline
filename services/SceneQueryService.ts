@@ -1,6 +1,7 @@
  
 import { Scene, SceneFilter, SortConfig, getStatusOrder } from '../models/Scene';
 import { compareActChapter, getActDisplayLabel } from '../utils/actChapter';
+import { parseSceneLocations } from './MetadataParser';
 
 /**
  * Read-only interface for accessing the scene store.
@@ -179,6 +180,10 @@ export class SceneQueryService {
     getUniqueValues(field: 'act' | 'chapter' | 'pov' | 'status' | 'emotion' | 'location'): string[] {
         const values = new Set<string>();
         for (const scene of this.sceneStore.sceneValues()) {
+            if (field === 'location') {
+                for (const location of parseSceneLocations(scene.location)) values.add(location);
+                continue;
+            }
             const val = scene[field];
             if (val !== undefined && val !== null) {
                 values.add(String(val));
@@ -256,8 +261,8 @@ export class SceneQueryService {
     getLocationFrequencies(): Map<string, number> {
         const counts = new Map<string, number>();
         for (const scene of this.sceneStore.sceneValues()) {
-            if (scene.location) {
-                const key = scene.location.toLowerCase();
+            for (const location of parseSceneLocations(scene.location)) {
+                const key = location.toLowerCase();
                 counts.set(key, (counts.get(key) || 0) + 1);
             }
         }
@@ -317,8 +322,8 @@ export class SceneQueryService {
             }
 
             // Locations
-            if (scene.location) {
-                locationCounts[scene.location] = (locationCounts[scene.location] || 0) + 1;
+            for (const location of parseSceneLocations(scene.location)) {
+                locationCounts[location] = (locationCounts[location] || 0) + 1;
             }
 
             // Orphaned (no tags, no connections)
@@ -370,8 +375,9 @@ export class SceneQueryService {
                 return false;
             }
         }
-        if (filter.locations?.length && (!scene.location || !filter.locations.includes(scene.location))) {
-            return false;
+        if (filter.locations?.length) {
+            const sceneLocations = parseSceneLocations(scene.location);
+            if (!sceneLocations.some(location => filter.locations!.includes(location))) return false;
         }
         if (filter.tags?.length) {
             if (!scene.tags || !filter.tags.some(t => scene.tags!.includes(t))) {
@@ -395,7 +401,7 @@ export class SceneQueryService {
                 scene.conflict,
                 scene.emotion,
                 scene.pov,
-                scene.location,
+                ...parseSceneLocations(scene.location),
                 ...(scene.characters || []),
                 ...(scene.tags || []),
             ].filter(Boolean).join(' ').toLowerCase();

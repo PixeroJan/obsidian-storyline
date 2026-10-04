@@ -85,6 +85,7 @@ export class RelationshipMap {
     private zoom = 1;
     private onSelectCharacter?: (name: string) => void;
     private resizeObserver: ResizeObserver | null = null;
+    private aliasMap: Map<string, string>;
     /** Issue #222 — relationship types currently hidden by the user. */
     private hiddenTypes: Set<RelationshipType> = new Set();
 
@@ -92,10 +93,12 @@ export class RelationshipMap {
         container: HTMLElement,
         characters: Character[],
         onSelectCharacter?: (name: string) => void,
+        aliasMap?: Map<string, string>,
     ) {
         this.container = container;
         this.characters = characters;
         this.onSelectCharacter = onSelectCharacter;
+        this.aliasMap = aliasMap || this.buildAliasMap();
     }
 
     render(): void {
@@ -217,11 +220,12 @@ export class RelationshipMap {
 
         // Create nodes for all characters with profiles
         for (const char of this.characters) {
-            const key = char.name.toLowerCase();
+            const canonicalName = this.resolveName(char.name);
+            const key = canonicalName.toLowerCase();
             if (!nodeMap.has(key)) {
                 nodeMap.set(key, {
                     id: key,
-                    label: char.name,
+                    label: canonicalName,
                     role: getRoleDisplay(char.role) || undefined,
                     x: this.width / 2 + (Math.random() - 0.5) * this.width * 0.6,
                     y: this.height / 2 + (Math.random() - 0.5) * this.height * 0.6,
@@ -234,16 +238,17 @@ export class RelationshipMap {
 
         // Parse relationships from structured rows
         for (const char of this.characters) {
-            const fromKey = char.name.toLowerCase();
+            const fromKey = this.resolveName(char.name).toLowerCase();
             if (Array.isArray(char.relations)) {
                 for (const relation of char.relations) {
                     const baseType = RELATION_BASE_TYPE_BY_CATEGORY[relation.category] || 'other';
                     const name = relation.target?.trim();
                     if (!name) continue;
-                    this.ensureNode(nodeMap, name);
+                    const target = this.resolveName(name);
+                    this.ensureNode(nodeMap, target);
                     edgeList.push({
                         source: fromKey,
-                        target: name.toLowerCase(),
+                        target: target.toLowerCase(),
                         type: baseType,
                         twoWay: relation.twoWay !== false,
                     });
@@ -253,8 +258,9 @@ export class RelationshipMap {
             // Legacy free-text family/background field may contain relatives by name.
             if (char.family) {
                 for (const name of this.parseNames(char.family)) {
-                    this.ensureNode(nodeMap, name);
-                    edgeList.push({ source: fromKey, target: name.toLowerCase(), type: 'family' });
+                    const target = this.resolveName(name);
+                    this.ensureNode(nodeMap, target);
+                    edgeList.push({ source: fromKey, target: target.toLowerCase(), type: 'family' });
                 }
             }
         }
@@ -288,6 +294,36 @@ export class RelationshipMap {
                 hasProfile: false,
             });
         }
+    }
+
+    private buildAliasMap(): Map<string, string> {
+        const aliases = new Map<string, string>();
+        for (const char of this.characters) aliases.set(char.name.toLowerCase(), char.name);
+        for (const char of this.characters) {
+            if (!char.nickname) continue;
+            for (const nickname of char.nickname.split(/[,;\n]/).map(value => value.trim()).filter(Boolean)) {
+                aliases.set(nickname.toLowerCase(), char.name);
+            }
+        }
+        return aliases;
+    }
+
+    private resolveName(value: string): string {
+        const cleaned = this.cleanReference(value);
+        return this.aliasMap.get(cleaned.toLowerCase()) || cleaned;
+    }
+
+    private cleanReference(value: string): string {
+        const trimmed = value.trim();
+        const match = trimmed.match(/^\[\[([^\]]+)\]\]$/);
+        if (!match) return trimmed;
+        const inner = match[1];
+        const [target, display] = inner.split('|', 2).map(part => part.trim());
+        const targetName = target.split('#')[0].split('/').pop()?.trim() || target;
+        return this.aliasMap.get(targetName.toLowerCase())
+            || this.aliasMap.get((display || '').toLowerCase())
+            || display
+            || targetName;
     }
 
     /**

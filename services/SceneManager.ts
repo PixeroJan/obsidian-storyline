@@ -262,10 +262,12 @@ export class SceneManager implements ISceneStore {
         const rootPath = this.plugin.settings.storyLineRoot;
         const adapter = this.app.vault.adapter;
 
-        // Check if root exists on the filesystem
-        if (!await adapter.exists(rootPath)) return [];
-
-        const rootListing = await adapter.list(rootPath);
+        // A project may have been created outside the configured root. Keep
+        // scanning so vault-wide discovery and the saved-path fallback can
+        // still restore it when the configured root does not exist.
+        const rootListing = await adapter.exists(rootPath)
+            ? await adapter.list(rootPath)
+            : { files: [], folders: [] };
 
         // Helper: try to parse a .md file at the given path as a project
         const tryParse = async (filePath: string) => {

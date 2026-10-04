@@ -16,6 +16,7 @@ import { ButtonComponent, DropdownComponent, ItemView, Menu, Modal, Notice, Sett
 import * as obsidian from 'obsidian';
 import { BUILTIN_BEAT_SHEETS, Scene, SceneStatus, TIMELINE_MODES, TIMELINE_MODE_ICONS, TIMELINE_MODE_LABELS, TimelineMode, formatSceneLength, getStatusOrder, resolveStatusCfg } from '../models/Scene';
 import { getActDisplayLabel } from '../utils/actChapter';
+import { parseSceneLocations } from '../services/MetadataParser';
 
 /**
  * Timeline ordering mode
@@ -714,7 +715,9 @@ export class TimelineView extends ItemView {
                 if (scene.characters && scene.characters.length > 0) return this.cleanLaneKeys(scene.characters);
                 return ['(no character)'];
             case 'location':
-                return [scene.location || '(no location)'];
+                return parseSceneLocations(scene.location).length > 0
+                    ? parseSceneLocations(scene.location)
+                    : ['(no location)'];
             case 'plotline':
             case 'tag':
                 if (scene.tags && scene.tags.length > 0) return this.cleanLaneKeys(scene.tags);
@@ -772,10 +775,11 @@ export class TimelineView extends ItemView {
         if (this.swimlaneGroupBy !== 'character' && scene.characters?.length) {
             meta.createSpan({ cls: 'timeline-card-pov', text: scene.characters.join(', ') });
         }
-        if (this.swimlaneGroupBy !== 'location' && scene.location) {
+        const sceneLocations = parseSceneLocations(scene.location);
+        if (this.swimlaneGroupBy !== 'location' && sceneLocations.length > 0) {
             const locSpan = meta.createSpan({ cls: 'timeline-card-location' });
             obsidian.setIcon(locSpan, 'map-pin');
-            locSpan.appendText(' ' + scene.location);
+            locSpan.appendText(' ' + sceneLocations.join(', '));
         }
         if (this.swimlaneGroupBy !== 'plotline' && this.swimlaneGroupBy !== 'tag' && scene.tags?.length) {
             meta.createSpan({ cls: 'timeline-card-pov', text: scene.tags.join(', ') });
@@ -943,10 +947,11 @@ export class TimelineView extends ItemView {
         if (scene.pov) {
             meta.createSpan({ cls: 'timeline-card-pov', text: `POV: ${scene.pov}` });
         }
-        if (scene.location) {
+        const sceneLocations = parseSceneLocations(scene.location);
+        if (sceneLocations.length > 0) {
             const locSpan = meta.createSpan({ cls: 'timeline-card-location' });
             obsidian.setIcon(locSpan, 'map-pin');
-            locSpan.appendText(' ' + scene.location);
+            locSpan.appendText(' ' + sceneLocations.join(', '));
         }
         if (scene.timeline) {
             const timeSpan = meta.createSpan({ cls: 'timeline-card-time' });

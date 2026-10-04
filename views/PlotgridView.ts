@@ -11,6 +11,7 @@ import { InspectorComponent } from '../components/Inspector';
 import { openManageSnapshotsModal } from '../components/ViewSnapshotModal';
 import { QuickAddModal } from '../components/QuickAddModal';
 import { LinkScanner } from '../services/LinkScanner';
+import { parseSceneLocations } from '../services/MetadataParser';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { FiltersComponent } from '../components/Filters';
 import { enableDragToPan } from '../components/DragToPan';
@@ -31,7 +32,8 @@ import { getVaultMarkdownFiles } from '../utils/vault';
 // Basic Plot Grid implementation (ground-up) following the supplied guide.
 // This file implements the core model, rendering, editing, and persistence.
 
-const ROW_HEADER_WIDTH = 120;
+const DEFAULT_LABEL_COLUMN_WIDTH = 120;
+const MIN_LABEL_COLUMN_WIDTH = 60;
 const COL_HEADER_HEIGHT = 40;
 
 function makeId(prefix = '') {
@@ -168,6 +170,12 @@ export class PlotgridView extends ItemView {
                     cells: loaded.cells || {},
                     zoom,
                     stickyHeaders: typeof loaded.stickyHeaders === 'boolean' ? loaded.stickyHeaders : true,
+                    labelColumnWidth: typeof loaded.labelColumnWidth === 'number' && isFinite(loaded.labelColumnWidth)
+                        ? Math.max(MIN_LABEL_COLUMN_WIDTH, Math.round(loaded.labelColumnWidth))
+                        : DEFAULT_LABEL_COLUMN_WIDTH,
+                    collapsedSections: loaded.collapsedSections && typeof loaded.collapsedSections === 'object'
+                        ? { ...loaded.collapsedSections }
+                        : {},
                 };
             } else {
                 this.data = { rows: [], columns: [], cells: {}, zoom: 1 };
@@ -296,6 +304,8 @@ export class PlotgridView extends ItemView {
                     ),
                     zoom: this.data.zoom,
                     stickyHeaders: this.data.stickyHeaders,
+                    labelColumnWidth: this.getLabelColumnWidth(),
+                    collapsedSections: { ...(this.data.collapsedSections || {}) },
                 };
                 if (typeof plugin.savePlotGrid === 'function') {
                     await plugin.savePlotGrid(dataToSave, projectKey);
@@ -323,6 +333,8 @@ export class PlotgridView extends ItemView {
             cells: {},
             zoom: this.data.zoom,
             stickyHeaders: this.data.stickyHeaders,
+            labelColumnWidth: this.getLabelColumnWidth(),
+            collapsedSections: { ...(this.data.collapsedSections || {}) },
         };
         for (const [k, v] of Object.entries(this.data.cells)) {
             snapshot.cells[k] = { ...v };
@@ -753,7 +765,14 @@ export class PlotgridView extends ItemView {
     }
 
     private computeTotalWidth() {
-        return ROW_HEADER_WIDTH + this.data.columns.reduce((s, c) => s + c.width, 0);
+        return this.getLabelColumnWidth() + this.data.columns.reduce((s, c) => s + c.width, 0);
+    }
+
+    private getLabelColumnWidth(): number {
+        const width = this.data.labelColumnWidth;
+        return typeof width === 'number' && isFinite(width)
+            ? Math.max(MIN_LABEL_COLUMN_WIDTH, Math.round(width))
+            : DEFAULT_LABEL_COLUMN_WIDTH;
     }
 
     private async autosizeCellsToContent(): Promise<void> {
@@ -863,7 +882,7 @@ export class PlotgridView extends ItemView {
         this.ensureDefaults();
         this.canvasEl.empty();
 
-        let colTemplate = [ROW_HEADER_WIDTH + 'px', ...this.data.columns.map((c) => c.width + 'px')].join(' ');
+        let colTemplate = [this.getLabelColumnWidth() + 'px', ...this.data.columns.map((c) => c.width + 'px')].join(' ');
 
         // ── Determine which rows are visible (filter support) ──
         // Also build a sort-order index if the user changed the sort dropdown
@@ -927,7 +946,7 @@ export class PlotgridView extends ItemView {
         }
 
         // ── Build act/chapter divider positions (visible rows only) ──
-        const dividersBefore = new Map<number, Array<{type: 'act'|'chapter', label: string}>>();
+        const dividersBefore = new Map<number, Array<{type: 'act'|'chapter', label: string, key: string}>>();
         {
             let prevAct: string | number | undefined;
             let prevChapter: string | number | undefined;
@@ -937,14 +956,18 @@ export class PlotgridView extends ItemView {
                 if (row.sourceType !== 'auto' || !row.sourceId || !sceneManager) continue;
                 const scene = sceneManager.getScene(row.sourceId);
                 if (!scene) continue;
-                const dividers: Array<{type: 'act'|'chapter', label: string}> = [];
+                const dividers: Array<{type: 'act'|'chapter', label: string, key: string}> = [];
                 if (scene.act !== undefined && String(scene.act) !== String(prevAct)) {
                     const actNum = typeof scene.act === 'number' ? scene.act : parseInt(String(scene.act), 10);
                     const actLabels = (activeProject as unknown as { actLabels?: Record<number, string> })?.actLabels;
                     const rawActLabel = !isNaN(actNum) ? (actLabels?.[actNum] || '') : '';
                     const cleanActLabel = rawActLabel.replace(/^(Act|Prologue|Epilogue)\s*\d*\s*[—:]\s*/i, '');
                     const actDisplay = getActDisplayLabel(scene.act);
-                    dividers.push({ type: 'act', label: cleanActLabel ? `${actDisplay}: ${cleanActLabel}` : actDisplay });
+                    dividers.push({
+                        type: 'act',
+                        label: cleanActLabel ? `${actDisplay}: ${cleanActLabel}` : actDisplay,
+                        key: `act:${String(scene.act)}`,
+                    });
                     prevChapter = undefined;
                 }
                 if (scene.chapter !== undefined && String(scene.chapter) !== String(prevChapter)) {
@@ -952,11 +975,34 @@ export class PlotgridView extends ItemView {
                     const chapterLabels = (activeProject as unknown as { chapterLabels?: Record<number, string> })?.chapterLabels;
                     const rawChLabel = !isNaN(chNum) ? (chapterLabels?.[chNum] || '') : '';
                     const cleanChLabel = rawChLabel.replace(/^Ch(?:apter)?\s*\d+\s*[—:]\s*/i, '');
-                    dividers.push({ type: 'chapter', label: cleanChLabel ? `Ch ${scene.chapter}: ${cleanChLabel}` : `Chapter ${scene.chapter}` });
+                    dividers.push({
+                        type: 'chapter',
+                        label: cleanChLabel ? `Ch ${scene.chapter}: ${cleanChLabel}` : `Chapter ${scene.chapter}`,
+                        key: `chapter:${String(scene.act)}:${String(scene.chapter)}`,
+                    });
                 }
                 if (dividers.length > 0) dividersBefore.set(ri, dividers);
                 prevAct = scene.act;
                 prevChapter = scene.chapter;
+            }
+        }
+
+        const collapsedRows = new Set<number>();
+        let collapsedActKey: string | null = null;
+        let collapsedChapterKey: string | null = null;
+        for (const ri of rowIndices) {
+            if (!visibleRows.has(ri)) continue;
+            for (const divider of dividersBefore.get(ri) || []) {
+                if (divider.type === 'act') {
+                    collapsedActKey = divider.key;
+                    collapsedChapterKey = null;
+                } else {
+                    collapsedChapterKey = divider.key;
+                }
+            }
+            if ((collapsedActKey && this.data.collapsedSections?.[collapsedActKey])
+                || (collapsedChapterKey && this.data.collapsedSections?.[collapsedChapterKey])) {
+                collapsedRows.add(ri);
             }
         }
 
@@ -973,6 +1019,7 @@ export class PlotgridView extends ItemView {
                     gridTrackIndex++;
                 }
             }
+            if (collapsedRows.has(ri)) continue;
             this.renderedRowTrackIndices.set(ri, gridTrackIndex);
             rowHeightParts.push(this.data.rows[ri].height + 'px');
             gridTrackIndex++;
@@ -1002,6 +1049,21 @@ export class PlotgridView extends ItemView {
             zIndex: '11',
             background: 'var(--background-modifier-hover)',
             border: '1px solid var(--sl-border-subtle)',
+        });
+
+        const labelColumnHandle = corner.createDiv('plot-label-col-resize-handle');
+        labelColumnHandle.setCssStyles({
+            position: 'absolute',
+            right: '0',
+            top: '0',
+            bottom: '0',
+            width: '6px',
+            cursor: 'col-resize',
+        });
+        labelColumnHandle.draggable = false;
+        labelColumnHandle.addEventListener('mousedown', (ev) => {
+            ev.stopPropagation();
+            this.startLabelColumnResize(ev as MouseEvent);
         });
 
         // corner context menu (Reset grid moved here)
@@ -1184,17 +1246,37 @@ export class PlotgridView extends ItemView {
                 const colCount = this.data.columns.length + 1;
                 for (const d of divs) {
                     const divEl = this.canvasEl.createDiv(`plot-grid-divider plot-grid-divider-${d.type}`);
+                    const isCollapsed = this.data.collapsedSections?.[d.key] === true;
                     divEl.setCssStyles({
                         gridColumn: `1 / ${colCount + 1}`,
                         position: (this.data.stickyHeaders === false) ? 'relative' : 'sticky',
                         left: '0',
                         zIndex: '8',
                     });
+                    divEl.setAttr('role', 'button');
+                    divEl.setAttr('tabindex', '0');
+                    divEl.setAttr('aria-expanded', String(!isCollapsed));
+                    divEl.title = `${isCollapsed ? 'Expand' : 'Collapse'} ${d.label}`;
                     const icon = divEl.createSpan('plot-grid-divider-icon');
-                    obsidian.setIcon(icon, d.type === 'act' ? 'bookmark' : 'hash');
+                    obsidian.setIcon(icon, isCollapsed ? 'chevron-right' : 'chevron-down');
                     divEl.createSpan({ text: d.label, cls: 'plot-grid-divider-label' });
+                    const toggleSection = () => {
+                        if (!this.data.collapsedSections) this.data.collapsedSections = {};
+                        this.data.collapsedSections[d.key] = !isCollapsed;
+                        this.scheduleSave();
+                        this.renderGrid();
+                    };
+                    divEl.addEventListener('click', toggleSection);
+                    divEl.addEventListener('keydown', (ev) => {
+                        if (ev.key === 'Enter' || ev.key === ' ') {
+                            ev.preventDefault();
+                            toggleSection();
+                        }
+                    });
                 }
             }
+
+            if (collapsedRows.has(ri)) continue;
 
             const row = this.data.rows[ri];
             const rowEl = this.canvasEl.createDiv('plot-grid-row-header');
@@ -3018,7 +3100,7 @@ export class PlotgridView extends ItemView {
             } else if (colSource === 'tags') {
                 for (const t of scene.tags || []) colSet.add(t);
             } else if (colSource === 'locations') {
-                if (scene.location) colSet.add(scene.location);
+                for (const location of parseSceneLocations(scene.location)) colSet.add(location);
             } else if (colSource.startsWith('codex:')) {
                 const catId = colSource.slice(6);
                 for (const n of scene.codexLinks?.[catId] || []) colSet.add(n);
@@ -3114,7 +3196,7 @@ export class PlotgridView extends ItemView {
             } else if (colSource === 'tags') {
                 sceneColValues = [...(scene.tags || [])];
             } else if (colSource === 'locations') {
-                sceneColValues = scene.location ? [scene.location] : [];
+                sceneColValues = parseSceneLocations(scene.location);
             } else if (colSource.startsWith('codex:')) {
                 const catId = colSource.slice(6);
                 sceneColValues = [...(scene.codexLinks?.[catId] || [])];
@@ -3181,6 +3263,11 @@ export class PlotgridView extends ItemView {
         this.data.columns = this.data.columns || [];
         this.data.cells = this.data.cells || {};
         if (typeof (this.data as unknown as Record<string, unknown>).stickyHeaders === 'undefined') (this.data as unknown as Record<string, unknown>).stickyHeaders = true;
+        if (!this.data.collapsedSections) this.data.collapsedSections = {};
+        if (typeof this.data.labelColumnWidth !== 'number' || !isFinite(this.data.labelColumnWidth)) {
+            this.data.labelColumnWidth = DEFAULT_LABEL_COLUMN_WIDTH;
+        }
+        this.data.labelColumnWidth = Math.max(MIN_LABEL_COLUMN_WIDTH, Math.round(this.data.labelColumnWidth));
     }
 
     private addRow() {
@@ -3256,10 +3343,39 @@ export class PlotgridView extends ItemView {
             this.data.columns[colIndex].width = newW;
             // update grid template for live feedback
             if (this.canvasEl) {
-                const colTemplate = [ROW_HEADER_WIDTH + 'px', ...this.data.columns.map((c) => c.width + 'px')].join(' ');
+                const colTemplate = [this.getLabelColumnWidth() + 'px', ...this.data.columns.map((c) => c.width + 'px')].join(' ');
                 this.canvasEl.setCssStyles({ gridTemplateColumns: colTemplate });
                 const totalWidth = this.computeTotalWidth();
                 this.canvasEl.setCssStyles({ width: totalWidth / this.data.zoom + 'px' });
+            }
+        };
+
+        const onUp = () => {
+            activeDocument.removeEventListener('mousemove', onMove);
+            activeDocument.removeEventListener('mouseup', onUp);
+            activeDocument.body.setCssStyles({ cursor: '' });
+            this.scheduleSave();
+            this.renderGrid();
+        };
+
+        activeDocument.addEventListener('mousemove', onMove);
+        activeDocument.addEventListener('mouseup', onUp);
+    }
+
+    private startLabelColumnResize(e: MouseEvent) {
+        e.preventDefault();
+        const startX = e.clientX;
+        const origWidth = this.getLabelColumnWidth();
+        activeDocument.body.setCssStyles({ cursor: 'col-resize' });
+
+        const onMove = (ev: MouseEvent) => {
+            const delta = ev.clientX - startX;
+            const newWidth = Math.max(MIN_LABEL_COLUMN_WIDTH, Math.round(origWidth + delta));
+            this.data.labelColumnWidth = newWidth;
+            if (this.canvasEl) {
+                const colTemplate = [newWidth + 'px', ...this.data.columns.map((c) => c.width + 'px')].join(' ');
+                this.canvasEl.setCssStyles({ gridTemplateColumns: colTemplate });
+                this.canvasEl.setCssStyles({ width: this.computeTotalWidth() / this.data.zoom + 'px' });
             }
         };
 

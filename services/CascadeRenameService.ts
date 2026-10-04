@@ -5,6 +5,7 @@ import { LocationManager } from './LocationManager';
 import { SceneManager } from './SceneManager';
 import { Scene } from '../models/Scene';
 import { CharacterRelation } from '../models/Character';
+import { parseSceneLocations } from './MetadataParser';
 
 /**
  * Preview result describing what a rename will affect.
@@ -176,7 +177,7 @@ export class CascadeRenameService {
 
         // Scenes: check location field
         for (const scene of this.sceneManager.getAllScenes()) {
-            if (scene.location && scene.location.toLowerCase() === lowerOld) {
+            if (parseSceneLocations(scene.location).some(location => location.toLowerCase() === lowerOld)) {
                 sceneCount++;
             }
         }
@@ -208,8 +209,10 @@ export class CascadeRenameService {
 
         // ── Update scenes ──
         for (const scene of this.sceneManager.getAllScenes()) {
-            if (scene.location && scene.location.toLowerCase() === lowerOld) {
-                await this.sceneManager.updateScene(scene.filePath, { location: newName });
+            const locations = parseSceneLocations(scene.location);
+            if (locations.some(location => location.toLowerCase() === lowerOld)) {
+                const updatedLocations = locations.map(location => location.toLowerCase() === lowerOld ? newName : location);
+                await this.sceneManager.updateScene(scene.filePath, { location: updatedLocations.join(', ') });
                 totalUpdated++;
             }
         }

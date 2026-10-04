@@ -167,6 +167,9 @@ Toggle between the standard Kanban column layout and a freeform **corkboard** ca
 
 - **Sticky notes** — create color-coded sticky notes to brainstorm and capture your first ideas. Notes support markdown formatting. Sticky notes are stored in a separate `Notes/` folder inside your project so they don't clutter the `Scenes/` folder in Obsidian's file explorer.
 - **Image sticky notes** — pin reference art, maps, and charts on the board. Click **+ New Image Note** in the toolbar, or drag an image from the vault file explorer or your desktop onto the canvas. Each image note has an optional caption that supports markdown and `[[wikilinks]]` — links in captions are included in relationship scanning. Right-click an image note to set, change, or remove the image. Click the image to open a fullscreen lightbox.
+- **Open a note in the editor** — right-click a Markdown-backed sticky note and choose **Open in Editor**. The action is omitted for notes without a backing Markdown file and does not change the note content.
+- **Focus selected** — select a scene card or sticky note, then click the **Focus selected** scan icon in the Corkboard toolbar to center it at a readable zoom. Sticky-note selection is separate from scene multi-select and does not add the note to scene bulk actions.
+- **Pan over cards and notes** — middle-drag anywhere over the Corkboard, including scene cards and sticky notes, to pan the board. Mouse-wheel zoom, left-drag background panning, and left-drag card positioning work as before.
 - **Convert to scene** — when an idea is ready, convert a sticky note into a full scene with one click. The file is moved from `Notes/` to `Scenes/` automatically.
 - **Freeform positioning** — drag scene cards and sticky notes anywhere on the spatial canvas.
 - **Positions saved per project** — your corkboard layout is stored in `System/board.json` and syncs across devices.

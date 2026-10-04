@@ -6,6 +6,18 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.80
+
+### Bug Fixes
+
+- **Custom-location projects restored on startup** *([#302](https://github.com/PixeroJan/obsidian-storyline/issues/302))* — Projects created outside the configured root folder are now restored from the saved project path even when the default root folder does not exist.
+
+### Improvements
+
+- **Collapsible Plot Grid Act/Chapter sections** — Act and Chapter dividers can now be collapsed and expanded, with their state persisted per project. The left label column can also be resized manually and retains its width.
+- **Scribe compatibility for aliases and locations** — Character aliases now resolve to canonical profiles, including relationship maps and duplicate alias files. Locations support compatible multi-value editing and matching while preserving the existing `location` field and stored format.
+- **Corkboard usability** — Markdown-backed sticky notes can be opened in the editor from their context menu, selected notes and scene cards can be centered with the new Focus selected action, and middle-mouse dragging now pans the board over cards and notes without changing existing wheel zoom or left-drag behavior.
+
 ## Version 1.10.79
 
 ### Bug Fixes

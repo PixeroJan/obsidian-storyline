@@ -974,6 +974,7 @@ export class CharacterView extends ItemView {
                     if (this.rootContainer) this.renderView(this.rootContainer);
                 }
             },
+            this.characterManager.buildAliasMap(this.plugin.settings.characterAliases),
         );
         this.relationshipMap.render();
     }

@@ -27,6 +27,8 @@ export interface InlineSuggestOptions {
     getDisplayLabel?: (value: string) => string;
     /** Minimum characters before showing suggestions (default: 0) */
     minChars?: number;
+    /** Reopen suggestions after a value is selected (used by tag-pill inputs). */
+    keepOpenOnSelect?: boolean;
 }
 
 /**
@@ -66,6 +68,7 @@ export class InlineSuggest {
     private maxVisible: number;
     private minChars: number;
     private getDisplayLabel?: (value: string) => string;
+    private keepOpenOnSelect: boolean;
 
     constructor(opts: InlineSuggestOptions) {
         this.inputEl = opts.inputEl;
@@ -77,6 +80,7 @@ export class InlineSuggest {
         this.maxVisible = opts.maxVisible ?? 200;
         this.minChars = opts.minChars ?? 0;
         this.getDisplayLabel = opts.getDisplayLabel;
+        this.keepOpenOnSelect = opts.keepOpenOnSelect ?? false;
 
         if (opts.placeholder) this.inputEl.placeholder = opts.placeholder;
 
@@ -335,6 +339,13 @@ export class InlineSuggest {
         this.removeDropdown();
         this.inputEl.value = '';
         this.onSelect(value);
+        if (this.keepOpenOnSelect && this.alive) {
+            window.setTimeout(() => {
+                if (!this.alive) return;
+                this.inputEl.focus();
+                this.updateDropdown();
+            }, 0);
+        }
     }
 
     private dismiss() {
@@ -365,6 +376,8 @@ export interface TagPillInputOptions {
     highlightValue?: string;
     /** Optional: label for highlighted chip */
     highlightLabel?: string;
+    /** Keep the suggestion list open after each selection. */
+    keepOpenOnSelect?: boolean;
 }
 
 export function renderTagPillInput(opts: TagPillInputOptions): { refresh: (values: string[], highlightValue?: string) => void } {
@@ -433,6 +446,7 @@ export function renderTagPillInput(opts: TagPillInputOptions): { refresh: (value
             },
             placeholder: placeholder ?? 'Type to add…',
             allowNew: true,
+            keepOpenOnSelect: opts.keepOpenOnSelect ?? true,
         });
     };
 

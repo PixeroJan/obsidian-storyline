@@ -38,6 +38,8 @@ export class BoardView extends ItemView {
     private groupBy: BoardGroupBy = 'act';
     private selectedScene: Scene | null = null;
     private selectedScenes: Set<string> = new Set();
+    private selectedCorkboardNodePath: string | null = null;
+    private corkboardFocusButton: HTMLButtonElement | null = null;
     private boardEl: HTMLElement | null = null;
     private bulkBarEl: HTMLElement | null = null;
     private rootContainer: HTMLElement | null = null;
@@ -342,6 +344,20 @@ export class BoardView extends ItemView {
         // Icon button group
         const iconGroup = controls.createDiv('story-line-icon-group');
 
+        if (this.boardMode === 'corkboard') {
+            const focusBtn = iconGroup.createEl('button', {
+                cls: 'clickable-icon',
+                attr: { 'aria-label': 'Focus selected' },
+            });
+            obsidian.setIcon(focusBtn, 'scan-square');
+            attachTooltip(focusBtn, 'Focus selected');
+            this.corkboardFocusButton = focusBtn;
+            this.updateCorkboardFocusButton();
+            focusBtn.addEventListener('click', () => this.focusSelectedCorkboardNode());
+        } else {
+            this.corkboardFocusButton = null;
+        }
+
         // Add acts/chapters button (available in both kanban and corkboard)
         {
             const structBtn = iconGroup.createEl('button', {
@@ -589,8 +605,11 @@ export class BoardView extends ItemView {
             const cardEl = this.cardComponent.render(scene, node, {
                 compact: false,
                 onSelect: (s, event) => {
-                    if (this.isCorkboardNoteScene(s)) return;
                     if (this.corkboardJustDragged.has(s.filePath)) return;
+                    if (this.isCorkboardNoteScene(s)) {
+                        this.selectCorkboardNode(s);
+                        return;
+                    }
                     this.selectScene(s, event);
                 },
                 onDoubleClick: (s) => {
@@ -608,7 +627,7 @@ export class BoardView extends ItemView {
             });
             cardEl.addClass('story-line-corkboard-card');
 
-            if (this.selectedScenes.has(scene.filePath)) {
+            if (this.selectedScenes.has(scene.filePath) || this.selectedCorkboardNodePath === scene.filePath) {
                 cardEl.addClass('selected');
             }
 
@@ -883,6 +902,7 @@ export class BoardView extends ItemView {
 
         const resizeHandle = cardEl.createDiv('story-line-corkboard-note-resize-handle');
         resizeHandle.addEventListener('pointerdown', (e: PointerEvent) => {
+            if (e.button !== 0) return;
             e.preventDefault();
             e.stopPropagation();
 
@@ -1243,7 +1263,8 @@ export class BoardView extends ItemView {
         };
 
         const onPointerDown = (e: PointerEvent) => {
-            if (!isBackgroundTarget(e.target)) return;
+            const isMiddleMouse = e.pointerType !== 'touch' && e.button === 1;
+            if (!isMiddleMouse && !isBackgroundTarget(e.target)) return;
 
             // Stop any running inertia when user grabs the canvas
             if (this.corkboardInertiaRaf !== null) {
@@ -1518,6 +1539,14 @@ export class BoardView extends ItemView {
     private showCorkboardNoteMenu(scene: Scene, event: MouseEvent): void {
         const scenePath = scene.filePath;
         const menu = new Menu();
+
+        const backingFile = this.app.vault.getAbstractFileByPath(scenePath);
+        if (backingFile instanceof TFile) {
+            menu.addItem(item => item
+                .setTitle('Open in Editor')
+                .setIcon('file-text')
+                .onClick(() => { void this.openScene(scene); }));
+        }
 
         menu.addItem(item => item
             .setTitle('Top')
@@ -2158,6 +2187,10 @@ export class BoardView extends ItemView {
             if (card) card.addClass('selected');
         }
 
+        if (this.boardMode === 'corkboard') {
+            this.selectedCorkboardNodePath = scene.filePath;
+        }
+
         // Show inspector for last clicked scene
         if (this.plugin.isSceneInspectorOpen()) {
             this.inspectorComponent?.hide();
@@ -2170,10 +2203,86 @@ export class BoardView extends ItemView {
         this.updateBulkBar();
     }
 
+    /** Select a sticky note without adding it to scene bulk selection. */
+    private selectCorkboardNode(scene: Scene): void {
+        this.selectedCorkboardNodePath = scene.filePath;
+        this.selectedScene = null;
+        this.selectedScenes.clear();
+        this.boardEl?.querySelectorAll('.scene-card.selected').forEach(el => {
+            el.removeClass('selected');
+        });
+
+        const card = this.boardEl?.querySelector(`[data-path="${CSS.escape(scene.filePath)}"]`);
+        if (card) card.addClass('selected');
+
+        this.inspectorComponent?.hide();
+        this.updateBulkBar();
+    }
+
+    private getSelectedCorkboardScene(): Scene | null {
+        if (this.selectedCorkboardNodePath) {
+            const selected = this.sceneManager.getScene(this.selectedCorkboardNodePath);
+            if (selected && (this.isCorkboardNoteScene(selected) || this.selectedScenes.has(selected.filePath))) {
+                return selected;
+            }
+        }
+
+        for (const filePath of this.selectedScenes) {
+            const scene = this.sceneManager.getScene(filePath);
+            if (scene && !this.isCorkboardNoteScene(scene)) return scene;
+        }
+
+        return null;
+    }
+
+    private updateCorkboardFocusButton(): void {
+        if (!this.corkboardFocusButton) return;
+        this.corkboardFocusButton.disabled = !this.getSelectedCorkboardScene();
+    }
+
+    private focusSelectedCorkboardNode(): void {
+        const scene = this.getSelectedCorkboardScene();
+        if (!scene || !this.boardEl) return;
+
+        const card = this.boardEl.querySelector(
+            `.story-line-corkboard-node [data-path="${CSS.escape(scene.filePath)}"]`
+        ) as HTMLElement | null;
+        const node = card?.closest('.story-line-corkboard-node') as HTMLElement | null;
+        const viewport = this.boardEl.querySelector('.story-line-corkboard-viewport') as HTMLElement | null;
+        const canvas = this.boardEl.querySelector('.story-line-corkboard-canvas') as HTMLElement | null;
+        if (!node || !viewport || !canvas) return;
+
+        if (this.corkboardInertiaRaf !== null) {
+            cancelAnimationFrame(this.corkboardInertiaRaf);
+            this.corkboardInertiaRaf = null;
+        }
+        if (this.corkboardZoomRaf !== null) {
+            cancelAnimationFrame(this.corkboardZoomRaf);
+            this.corkboardZoomRaf = null;
+        }
+        this.corkboardZoomTarget = null;
+
+        const position = this.getCorkboardPosition(scene.filePath);
+        const left = position?.x ?? (Number.parseFloat(node.style.left || '0') || 0);
+        const top = position?.y ?? (Number.parseFloat(node.style.top || '0') || 0);
+        const width = node.offsetWidth;
+        const height = node.offsetHeight;
+        const viewportWidth = viewport.clientWidth;
+        const viewportHeight = viewport.clientHeight;
+        if (!width || !height || !viewportWidth || !viewportHeight) return;
+
+        const zoom = 1.4;
+        this.corkboardCamera.zoom = zoom;
+        this.corkboardCamera.x = viewportWidth / 2 - (left + width / 2) * zoom;
+        this.corkboardCamera.y = viewportHeight / 2 - (top + height / 2) * zoom;
+        this.applyCorkboardCamera(canvas);
+    }
+
     /**
      * Update the bulk action bar based on current selection
      */
     private updateBulkBar(): void {
+        this.updateCorkboardFocusButton();
         if (!this.bulkBarEl) return;
 
         if (this.selectedScenes.size < 2) {
@@ -3947,6 +4056,7 @@ export class BoardView extends ItemView {
         // Resize handle
         const resizeHandle = cardEl.createDiv('story-line-corkboard-note-resize-handle');
         resizeHandle.addEventListener('pointerdown', (e: PointerEvent) => {
+            if (e.button !== 0) return;
             e.preventDefault();
             e.stopPropagation();
             const startY = e.clientY;

@@ -12,6 +12,7 @@ import { AddFieldModal } from './AddFieldModal';
 import { UniversalFieldTemplate } from '../services/FieldTemplateService';
 import { parseActChapterInput, actChapterHasIllegalPathChars, isPrologueAct, isEpilogueAct, PROLOGUE_ACT, EPILOGUE_ACT } from '../utils/actChapter';
 import { Scene, SceneStatus, TIMELINE_MODES, TIMELINE_MODE_LABELS, TimelineMode, getStatusOrder, resolveStatusCfg } from '../models/Scene';
+import { parseSceneLocations } from '../services/MetadataParser';
 
 /**
  * Scene inspector sidebar component
@@ -425,13 +426,14 @@ export class InspectorComponent {
         const locSection = this.container.createDiv('inspector-section');
         locSection.createSpan({ cls: 'inspector-label', text: 'Location: ' });
         const locContainer = locSection.createDiv('inspector-location-autocomplete');
-        renderAutocompleteInput({
+        renderTagPillInput({
             container: locContainer,
-            value: scene.location || '',
+            values: parseSceneLocations(scene.location),
             getSuggestions: () => this.getLocationNames(),
-            onChange: async (val) => {
-                await this.sceneManager.updateScene(scene.filePath, { location: val });
-                scene.location = val;
+            onChange: async (values) => {
+                const value = values.join(', ');
+                await this.sceneManager.updateScene(scene.filePath, { location: value || undefined });
+                scene.location = value || undefined;
             },
             placeholder: 'Search locations…',
             getDisplayLabel: this.getLocationDisplayLabel(),
@@ -1085,7 +1087,7 @@ export class InspectorComponent {
 
         // Exclude links that are already listed in frontmatter characters / location / codexLinks
         const fmChars = new Set((scene.characters || []).map(c => c.toLowerCase()));
-        const fmLoc = scene.location?.toLowerCase();
+        const fmLocs = new Set(parseSceneLocations(scene.location).map(location => location.toLowerCase()));
         const fmCodex = new Set<string>();
         if (scene.codexLinks) {
             for (const names of Object.values(scene.codexLinks)) {
@@ -1098,7 +1100,7 @@ export class InspectorComponent {
             const key = l.name.toLowerCase();
             if (ignored.has(key)) return false;
             if (l.type === 'character' && fmChars.has(key)) return false;
-            if (l.type === 'location' && key === fmLoc) return false;
+            if (l.type === 'location' && fmLocs.has(key)) return false;
             if (fmCodex.has(key)) return false;
             return true;
         });
