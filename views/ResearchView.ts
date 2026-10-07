@@ -9,6 +9,7 @@ import { attachTooltip } from '../components/Tooltip';
 import { pickImage, resolveImagePath } from '../components/ImagePicker';
 import { tokenizeWords, isScriptioContinuaLocale, DEFAULT_STORYLINE_LOCALE, type StoryLineLocale } from '../utils/locale';
 import { getVaultFiles } from '../utils/vault';
+import { parseSceneLocations } from '../services/MetadataParser';
 
 /**
  * ResearchView — a right-sidebar panel for browsing, searching,
