@@ -2370,7 +2370,12 @@ export default class SceneCardsPlugin extends Plugin {
                     if (!type) continue;
                     switch (type) {
                         case 'scene':
-                            this.sceneManager.addFile(content, fp);
+                            {
+                                const sceneFolder = normalizePath(this.sceneManager.getSceneFolder()).replace(/\/$/, '');
+                                if (fp === sceneFolder || fp.startsWith(`${sceneFolder}/`)) {
+                                    this.sceneManager.addFile(content, fp);
+                                }
+                            }
                             break;
                         case 'character':
                             this.characterManager.addFile(content, fp);

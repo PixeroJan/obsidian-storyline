@@ -42,6 +42,11 @@ function normalizeActChapterList(raw: unknown): number[] {
     return Array.from(new Set(nums)).sort((a, b) => a - b);
 }
 
+interface SceneUpdateOptions {
+    /** Move/rename the backing file as part of an explicit scene move. */
+    moveFile?: boolean;
+}
+
 /**
  * Manages CRUD operations, indexing, and project management for scenes.
  *
@@ -845,7 +850,7 @@ export class SceneManager implements ISceneStore {
         const sceneFolder = this.getSceneFolder();
         await this.scanFolderAdapter(sceneFolder);
         const notesFolder = this.getNotesFolder();
-        await this.scanFolderAdapter(notesFolder);
+        await this.scanFolderAdapter(notesFolder, true);
         this.initialized = true;
         this.bumpVersion();
     }
@@ -874,7 +879,7 @@ export class SceneManager implements ISceneStore {
      * scenes themselves. Skip both the snapshot files directly and any
      * recursion into a `_snapshots` subfolder.
      */
-    private async scanFolderAdapter(folderPath: string): Promise<void> {
+    private async scanFolderAdapter(folderPath: string, corkboardNotesOnly = false): Promise<void> {
         const adapter = this.app.vault.adapter;
         if (!await adapter.exists(folderPath)) return;
 
@@ -885,7 +890,7 @@ export class SceneManager implements ISceneStore {
             try {
                 const content = await adapter.read(f);
                 const scene = MetadataParser.parseContent(content, f);
-                if (scene) {
+                if (scene && (!corkboardNotesOnly || scene.corkboardNote === true)) {
                     this.scenes.set(f, scene);
                 }
             } catch { /* file unreadable — skip */ }
@@ -893,8 +898,14 @@ export class SceneManager implements ISceneStore {
         for (const sub of listing.folders) {
             const segment = sub.split('/').pop() ?? '';
             if (segment === '_snapshots' || segment === '.snapshots') continue; // issue #100 — don't recurse into snapshots
-            await this.scanFolderAdapter(sub);
+            await this.scanFolderAdapter(sub, corkboardNotesOnly);
         }
+    }
+
+    private isWithinFolder(filePath: string, folderPath: string): boolean {
+        const file = normalizePath(filePath);
+        const folder = normalizePath(folderPath).replace(/\/$/, '');
+        return file === folder || file.startsWith(`${folder}/`);
     }
 
     /**
@@ -1061,7 +1072,11 @@ export class SceneManager implements ISceneStore {
     /**
      * Update an existing scene's metadata
      */
-    async updateScene(filePath: string, updates: Partial<Scene>): Promise<string | void> {
+    async updateScene(
+        filePath: string,
+        updates: Partial<Scene>,
+        options: SceneUpdateOptions = {},
+    ): Promise<string | void> {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!file || !(file instanceof TFile)) {
             new Notice('Scene file not found');
@@ -1100,17 +1115,13 @@ export class SceneManager implements ISceneStore {
 
         let currentPath = filePath;
 
-        // If the act changed, relocate the file to the correct Act folder and
-        // update the act prefix in the filename.
-        if (updates.act !== undefined && oldSnap && updates.act !== oldSnap.act) {
+        // Act changes are metadata-only unless the caller explicitly requested
+        // a physical scene move.
+        if (options.moveFile && updates.act !== undefined && oldSnap && updates.act !== oldSnap.act) {
             currentPath = await this.relocateSceneForAct(filePath, updates.act);
         }
 
-        if (
-            updates.title !== undefined ||
-            updates.sequence !== undefined ||
-            (updates.act !== undefined && oldSnap && updates.act !== oldSnap.act)
-        ) {
+        if (updates.title !== undefined) {
             currentPath = await this.syncSceneFileName(currentPath);
         }
 
@@ -1170,24 +1181,12 @@ export class SceneManager implements ISceneStore {
         }
         await this.ensureFolder(targetFolder);
 
-        // Update act (and optionally sequence) prefix in filename.
-        // The prefix may be either two digits ("01-05") for numeric acts or
-        // a freeform string ("1.1-05", "Prologue-05") for string acts —
-        // recognise both shapes so we can rewrite them in place.
-        let newName = file.name;
-        const actStr = formatActChapterPrefix(newAct, '00');
-        // Match either NN-NN<space>... (legacy numeric) or <anything>-NN<space>...
-        // where the act portion may contain dots or letters but no whitespace
-        // and no second dash before the sequence.
-        const prefixMatch = file.name.match(/^([^\s/-]+)-(\d+(?:\.\d+)?)\s/);
-        if (prefixMatch) {
-            // Read the updated sequence from the freshly-written YAML
-            const updatedScene = this.scenes.get(filePath);
-            const seqStr = updatedScene?.sequence !== undefined
-                ? String(updatedScene.sequence).padStart(2, '0')
-                : prefixMatch[2];  // keep existing if unknown
-            newName = file.name.replace(/^[^\s/-]+-\d+(?:\.\d+)?(\s)/, `${actStr}-${seqStr}$1`);
-        }
+        // Rebuild the complete name from metadata so stale or duplicated
+        // prefixes in an older filename cannot survive another act move.
+        const updatedScene = this.scenes.get(filePath);
+        const newName = updatedScene
+            ? this.getSceneFileNameForMetadata({ ...updatedScene, act: newAct }, file)
+            : file.name;
 
         const newPath = normalizePath(`${targetFolder}/${newName}`);
         if (normalizePath(filePath) === newPath) return filePath;
@@ -1217,9 +1216,12 @@ export class SceneManager implements ISceneStore {
     }
 
     private getSceneFileNameForMetadata(scene: Scene, currentFile: TFile): string {
-        const safeTitle = this.getSceneSafeTitle(scene.title);
+        let safeTitle = this.getSceneSafeTitle(scene.title);
         const hasPrefix = /^([^\s/-]+)-(\d+(?:\.\d+)?)\s/.test(currentFile.name);
         if (hasPrefix || scene.sequence !== undefined || scene.act !== undefined) {
+            while (/^[^\s/-]+-\d+(?:\.\d+)?\s+/.test(safeTitle)) {
+                safeTitle = safeTitle.replace(/^[^\s/-]+-\d+(?:\.\d+)?\s+/, '');
+            }
             const actStr = formatActChapterPrefix(scene.act, '00');
             const seqStr = scene.sequence !== undefined
                 ? String(scene.sequence).padStart(2, '0')
@@ -1548,7 +1550,7 @@ export class SceneManager implements ISceneStore {
         if (targetAct !== undefined) updates.act = targetAct;
         if (newSequence !== undefined) updates.sequence = newSequence;
 
-        await this.updateScene(filePath, updates);
+        await this.updateScene(filePath, updates, { moveFile: true });
     }
 
     /**
@@ -1610,11 +1612,12 @@ export class SceneManager implements ISceneStore {
             return;
         }
 
-        // Check if file is in scene folder or notes folder
-        if (!file.path.startsWith(this.getSceneFolder()) && !file.path.startsWith(this.getNotesFolder())) return;
+        const inSceneFolder = this.isWithinFolder(file.path, this.getSceneFolder());
+        const inNotesFolder = this.isWithinFolder(file.path, this.getNotesFolder());
+        if (!inSceneFolder && !inNotesFolder) return;
 
         const scene = await MetadataParser.parseFile(this.app, file);
-        if (scene) {
+        if (scene && (inSceneFolder || scene.corkboardNote === true)) {
             this.scenes.set(file.path, scene);
         } else {
             this.scenes.delete(file.path);
@@ -1641,21 +1644,21 @@ export class SceneManager implements ISceneStore {
             this.bumpVersion(file.path);
             return;
         }
-        const isProjectContent = file.path.startsWith(this.getSceneFolder())
-            || file.path.startsWith(this.getNotesFolder())
-            || oldPath.startsWith(this.getSceneFolder())
-            || oldPath.startsWith(this.getNotesFolder());
+        const inSceneFolder = this.isWithinFolder(file.path, this.getSceneFolder());
+        const inNotesFolder = this.isWithinFolder(file.path, this.getNotesFolder());
+        const wasInSceneFolder = this.isWithinFolder(oldPath, this.getSceneFolder());
+        const wasInNotesFolder = this.isWithinFolder(oldPath, this.getNotesFolder());
+        const isProjectContent = inSceneFolder || inNotesFolder || wasInSceneFolder || wasInNotesFolder;
         if (isProjectContent) {
             await this.plugin.flushCorkboardPositions();
             await this.migrateCorkboardPosition(oldPath, file.path);
             this.plugin.invalidateCorkboardCache();
         }
-        if (file.extension === 'md' && (file.path.startsWith(this.getSceneFolder()) || file.path.startsWith(this.getNotesFolder()))) {
+        if (file.extension === 'md' && (inSceneFolder || inNotesFolder)) {
             const scene = await MetadataParser.parseFile(this.app, file);
-            if (scene) {
+            if (scene && (inSceneFolder || scene.corkboardNote === true)) {
                 this.scenes.set(file.path, scene);
-                const sceneFolder = normalizePath(this.getSceneFolder());
-                if (!scene.corkboardNote && normalizePath(file.path).startsWith(`${sceneFolder}/`)) {
+                if (!scene.corkboardNote && inSceneFolder) {
                     await this.plugin.snapshotManager?.renameSceneSnapshots(oldPath, file.path);
                     const titleFromFile = this.getTitleFromSceneFileName(file);
                     if (titleFromFile && titleFromFile !== scene.title) {

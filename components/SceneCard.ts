@@ -220,8 +220,47 @@ export class SceneCardComponent {
         }, true);
 
         // Wire up event listeners
+        let lastTouchTapAt = 0;
+        let suppressTouchClick = false;
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        if (options?.onDoubleClick) {
+            card.addEventListener('pointerdown', (e) => {
+                if (e.pointerType !== 'touch') return;
+                touchStartX = e.clientX;
+                touchStartY = e.clientY;
+            });
+            card.addEventListener('pointerup', (e) => {
+                if (e.pointerType !== 'touch') return;
+                const target = e.target as HTMLElement;
+                if (target.closest('a, button, input, textarea, select, [contenteditable="true"]')) return;
+
+                const moved = Math.hypot(e.clientX - touchStartX, e.clientY - touchStartY) > 12;
+                if (moved) {
+                    lastTouchTapAt = 0;
+                    return;
+                }
+
+                const now = Date.now();
+                if (now - lastTouchTapAt <= 350) {
+                    lastTouchTapAt = 0;
+                    suppressTouchClick = true;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    options.onDoubleClick!(scene);
+                } else {
+                    lastTouchTapAt = now;
+                }
+            });
+        }
+
         if (options?.onSelect) {
             card.addEventListener('click', (e) => {
+                if (suppressTouchClick) {
+                    suppressTouchClick = false;
+                    return;
+                }
                 e.stopPropagation();
                 options.onSelect!(scene, e);
             });

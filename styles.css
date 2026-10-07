@@ -522,6 +522,18 @@ body.sl-hide-toolbar-title .workspace-leaf-content[data-type^="story-line-"] > .
 .story-line-icon-group .clickable-icon {
     padding: 4px;
 }
+.story-line-corkboard-zoom-value {
+    min-width: 42px;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    text-align: center;
+    user-select: none;
+}
+.story-line-corkboard-reset-zoom {
+    min-width: 36px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
 
 /* --- View Switcher Tabs --- */
 .story-line-view-switcher {

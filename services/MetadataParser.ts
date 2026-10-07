@@ -227,8 +227,8 @@ export class MetadataParser {
      * Extract body content (everything after frontmatter)
      */
     static extractBody(content: string): string {
-        const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/);
-        return match ? match[1].trim() : content;
+        const match = content.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)([\s\S]*)$/);
+        return match ? match[1] : content;
     }
 
     /**
@@ -325,7 +325,9 @@ export class MetadataParser {
         // Issue #71 — mirror universal fields to top-level YAML keys
         mirrorUniversalFieldsToTopLevel(frontmatter, frontmatter.universalFields as Record<string, unknown> | undefined);
 
-        const newContent = `---\n${stringifyYaml(frontmatter)}---\n\n${finalBody}`;
+        // Keep the body exactly as read after the frontmatter delimiter so
+        // metadata edits do not normalize headings or blank-line spacing.
+        const newContent = `---\n${stringifyYaml(frontmatter)}---\n${finalBody}`;
         await app.vault.modify(file, newContent);
     }
 

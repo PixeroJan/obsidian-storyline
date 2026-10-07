@@ -18,6 +18,7 @@ import { openManageSnapshotsModal } from '../components/ViewSnapshotModal';
 import { resolveStickyNoteColors, resolveStickyNoteFontColor } from '../settings';
 import { attachTooltip } from '../components/Tooltip';
 import { resolveImagePath } from '../components/ImagePicker';
+import { createElement as createLucideElement, ScanSquare } from 'lucide';
 import type SceneCardsPlugin from '../main';
 import { compareActChapter, parseActChapterInput, getActDisplayLabel } from '../utils/actChapter';
 
@@ -40,6 +41,7 @@ export class BoardView extends ItemView {
     private selectedScenes: Set<string> = new Set();
     private selectedCorkboardNodePath: string | null = null;
     private corkboardFocusButton: HTMLButtonElement | null = null;
+    private corkboardZoomLabel: HTMLElement | null = null;
     private boardEl: HTMLElement | null = null;
     private bulkBarEl: HTMLElement | null = null;
     private rootContainer: HTMLElement | null = null;
@@ -345,17 +347,55 @@ export class BoardView extends ItemView {
         const iconGroup = controls.createDiv('story-line-icon-group');
 
         if (this.boardMode === 'corkboard') {
+            const zoomOutBtn = iconGroup.createEl('button', {
+                cls: 'clickable-icon',
+                attr: { 'aria-label': 'Zoom out' },
+            });
+            obsidian.setIcon(zoomOutBtn, 'zoom-out');
+            attachTooltip(zoomOutBtn, 'Zoom out');
+            zoomOutBtn.addEventListener('click', () => this.zoomCorkboardBy(-0.1));
+
+            this.corkboardZoomLabel = iconGroup.createSpan({
+                cls: 'story-line-corkboard-zoom-value',
+                text: `${Math.round(this.corkboardCamera.zoom * 100)}%`,
+            });
+
+            const zoomInBtn = iconGroup.createEl('button', {
+                cls: 'clickable-icon',
+                attr: { 'aria-label': 'Zoom in' },
+            });
+            obsidian.setIcon(zoomInBtn, 'zoom-in');
+            attachTooltip(zoomInBtn, 'Zoom in');
+            zoomInBtn.addEventListener('click', () => this.zoomCorkboardBy(0.1));
+
+            const fitBtn = iconGroup.createEl('button', {
+                cls: 'clickable-icon',
+                attr: { 'aria-label': 'Fit Corkboard to viewport' },
+            });
+            obsidian.setIcon(fitBtn, 'maximize');
+            attachTooltip(fitBtn, 'Fit Corkboard to viewport');
+            fitBtn.addEventListener('click', () => this.fitCorkboardToViewport());
+
             const focusBtn = iconGroup.createEl('button', {
                 cls: 'clickable-icon',
                 attr: { 'aria-label': 'Focus selected' },
             });
-            obsidian.setIcon(focusBtn, 'scan-square');
+            focusBtn.appendChild(createLucideElement(ScanSquare, { width: 18, height: 18 }));
             attachTooltip(focusBtn, 'Focus selected');
             this.corkboardFocusButton = focusBtn;
             this.updateCorkboardFocusButton();
             focusBtn.addEventListener('click', () => this.focusSelectedCorkboardNode());
+
+            const resetZoomBtn = iconGroup.createEl('button', {
+                cls: 'clickable-icon story-line-corkboard-reset-zoom',
+                attr: { 'aria-label': 'Reset zoom to 1:1' },
+            });
+            resetZoomBtn.setText('1:1');
+            attachTooltip(resetZoomBtn, 'Reset zoom to 1:1');
+            resetZoomBtn.addEventListener('click', () => this.resetCorkboardZoom());
         } else {
             this.corkboardFocusButton = null;
+            this.corkboardZoomLabel = null;
         }
 
         // Add acts/chapters button (available in both kanban and corkboard)
@@ -1099,6 +1139,80 @@ export class BoardView extends ItemView {
 
     private applyCorkboardCamera(canvas: HTMLElement): void {
         canvas.setCssStyles({ transform: `translate(${this.corkboardCamera.x}px, ${this.corkboardCamera.y}px) scale(${this.corkboardCamera.zoom})` });
+        this.corkboardZoomLabel?.setText(`${Math.round(this.corkboardCamera.zoom * 100)}%`);
+    }
+
+    private zoomCorkboardBy(delta: number): void {
+        const viewport = this.boardEl?.querySelector('.story-line-corkboard-viewport') as HTMLElement | null;
+        const canvas = this.boardEl?.querySelector('.story-line-corkboard-canvas') as HTMLElement | null;
+        if (!viewport || !canvas) return;
+
+        const rect = viewport.getBoundingClientRect();
+        this.zoomCorkboardAt(
+            canvas,
+            viewport,
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+            this.corkboardCamera.zoom + delta,
+        );
+    }
+
+    private resetCorkboardZoom(): void {
+        const viewport = this.boardEl?.querySelector('.story-line-corkboard-viewport') as HTMLElement | null;
+        const canvas = this.boardEl?.querySelector('.story-line-corkboard-canvas') as HTMLElement | null;
+        if (!viewport || !canvas) return;
+
+        const rect = viewport.getBoundingClientRect();
+        this.zoomCorkboardAt(
+            canvas,
+            viewport,
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+            1,
+        );
+    }
+
+    private fitCorkboardToViewport(): void {
+        const viewport = this.boardEl?.querySelector('.story-line-corkboard-viewport') as HTMLElement | null;
+        const canvas = this.boardEl?.querySelector('.story-line-corkboard-canvas') as HTMLElement | null;
+        if (!viewport || !canvas) return;
+
+        const nodes = Array.from(canvas.querySelectorAll('.story-line-corkboard-node')) as HTMLElement[];
+        if (nodes.length === 0) return;
+
+        const bounds = nodes.reduce(
+            (current, node) => {
+                const left = Number.parseFloat(node.style.left || '0') || 0;
+                const top = Number.parseFloat(node.style.top || '0') || 0;
+                return {
+                    left: Math.min(current.left, left),
+                    top: Math.min(current.top, top),
+                    right: Math.max(current.right, left + node.offsetWidth),
+                    bottom: Math.max(current.bottom, top + node.offsetHeight),
+                };
+            },
+            { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
+        );
+
+        const width = Math.max(1, bounds.right - bounds.left);
+        const height = Math.max(1, bounds.bottom - bounds.top);
+        const padding = 48;
+        const viewportWidth = viewport.clientWidth;
+        const viewportHeight = viewport.clientHeight;
+        if (!viewportWidth || !viewportHeight) return;
+
+        if (this.corkboardZoomRaf !== null) {
+            cancelAnimationFrame(this.corkboardZoomRaf);
+            this.corkboardZoomRaf = null;
+        }
+        this.corkboardZoomTarget = null;
+        const zoom = Math.max(0.35, Math.min(2.8,
+            Math.min((viewportWidth - padding * 2) / width, (viewportHeight - padding * 2) / height),
+        ));
+        this.corkboardCamera.zoom = zoom;
+        this.corkboardCamera.x = viewportWidth / 2 - (bounds.left + width / 2) * zoom;
+        this.corkboardCamera.y = viewportHeight / 2 - (bounds.top + height / 2) * zoom;
+        this.applyCorkboardCamera(canvas);
     }
 
     /**
@@ -2344,7 +2458,7 @@ export class BoardView extends ItemView {
                         item.setTitle(getActDisplayLabel(act))
                             .onClick(async () => {
                                 for (const fp of this.selectedScenes) {
-                                    await this.sceneManager.updateScene(fp, { act: Number(act) || act });
+                                    await this.sceneManager.updateScene(fp, { act: Number(act) || act }, { moveFile: true });
                                 }
                                 new Notice(`Moved ${count} scenes to ${getActDisplayLabel(act)}`);
                                 this.selectedScenes.clear();
@@ -2359,7 +2473,7 @@ export class BoardView extends ItemView {
                         item.setTitle(getActDisplayLabel(act))
                             .onClick(async () => {
                                 for (const fp of this.selectedScenes) {
-                                    await this.sceneManager.updateScene(fp, { act });
+                                    await this.sceneManager.updateScene(fp, { act }, { moveFile: true });
                                 }
                                 new Notice(`Moved ${count} scenes to ${getActDisplayLabel(act)}`);
                                 this.selectedScenes.clear();
@@ -2639,7 +2753,7 @@ export class BoardView extends ItemView {
                     item.setTitle(display)
                         .setChecked(scene.act === act)
                         .onClick(async () => {
-                            await this.sceneManager.updateScene(scene.filePath, { act });
+                            await this.sceneManager.updateScene(scene.filePath, { act }, { moveFile: true });
                             this.refreshBoard();
                         });
                 });
@@ -3974,7 +4088,7 @@ export class BoardView extends ItemView {
         const editorWrap = cardEl.createDiv('story-line-corkboard-note-editor story-line-corkboard-image-editor');
 
         // Image element
-        const imgSrc = resolveImagePath(this.app, scene.corkboardNoteImage!);
+        const imgSrc = resolveImagePath(this.app, scene.corkboardNoteImage!, this.sceneManager.getSceneFolder());
         const imgEl = editorWrap.createEl('img', {
             cls: 'story-line-corkboard-note-img',
             attr: { src: imgSrc, alt: scene.corkboardNoteCaption || 'Image note' },

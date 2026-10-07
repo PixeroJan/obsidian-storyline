@@ -595,7 +595,7 @@ export class CharacterView extends ItemView {
         // Portrait / placeholder
         const portrait = card.createDiv('character-card-portrait');
         if (char.image) {
-            const imgSrc = resolveImagePath(this.app, char.image);
+            const imgSrc = resolveImagePath(this.app, char.image, this.sceneManager.getSceneFolder());
             if (imgSrc) {
                 const img = portrait.createEl('img', {
                     cls: 'character-portrait-img',
@@ -1092,7 +1092,7 @@ export class CharacterView extends ItemView {
         const renderPortrait = () => {
             portraitArea.empty();
             if (draft.image) {
-                const imgSrc = resolveImagePath(this.app, draft.image);
+                const imgSrc = resolveImagePath(this.app, draft.image, this.sceneManager.getSceneFolder());
                 if (imgSrc) {
                     const img = portraitArea.createEl('img', {
                         cls: 'character-detail-portrait-img',
@@ -2770,7 +2770,7 @@ export class CharacterView extends ItemView {
             captionEl.empty();
             if (activeIndex >= 0 && activeIndex < gallery.length) {
                 const entry = gallery[activeIndex];
-                const src = resolveImagePath(this.app, entry.path);
+                const src = resolveImagePath(this.app, entry.path, this.sceneManager.getSceneFolder());
                 if (src) {
                     const img = viewer.createEl('img', {
                         cls: 'character-gallery-img',
@@ -2852,7 +2852,7 @@ export class CharacterView extends ItemView {
                 const thumb = thumbStrip.createDiv({
                     cls: `character-gallery-thumb${i === activeIndex ? ' active' : ''}`
                 });
-                const src = resolveImagePath(this.app, gallery[i].path);
+                const src = resolveImagePath(this.app, gallery[i].path, this.sceneManager.getSceneFolder());
                 if (src) {
                     const timg = thumb.createEl('img', { attr: { src } });
                     timg.onerror = () => {
@@ -3831,7 +3831,7 @@ export class CharacterView extends ItemView {
         const setZoom = (z: number) => { zoomLevels.set(currentIndex, z); };
         const renderContent = () => {
             const entry = gallery[currentIndex];
-            const src = resolveImagePath(this.app, entry.path);
+            const src = resolveImagePath(this.app, entry.path, this.sceneManager.getSceneFolder());
             titleText.textContent = entry.caption || `Image ${currentIndex + 1} of ${gallery.length}`;
             imgContainer.empty();
             if (src) {

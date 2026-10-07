@@ -476,7 +476,7 @@ export class LocationView extends ItemView {
         if (world.image) {
             try {
                 // Use the helper function to resolve the image path
-                const imgSrc = resolveImagePath(this.app, world.image);
+                const imgSrc = resolveImagePath(this.app, world.image, this.sceneManager.getSceneFolder());
                 
                 const img = icon.createEl('img', { attr: { src: imgSrc, alt: world.name }, cls: 'location-tree-thumb' });
                 
@@ -596,7 +596,7 @@ export class LocationView extends ItemView {
         if (loc.image) {
             try {
                 // Use the helper function to resolve the image path
-                const imgSrc = resolveImagePath(this.app, loc.image);
+                const imgSrc = resolveImagePath(this.app, loc.image, this.sceneManager.getSceneFolder());
                 
                 const img = icon.createEl('img', { attr: { src: imgSrc, alt: loc.name }, cls: 'location-tree-thumb' });
                 
@@ -1027,7 +1027,7 @@ export class LocationView extends ItemView {
             if (draft.image) {
                 try {
                     // Use the helper function to resolve the image path
-                    const imgSrc = resolveImagePath(this.app, draft.image);
+                    const imgSrc = resolveImagePath(this.app, draft.image, this.sceneManager.getSceneFolder());
                     
                     const img = portraitArea.createEl('img', { attr: { src: imgSrc, alt: draft.name } });
                     img.classList.add('location-detail-portrait-img');
@@ -2613,7 +2613,7 @@ export class LocationView extends ItemView {
             captionEl.empty();
             if (activeIndex >= 0 && activeIndex < gallery.length) {
                 const entry = gallery[activeIndex];
-                const src = resolveImagePath(this.app, entry.path);
+                    const src = resolveImagePath(this.app, entry.path, this.sceneManager.getSceneFolder());
                 if (src) {
                     const img = viewer.createEl('img', {
                         cls: 'character-gallery-img',
@@ -2695,7 +2695,7 @@ export class LocationView extends ItemView {
                 const thumb = thumbStrip.createDiv({
                     cls: `character-gallery-thumb${i === activeIndex ? ' active' : ''}`
                 });
-                const src = resolveImagePath(this.app, gallery[i].path);
+                const src = resolveImagePath(this.app, gallery[i].path, this.sceneManager.getSceneFolder());
                 if (src) {
                     const timg = thumb.createEl('img', { attr: { src } });
                     timg.onerror = () => {
@@ -2780,7 +2780,7 @@ export class LocationView extends ItemView {
         const setZoom = (z: number) => { zoomLevels.set(currentIndex, z); };
         const renderContent = () => {
             const entry = gallery[currentIndex];
-            const src = resolveImagePath(this.app, entry.path);
+            const src = resolveImagePath(this.app, entry.path, this.sceneManager.getSceneFolder());
             titleText.textContent = entry.caption || `Image ${currentIndex + 1} of ${gallery.length}`;
             imgContainer.empty();
             if (src) {

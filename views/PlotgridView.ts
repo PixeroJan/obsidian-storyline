@@ -1883,7 +1883,7 @@ export class PlotgridView extends ItemView {
                 cellEl.addEventListener('dragleave', () => {
                     cellEl.removeClass('plot-grid-drop-target');
                 });
-                cellEl.addEventListener('drop', (ev) => {
+                cellEl.addEventListener('drop', async (ev) => {
                     ev.preventDefault();
                     cellEl.removeClass('plot-grid-drop-target');
                     const sourceKey = ev.dataTransfer?.getData('text/cell-source');
@@ -1894,7 +1894,7 @@ export class PlotgridView extends ItemView {
                         const tgt = this.data.cells[key];
                         if (src && tgt) {
                             const targetHasContent = tgt.linkedSceneId || tgt.content || tgt.manualContent;
-                            const doMove = () => {
+                            const doMove = async () => {
                                 // Snapshot cells for undo before modifying
                                 this.pushPlotGridUndo();
                                 tgt.linkedSceneId = src.linkedSceneId;
@@ -1903,6 +1903,9 @@ export class PlotgridView extends ItemView {
                                 src.linkedSceneId = undefined;
                                 src.content = '';
                                 src.manualContent = undefined;
+                                if (tgt.linkedSceneId) {
+                                    await this.syncPlotGridOrigin(tgt.linkedSceneId, tgt.id);
+                                }
                                 this.scheduleSave();
                                 this.renderGrid();
                             };
@@ -1920,6 +1923,7 @@ export class PlotgridView extends ItemView {
                     } else if (scenePath) {
                         // External scene drop (e.g., from scene list)
                         const c = this.data.cells[key]; if (c) c.linkedSceneId = scenePath;
+                        await this.syncPlotGridOrigin(scenePath, key);
                         this.scheduleSave();
                         this.renderGrid();
                     }
@@ -2807,6 +2811,16 @@ export class PlotgridView extends ItemView {
         this.renderGrid();
     }
 
+    private async syncPlotGridOrigin(scenePath: string, cellId: string): Promise<void> {
+        const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
+        const scene = scMgr?.getScene(scenePath);
+        if (!scMgr || !scene?.corkboardNote) return;
+
+        const origin = this.getPlotGridOrigin(cellId);
+        await scMgr.updateScene(scenePath, { plotgridOrigin: origin });
+        scene.plotgridOrigin = origin;
+    }
+
     private openNoteColorModal(scene: Scene, cellKey: string): void {
         const modal = new Modal(this.app);
         modal.titleEl.setText('Custom note color');
@@ -2838,26 +2852,9 @@ export class PlotgridView extends ItemView {
         // Guard: if the cell already has a linked scene, skip (prevents double-fire)
         if (cell.linkedSceneId) return;
 
-        // Resolve row/column labels for context
-        // cell.id format: "rowId-colId" but IDs may contain hyphens from makeId,
-        // so find the matching row/col by checking all combinations
-        let rowLabel = '';
-        let colLabel = '';
-        for (const row of this.data.rows) {
-            for (const col of this.data.columns) {
-                if (`${row.id}-${col.id}` === cell.id) {
-                    rowLabel = row.label || '';
-                    colLabel = col.label || '';
-                }
-            }
-        }
-
         // Build body — no longer appending origin as text
         const body = cell.content.trim();
-        const contextParts: string[] = [];
-        if (rowLabel) contextParts.push(rowLabel);
-        if (colLabel) contextParts.push(colLabel);
-        const originLabel = contextParts.length > 0 ? contextParts.join(' / ') : undefined;
+        const originLabel = this.getPlotGridOrigin(cell.id);
 
         const file = await scMgr.createScene({
             status: 'idea',
@@ -2879,6 +2876,17 @@ export class PlotgridView extends ItemView {
         const rowIndex = this.data.rows.findIndex(row => this.data.columns.some(col => `${row.id}-${col.id}` === cell.id));
         if (rowIndex >= 0) void this.autosizeRowToContent(rowIndex);
         new Notice('Auto-Note created from cell');
+    }
+
+    private getPlotGridOrigin(cellId: string): string | undefined {
+        for (const row of this.data.rows) {
+            for (const col of this.data.columns) {
+                if (`${row.id}-${col.id}` !== cellId) continue;
+                const contextParts = [row.label, col.label].filter((label): label is string => !!label);
+                return contextParts.length > 0 ? contextParts.join(' / ') : undefined;
+            }
+        }
+        return undefined;
     }
 
     // Scene link modal

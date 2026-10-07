@@ -718,10 +718,10 @@ export class CodexView extends ItemView {
         // ── Portrait / image ───────────────────────────
         const portraitArea = container.createDiv('codex-detail-portrait');
         if (draft.image) {
-            const file = this.app.vault.getAbstractFileByPath(draft.image);
-            if (file instanceof TFile) {
+            const imgSrc = resolveImagePath(this.app, draft.image, this.sceneManager.getSceneFolder());
+            if (imgSrc) {
                 const img = portraitArea.createEl('img', {
-                    attr: { src: this.app.vault.getResourcePath(file) },
+                    attr: { src: imgSrc },
                 });
                 img.addClass('codex-detail-img');
             }
@@ -1749,7 +1749,7 @@ export class CodexView extends ItemView {
             captionEl.empty();
             if (activeIndex >= 0 && activeIndex < gallery.length) {
                 const entry = gallery[activeIndex];
-                const src = resolveImagePath(this.app, entry.path);
+                const src = resolveImagePath(this.app, entry.path, this.sceneManager.getSceneFolder());
                 if (src) {
                     const img = viewer.createEl('img', {
                         cls: 'character-gallery-img',
@@ -1828,7 +1828,7 @@ export class CodexView extends ItemView {
             thumbStrip.empty();
             for (let i = 0; i < gallery.length; i++) {
                 const thumb = thumbStrip.createDiv(`character-gallery-thumb-item ${i === activeIndex ? 'active' : ''}`);
-                const src = resolveImagePath(this.app, gallery[i].path);
+                const src = resolveImagePath(this.app, gallery[i].path, this.sceneManager.getSceneFolder());
                 if (src) {
                     thumb.createEl('img', { attr: { src } });
                 } else {
@@ -2504,7 +2504,7 @@ export class CodexView extends ItemView {
 
         const renderContent = () => {
             const entry = gallery[currentIndex];
-            const src = resolveImagePath(this.app, entry.path);
+            const src = resolveImagePath(this.app, entry.path, this.sceneManager.getSceneFolder());
             titleText.textContent = entry.caption || `Image ${currentIndex + 1} of ${gallery.length}`;
             imgContainer.empty();
             if (src) {

@@ -311,7 +311,7 @@ export class ResearchView extends ItemView {
                 const imgPath = wikiMatch ? wikiMatch[1] : mdMatch ? mdMatch[1] : null;
                 if (imgPath) {
                     try {
-                        const imgSrc = resolveImagePath(this.app, imgPath);
+                        const imgSrc = resolveImagePath(this.app, imgPath, this.plugin.sceneManager.getSceneFolder());
                         const img = imagePreviewEl.createEl('img', { attr: { src: imgSrc, alt: post.title } });
                         img.setCssStyles({
                             maxWidth: '100%',
@@ -537,7 +537,7 @@ export class ResearchView extends ItemView {
                 if (imagePath) {
                     const previewEl = imageSetting.controlEl.createDiv('sl-research-image-preview');
                     try {
-                        const imgSrc = resolveImagePath(this.app, imagePath);
+                        const imgSrc = resolveImagePath(this.app, imagePath, this.plugin.sceneManager.getSceneFolder());
                         const img = previewEl.createEl('img', { attr: { src: imgSrc } });
                         img.setCssStyles({
                             maxWidth: '120px',
@@ -702,7 +702,7 @@ export class ResearchView extends ItemView {
             if (imagePath) {
                 const previewEl = imageSetting.controlEl.createDiv('sl-research-image-preview');
                 try {
-                    const imgSrc = resolveImagePath(this.app, imagePath);
+                    const imgSrc = resolveImagePath(this.app, imagePath, this.plugin.sceneManager.getSceneFolder());
                     const img = previewEl.createEl('img', { attr: { src: imgSrc } });
                     img.setCssStyles({
                         maxWidth: '120px',

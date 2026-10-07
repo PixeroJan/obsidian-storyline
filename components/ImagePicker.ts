@@ -44,7 +44,7 @@ function normalizeImagePath(imagePath: string): string {
  * Helper function to resolve an image path to a valid resource URL
  * Tries multiple approaches to handle different image storage methods
  */
-export function resolveImagePath(app: App, imagePath: string): string {
+export function resolveImagePath(app: App, imagePath: string, sceneFolder?: string): string {
     if (!imagePath) return '';
     const normalizedPath = normalizeImagePath(imagePath);
     if (!normalizedPath) return '';
@@ -54,23 +54,36 @@ export function resolveImagePath(app: App, imagePath: string): string {
         return normalizedPath;
     }
     
+    const candidatePaths = [normalizedPath];
+    if (sceneFolder) {
+        const projectRoot = sceneFolder.replace(/\\/g, '/').replace(/\/Scenes\/?$/, '');
+        const imagesMatch = normalizedPath.match(/(?:^|\/)Images\/(.+)$/i);
+        if (imagesMatch) {
+            candidatePaths.push(`${projectRoot}/Images/${imagesMatch[1]}`);
+        } else if (!normalizedPath.includes('/')) {
+            candidatePaths.push(`${projectRoot}/Images/${normalizedPath}`);
+        }
+    }
+
     // Try to get the file object — vault.getResourcePath(TFile) is the most reliable
-    try {
-        const imageFile = app.vault.getAbstractFileByPath(normalizedPath);
-        if (imageFile instanceof TFile) {
-            return app.vault.getResourcePath(imageFile);
-        }
-    } catch { /* fall through */ }
+    for (const candidatePath of candidatePaths) {
+        try {
+            const imageFile = app.vault.getAbstractFileByPath(candidatePath);
+            if (imageFile instanceof TFile) {
+                return app.vault.getResourcePath(imageFile);
+            }
+        } catch { /* try the next candidate */ }
 
-    // Try Obsidian linkpath resolution (handles relative and extensionless paths)
-    try {
-        const linked = app.metadataCache.getFirstLinkpathDest(normalizedPath, '');
-        if (linked instanceof TFile) {
-            return app.vault.getResourcePath(linked);
-        }
-    } catch { /* fall through */ }
+        // Try Obsidian linkpath resolution (handles relative and extensionless paths)
+        try {
+            const linked = app.metadataCache.getFirstLinkpathDest(candidatePath, '');
+            if (linked instanceof TFile) {
+                return app.vault.getResourcePath(linked);
+            }
+        } catch { /* try the next candidate */ }
+    }
 
-    // Fallback to adapter resource path
+    // Preserve the existing adapter fallback for unresolved references.
     return app.vault.adapter.getResourcePath(normalizedPath);
 }
 
@@ -222,7 +235,7 @@ class ImageChoiceModal extends Modal {
             const preview = contentEl.createDiv('image-choice-preview');
             try {
                 // Use the helper function to resolve the image path
-                const imgSrc = resolveImagePath(this.app, this.currentImage);
+                const imgSrc = resolveImagePath(this.app, this.currentImage, this.sceneFolder);
                 
                 const img = preview.createEl('img', { attr: { src: imgSrc } });
                 img.setCssStyles({

@@ -6,6 +6,20 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.81
+
+### Bug Fixes
+
+- **Markdown compatibility** — Sequence and ordinary act metadata updates no longer rename scene files, Markdown body content preserves its headings and blank-line spacing during frontmatter updates, and scene indexing stays within the configured manuscript root.
+- **Plot Grid note origins** — Moving a corkboard note between Plot Grid cells now updates its `plotgridOrigin` frontmatter.
+- **Moved project images** — Character, Codex, Location, Research, and corkboard image references can still resolve after their project folder is moved, including legacy paths that retain the old project location.
+- **Scene filename prefixes** — Reordering or moving scenes now rebuilds act/sequence prefixes from metadata instead of retaining duplicated prefixes from an older filename.
+
+### Improvements
+
+- **Corkboard zoom controls** — Added Scribe-style zoom out, zoom percentage, zoom in, fit-to-viewport, 1:1 reset, and Focus selected toolbar controls.
+- **Touch card opening** — Added iPad-style double-tap support for opening scene cards in the editor while preserving single-tap selection.
+
 ## Version 1.10.80
 
 ### Bug Fixes
