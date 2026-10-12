@@ -631,15 +631,16 @@ export default class SceneCardsPlugin extends Plugin {
                 if (!remote) { new Notice('File dialog not available.'); return; }
 
                 const result = await remote.dialog.showOpenDialog({
-                    title: 'Select Scrivener Project (.scriv)',
-                    properties: ['openDirectory', 'openFile'],
+                    title: 'Select Scrivener Project folder (.scriv)',
+                    message: 'Select the .scriv project folder. A second dialog will ask for an import destination inside the active vault.',
+                    properties: ['openDirectory'],
                     filters: [
                         { name: 'Scrivener Project', extensions: ['scriv'] },
                     ],
                 });
                 if (result.canceled || !result.filePaths?.length) return;
                 const scrivPath = result.filePaths[0];
-                if (!scrivPath.endsWith('.scriv')) {
+                if (!scrivPath.toLowerCase().endsWith('.scriv')) {
                     new Notice('Please select a .scriv folder.'); return;
                 }
                 let destination: string | undefined;

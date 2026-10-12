@@ -1282,8 +1282,8 @@ export class SceneManager implements ISceneStore {
     private async renameSceneNotesFile(scenePath: string): Promise<void> {
         const scene = this.scenes.get(scenePath);
         if (!scene || !scene.notesFile) return;
-        const notesFile = this.app.vault.getAbstractFileByPath(scene.notesFile);
-        if (!(notesFile instanceof TFile)) return;
+        const notesFile = this.resolveSceneNotesFile(scene);
+        if (!notesFile) return;
 
         const notesFolder = normalizePath(this.getSceneNotesFolder());
         if (!normalizePath(notesFile.path).startsWith(`${notesFolder}/`)) return;
@@ -2246,8 +2246,8 @@ export class SceneManager implements ISceneStore {
     async getOrCreateSceneNotesFile(scene: Scene): Promise<string> {
         if (scene.notesFile) {
             // Verify the file still exists
-            const existing = this.app.vault.getAbstractFileByPath(scene.notesFile);
-            if (existing && existing instanceof TFile) {
+            const existing = this.resolveSceneNotesFile(scene);
+            if (existing) {
                 return this.migrateLegacySceneNotesName(scene, existing);
             }
         }
@@ -2274,8 +2274,10 @@ export class SceneManager implements ISceneStore {
     /**
      * Read-only lookup of a scene's external notes file path.
      *
-     * Returns the vault-relative path if the scene has a `notesFile` *and* the
-     * file still exists on disk; otherwise `undefined`. Crucially this does
+    * Returns the vault-relative path if the scene has a `notesFile` *and* the
+    * file still exists on disk. Both vault-relative paths and Scribe's
+    * project-relative paths are accepted; otherwise returns `undefined`.
+    * Crucially this does
      * **not** create a file — render paths (Inspector / InfoPanel / NotesView)
      * use it so that merely opening a scene doesn't sprout an empty
      * `Title - Notes.md`. Creation is deferred to `writeSceneNotes()` /
@@ -2285,9 +2287,22 @@ export class SceneManager implements ISceneStore {
      * Issue #200.
      */
     getSceneNotesFile(scene: Scene): string | undefined {
+        return this.resolveSceneNotesFile(scene)?.path;
+    }
+
+    /** Resolve a notesFile stored either relative to the vault or its project. */
+    private resolveSceneNotesFile(scene: Scene): TFile | undefined {
         if (!scene.notesFile) return undefined;
-        const existing = this.app.vault.getAbstractFileByPath(scene.notesFile);
-        return existing instanceof TFile ? scene.notesFile : undefined;
+
+        const notesPath = normalizePath(scene.notesFile);
+        const direct = this.app.vault.getAbstractFileByPath(notesPath);
+        if (direct instanceof TFile) return direct;
+
+        if (!this._activeProject) return undefined;
+        const baseFolder = deriveProjectFoldersFromFilePath(this._activeProject.filePath).baseFolder;
+        const projectPath = normalizePath(`${baseFolder}/${notesPath}`);
+        const projectRelative = this.app.vault.getAbstractFileByPath(projectPath);
+        return projectRelative instanceof TFile ? projectRelative : undefined;
     }
 
     private getSceneNotesBaseName(scene: Scene): string {
@@ -2343,8 +2358,8 @@ export class SceneManager implements ISceneStore {
      */
     async readSceneNotes(scene: Scene): Promise<string | undefined> {
         if (!scene.notesFile) return scene.notes || undefined;
-        const file = this.app.vault.getAbstractFileByPath(scene.notesFile);
-        if (!file || !(file instanceof TFile)) return scene.notes || undefined;
+        const file = this.resolveSceneNotesFile(scene);
+        if (!file) return scene.notes || undefined;
         return this.app.vault.read(file);
     }
 
@@ -2378,8 +2393,8 @@ export class SceneManager implements ISceneStore {
      */
     async deleteSceneNotes(scene: Scene): Promise<void> {
         if (!scene.notesFile) return;
-        const file = this.app.vault.getAbstractFileByPath(scene.notesFile);
-        if (file && file instanceof TFile) {
+        const file = this.resolveSceneNotesFile(scene);
+        if (file) {
             await this.app.fileManager.trashFile(file);
         }
         await this.updateScene(scene.filePath, { notesFile: undefined });

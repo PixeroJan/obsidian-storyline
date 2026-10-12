@@ -9,6 +9,18 @@ import { getActDisplayLabel } from '../utils/actChapter';
 
 type FocusModeCallback = (active: boolean) => void;
 
+export function cloneSceneFilter(filter?: SceneFilter): SceneFilter {
+    if (!filter) return {};
+    try {
+        const cloned: unknown = JSON.parse(JSON.stringify(filter));
+        return cloned && typeof cloned === 'object' && !Array.isArray(cloned)
+            ? cloned as SceneFilter
+            : {};
+    } catch {
+        return {};
+    }
+}
+
 /**
  * Filter controls component for scene views
  */
@@ -36,7 +48,7 @@ export class FiltersComponent {
         this.onChange = onChange;
         this.plugin = plugin ?? null;
         this.onFocusModeChange = onFocusModeChange;
-        this.currentFilter = initialFilter ? JSON.parse(JSON.stringify(initialFilter)) as SceneFilter : {};
+        this.currentFilter = cloneSceneFilter(initialFilter);
         this.currentSort = initialSort ? { ...initialSort } : { field: 'sequence', direction: 'asc' };
     }
 
@@ -434,7 +446,7 @@ export class FiltersComponent {
                 const doSave = () => {
                     const name = nameInput.value.trim();
                     if (!name) { nameInput.remove(); return; }
-                    const preset: FilterPreset = { name, filter: JSON.parse(JSON.stringify(this.currentFilter)) };
+                    const preset: FilterPreset = { name, filter: cloneSceneFilter(this.currentFilter) };
                     this.sceneManager.addFilterPreset(preset);
                     nameInput.remove();
                     this.render(); // re‑render to show new preset chip
@@ -457,7 +469,7 @@ export class FiltersComponent {
                     attr: { title: 'Click to apply, right‑click to delete' },
                 });
                 chip.addEventListener('click', () => {
-                    this.currentFilter = JSON.parse(JSON.stringify(preset.filter));
+                    this.currentFilter = cloneSceneFilter(preset.filter);
                     this.render();
                     this.emitChange();
                     new Notice(`Applied preset "${preset.name}"`);

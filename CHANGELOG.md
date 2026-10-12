@@ -6,6 +6,15 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.82
+
+### Bug Fixes
+
+- **Scrivener destination picker** — The source and destination folder steps are now clearly separated, destination selection is directory-only, and `.scriv` matching is case-insensitive.
+- **Manuscript filter cloning** — Filter state and presets no longer fail when JSON cloning encounters an unsupported value or malformed persisted data.
+- **Scrivener metadata and annotations** — Imports now preserve original Created and Modified dates, read `synopsis.txt`, retain inline footnote and annotation text, and import `notes.rtf` into each scene's external notes file.
+- **Scribe scene notes paths** — Scene notes now resolve correctly when `notesFile` is stored relative to the project, as in Scribe Markdown projects, as well as when it is vault-relative. 
+
 ## Version 1.10.81
 
 ### Bug Fixes

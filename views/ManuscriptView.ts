@@ -6,7 +6,7 @@ import { syntaxTree } from '@codemirror/language';
 import { Scene, SceneFilter, SortConfig } from '../models/Scene';
 import { SceneManager } from '../services/SceneManager';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
-import { FiltersComponent } from '../components/Filters';
+import { cloneSceneFilter, FiltersComponent } from '../components/Filters';
 import { applyMobileClass, isMobile, isPhone, isTablet } from '../components/MobileAdapter';
 import { buildFormattingToolbar } from '../components/FormattingToolbar';
 import { compareActChapter, getActDisplayLabel } from '../utils/actChapter';
@@ -102,9 +102,7 @@ export class ManuscriptView extends ItemView {
         super(leaf);
         this.plugin = plugin;
         this.sceneManager = sceneManager;
-        this.currentFilter = sceneManager.activeProject?.manuscriptFilter
-            ? JSON.parse(JSON.stringify(sceneManager.activeProject.manuscriptFilter)) as SceneFilter
-            : {};
+        this.currentFilter = cloneSceneFilter(sceneManager.activeProject?.manuscriptFilter);
         this.currentSort = sceneManager.activeProject?.manuscriptSort
             ? { ...sceneManager.activeProject.manuscriptSort }
             : { field: 'sequence', direction: 'asc' };

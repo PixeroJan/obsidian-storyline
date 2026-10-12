@@ -73,8 +73,10 @@ export async function pickScrivenerDestination(app: App): Promise<string | null>
     const vaultRoot = (app.vault.adapter as unknown as { getBasePath?: () => string }).getBasePath?.();
     if (!vaultRoot) throw new Error('Could not determine the active vault folder.');
 
+    new Notice('Now choose an existing destination folder inside the active vault.');
     const result = await remote.dialog.showOpenDialog({
-        title: 'Choose StoryLine import destination',
+        title: 'Choose StoryLine import destination folder',
+        message: 'Choose an existing folder inside the active vault (not the vault root).',
         properties: ['openDirectory'],
     });
     if (result.canceled || !result.filePaths?.length) return null;
@@ -98,6 +100,8 @@ interface BinderItem {
     children: BinderItem[];
     // Scrivener metadata
     synopsis?: string;
+    created?: string;
+    modified?: string;
     labelTitle?: string;
     statusTitle?: string;
     keywords?: string[];
@@ -330,8 +334,15 @@ function cp1252ToChar(byte: number): string {
     return String.fromCharCode(mapped !== undefined ? mapped : byte);
 }
 
+function normalizeScrivenerInlineFields(rtf: string): string {
+    // Remove Scrivener's private wrappers while preserving their RTF content.
+    return rtf.replace(/\{\\(?:\*\\)?(?:Scrv_fn|Scrv_annot|footnote|annotation)(?=[\s}])/gi, '{');
+}
+
 function rtfToMarkdown(rtf: string): string {
     if (!rtf || !rtf.startsWith('{\\rtf')) return rtf || '';
+
+    rtf = normalizeScrivenerInlineFields(rtf);
 
     let result = '';
     let bold = false;
@@ -388,7 +399,7 @@ function rtfToMarkdown(rtf: string): string {
         if (ch === '{') {
             // Check for ignorable groups
             const peek = rtf.substring(i, i + 30);
-            if (peek.match(/^\{\\(fonttbl|colortbl|stylesheet|info|pict|object|header|footer|footnote|field|fldinst|datafield|themedata|colorschememapping|latentstyles|datastore|xmlnstbl|listtable|listoverridetable|pgdsctbl|rsidtbl)/)) {
+            if (peek.match(/^\{\\(fonttbl|colortbl|stylesheet|info|pict|object|header|footer|field|fldinst|datafield|themedata|colorschememapping|latentstyles|datastore|xmlnstbl|listtable|listoverridetable|pgdsctbl|rsidtbl)/)) {
                 skipGroup();
                 continue;
             }
@@ -585,6 +596,21 @@ function getAllTags(xml: string, tag: string): string[] {
     }
     return matches;
 }
+
+function normalizeScrivenerDate(value: string | undefined, fallback: string): string {
+    const trimmed = value?.trim();
+    if (!trimmed) return fallback;
+    if (/^\d{4}-\d{2}-\d{2}(?:$|T|\s)/.test(trimmed)) return trimmed;
+    const parsed = Date.parse(trimmed);
+    return Number.isNaN(parsed) ? fallback : new Date(parsed).toISOString();
+}
+
+function getImportDates(item: BinderItem, fallback: string): { created: string; modified: string } {
+    return {
+        created: normalizeScrivenerDate(item.created, fallback),
+        modified: normalizeScrivenerDate(item.modified, fallback),
+    };
+}
 // ────────────────────────────────────────────────────
 //  Scrivx parser
 // ────────────────────────────────────────────────────
@@ -738,6 +764,8 @@ function parseBinder(
         // Metadata
         const metadataXml = getTagContent(body, 'MetaData') || body;
         const synopsis = getTagContent(metadataXml, 'Synopsis') || undefined;
+        const created = getTagContent(metadataXml, 'Created') || undefined;
+        const modified = getTagContent(metadataXml, 'Modified') || undefined;
         const labelId = getTagContent(metadataXml, 'LabelID');
         const statusId = getTagContent(metadataXml, 'StatusID');
         const includeStr = getTagContent(metadataXml, 'IncludeInCompile');
@@ -800,6 +828,8 @@ function parseBinder(
             binderType,
             children,
             synopsis,
+            created,
+            modified,
             labelTitle: labelId ? labelTitles.get(labelId) : undefined,
             statusTitle: statusId ? statusTitles.get(statusId) : undefined,
             keywords,
@@ -985,6 +1015,7 @@ export class ScrivenerImporter {
         // For single book: everything in the one project
         let folders: {
             sceneFolder: string;      // only used in single-book mode
+            sceneNotesFolder: string;
             characterFolder: string;
             locationFolder: string;
             codexFolder: string;
@@ -994,6 +1025,7 @@ export class ScrivenerImporter {
 
         // bookSceneFolders maps book title → scene folder path (series mode)
         const bookSceneFolders = new Map<string, string>();
+        const bookSceneNotesFolders = new Map<string, string>();
         // bookSceneCounters tracks per-book scene numbering
         const bookSceneCounters = new Map<string, number>();
         // Per-book research and notes folders (series mode)
@@ -1045,6 +1077,7 @@ export class ScrivenerImporter {
                 await this.plugin.sceneManager.saveProjectFrontmatter(bookProject);
 
                 bookSceneFolders.set(bookItem.title, bookProject.sceneFolder);
+                bookSceneNotesFolders.set(bookItem.title, bookProject.sceneNotesFolder);
                 bookSceneCounters.set(bookItem.title, 0);
                 bookResearchFolders.set(bookItem.title, bookProject.researchFolder);
                 bookNotesFolders.set(bookItem.title, bookProject.notesFolder);
@@ -1065,6 +1098,7 @@ export class ScrivenerImporter {
             // Non-scene items go to shared codex / first book's folders
             folders = {
                 sceneFolder: firstProject!.sceneFolder,  // fallback for loose manuscript items
+                sceneNotesFolder: firstProject!.sceneNotesFolder,
                 characterFolder: seriesCharFolder,
                 locationFolder: seriesLocFolder,
                 codexFolder: seriesCodexFolder,
@@ -1079,6 +1113,7 @@ export class ScrivenerImporter {
             lastProject = project;
             folders = {
                 sceneFolder: project.sceneFolder,
+                sceneNotesFolder: project.sceneNotesFolder,
                 characterFolder: project.characterFolder,
                 locationFolder: project.locationFolder,
                 codexFolder: project.codexFolder,
@@ -1116,7 +1151,22 @@ export class ScrivenerImporter {
             // Read content — may be RTF, plain text, image, PDF, or other binary
             const contentFile = this.findContentFile(scrivPath, item.uuid);
             let mdBody = '';
+            let sceneNotes = '';
             let binarySourcePath: string | null = null;
+
+            const synopsisFile = this.findSupplementalFile(scrivPath, item.uuid, 'synopsis.txt');
+            if (synopsisFile) {
+                const synopsis = fs.readFileSync(synopsisFile, 'utf-8').replace(/^\uFEFF/, '').trim();
+                if (synopsis) item.synopsis = synopsis;
+            }
+
+            if (item.binderType === 'manuscript') {
+                const notesFile = this.findSupplementalFile(scrivPath, item.uuid, 'notes.rtf');
+                if (notesFile) {
+                    const notesRtf = fs.readFileSync(notesFile, 'utf-8');
+                    sceneNotes = rtfToMarkdown(notesRtf);
+                }
+            }
 
             if (contentFile) {
                 const ext = contentFile.ext.toLowerCase();
@@ -1165,7 +1215,10 @@ export class ScrivenerImporter {
                                 sceneIndex++;
                                 idx = sceneIndex;
                             }
-                            await this.importScene(targetSceneFolder, safeTitle, mdBody, item, idx);
+                            const targetSceneNotesFolder = isSeries && item.bookTitle
+                                ? bookSceneNotesFolders.get(item.bookTitle) || folders.sceneNotesFolder
+                                : folders.sceneNotesFolder;
+                            await this.importScene(targetSceneFolder, targetSceneNotesFolder, safeTitle, mdBody, sceneNotes, item, idx);
                             result.scenesImported++;
                             break;
                         }
@@ -1416,12 +1469,7 @@ export class ScrivenerImporter {
         this.plugin.codexManager.initCategories(settings.codexEnabledCategories, customDefs);
     }
 
-    /**
-     * Find the content file for a given UUID in the .scriv bundle.
-     * Returns the absolute path + extension, or null if nothing found.
-     * Supports Scrivener 3 (Files/Data/<UUID>/) and Scrivener 2 (Files/Docs/) layouts.
-     */
-    private findContentFile(scrivPath: string, uuid: string): { path: string; ext: string } | null {
+    private findDataDirectory(scrivPath: string, uuid: string): string | null {
         if (!fs || !nodePath || !uuid) return null;
 
         // Try each known data directory: Scrivener 3 desktop, Scrivener iOS/mobile-sync, Scrivener 2
@@ -1453,18 +1501,47 @@ export class ScrivenerImporter {
             }
 
             if (targetDir) {
-                try {
-                    const files = fs.readdirSync(targetDir);
-                    // Prefer content.rtf, then any content.* file, then first non-system file
-                    const contentFile = files.find((f: string) => f.toLowerCase() === 'content.rtf')
-                        || files.find((f: string) => f.toLowerCase().startsWith('content.'))
-                        || files.find((f: string) => !f.startsWith('.') && f.toLowerCase() !== 'snapshot.xml' && f.toLowerCase() !== 'search.indexes');
-                    if (contentFile) {
-                        const ext = contentFile.includes('.') ? contentFile.split('.').pop()! : '';
-                        return { path: nodePath.join(targetDir, contentFile), ext };
-                    }
-                } catch { /* ignore read errors */ }
+                return targetDir;
             }
+        }
+
+        return null;
+    }
+
+    private findSupplementalFile(scrivPath: string, uuid: string, fileName: string): string | null {
+        const dataDir = this.findDataDirectory(scrivPath, uuid);
+        if (!dataDir || !fs || !nodePath) return null;
+        try {
+            const files = fs.readdirSync(dataDir);
+            const match = files.find((file: string) => file.toLowerCase() === fileName.toLowerCase());
+            return match ? nodePath.join(dataDir, match) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Find the content file for a given UUID in the .scriv bundle.
+     * Returns the absolute path + extension, or null if nothing found.
+     * Supports Scrivener 3 (Files/Data/<UUID>/) and Scrivener 2 (Files/Docs/) layouts.
+     */
+    private findContentFile(scrivPath: string, uuid: string): { path: string; ext: string } | null {
+        if (!fs || !nodePath || !uuid) return null;
+
+        const dataDir = this.findDataDirectory(scrivPath, uuid);
+        if (dataDir) {
+            try {
+                const files = fs.readdirSync(dataDir);
+                // Prefer content.rtf, then any content.* file, then a non-system body file.
+                const contentFile = files.find((f: string) => f.toLowerCase() === 'content.rtf')
+                    || files.find((f: string) => f.toLowerCase().startsWith('content.'))
+                    || files.find((f: string) => !f.startsWith('.')
+                        && !['snapshot.xml', 'search.indexes', 'notes.rtf', 'synopsis.txt'].includes(f.toLowerCase()));
+                if (contentFile) {
+                    const ext = contentFile.includes('.') ? contentFile.split('.').pop()! : '';
+                    return { path: nodePath.join(dataDir, contentFile), ext };
+                }
+            } catch { /* ignore read errors */ }
         }
 
         // Scrivener 2: Files/Docs/<uuid>.rtf (or other extensions)
@@ -1515,8 +1592,10 @@ export class ScrivenerImporter {
 
     private async importScene(
         sceneFolder: string,
+        sceneNotesFolder: string,
         title: string,
         body: string,
+        sceneNotes: string,
         item: BinderItem,
         index: number = 0,
     ): Promise<void> {
@@ -1526,11 +1605,11 @@ export class ScrivenerImporter {
             type: 'scene',
             title,
             status: mapStatus(item.statusTitle),
-            created: now,
-            modified: now,
+            created: normalizeScrivenerDate(item.created, now),
+            modified: normalizeScrivenerDate(item.modified, now),
         };
 
-        if (item.synopsis) fm.subtitle = item.synopsis;
+        if (item.synopsis) fm.synopsis = item.synopsis;
         if (item.labelTitle) fm.tags = [item.labelTitle];
         if (item.keywords?.length) {
             fm.tags = [...((fm.tags as string[] | undefined) || []), ...item.keywords];
@@ -1559,10 +1638,18 @@ export class ScrivenerImporter {
 
         fm.order = index;
 
+        let notesPath: string | undefined;
+        if (sceneNotes.trim()) {
+            await this.ensureFolder(sceneNotesFolder);
+            notesPath = await this.uniquePath(normalizePath(`${sceneNotesFolder}/${title} - Notes.md`));
+            fm.notesFile = notesPath;
+        }
+
         const content = `---\n${stringifyYaml(fm)}---\n\n${body}`;
         const prefix = index > 0 ? String(index).padStart(3, '0') + ' - ' : '';
         const filePath = await this.uniquePath(normalizePath(`${sceneFolder}/${prefix}${title}.md`));
         await this.app.vault.create(filePath, content);
+        if (notesPath) await this.app.vault.create(notesPath, `${sceneNotes.trim()}\n`);
     }
 
     private async importCharacter(
@@ -1573,11 +1660,11 @@ export class ScrivenerImporter {
     ): Promise<void> {
         await this.ensureFolder(charFolder);
         const now = new Date().toISOString().split('T')[0];
+        const dates = getImportDates(item, now);
         const fm: Record<string, unknown> = {
             type: 'character',
             name,
-            created: now,
-            modified: now,
+            ...dates,
         };
 
         if (item.synopsis) fm.tagline = item.synopsis;
@@ -1599,11 +1686,11 @@ export class ScrivenerImporter {
     ): Promise<void> {
         await this.ensureFolder(locFolder);
         const now = new Date().toISOString().split('T')[0];
+        const dates = getImportDates(item, now);
         const fm: Record<string, unknown> = {
             type: 'location',
             name,
-            created: now,
-            modified: now,
+            ...dates,
         };
 
         if (item.synopsis) fm.description = item.synopsis;
@@ -1629,12 +1716,12 @@ export class ScrivenerImporter {
             : researchFolder;
         await this.ensureFolder(targetFolder);
         const now = new Date().toISOString().split('T')[0];
+        const dates = getImportDates(item, now);
         const fm: Record<string, unknown> = {
             type: 'research',
             researchType: 'note',
             title,
-            created: now,
-            modified: now,
+            ...dates,
         };
 
         if (item.keywords?.length) fm.tags = item.keywords;
@@ -1717,12 +1804,12 @@ export class ScrivenerImporter {
         // For images and PDFs: create a companion markdown note that embeds/links it
         if (EMBEDDABLE_EXTENSIONS.has(ext)) {
             const now = new Date().toISOString().split('T')[0];
+            const dates = getImportDates(item, now);
             const fm: Record<string, unknown> = {
                 type: 'research',
                 researchType: IMAGE_EXTENSIONS.has(ext) ? 'image' : 'file',
                 title,
-                created: now,
-                modified: now,
+                ...dates,
             };
             if (item.synopsis) fm.description = item.synopsis;
             if (item.keywords?.length) fm.tags = item.keywords;
@@ -1746,11 +1833,11 @@ export class ScrivenerImporter {
         const catFolder = normalizePath(`${codexFolder}/${categoryLabel}`);
         await this.ensureFolder(catFolder);
         const now = new Date().toISOString().split('T')[0];
+        const dates = getImportDates(item, now);
         const fm: Record<string, unknown> = {
             type: categoryId,
             name,
-            created: now,
-            modified: now,
+            ...dates,
         };
 
         if (item.synopsis) fm.description = item.synopsis;
