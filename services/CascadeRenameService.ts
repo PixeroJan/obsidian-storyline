@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { App } from 'obsidian';
+import { App, TFile } from 'obsidian';
 import { CharacterManager } from './CharacterManager';
 import { LocationManager } from './LocationManager';
 import { SceneManager } from './SceneManager';
 import { Scene } from '../models/Scene';
 import { CharacterRelation } from '../models/Character';
 import { parseSceneLocations } from './MetadataParser';
+import { MetadataParser } from './MetadataParser';
 
 /**
  * Preview result describing what a rename will affect.
@@ -78,26 +79,10 @@ export class CascadeRenameService {
 
         // ── Update scenes ──
         for (const scene of this.sceneManager.getAllScenes()) {
-            const updates: Partial<Scene> = {};
-            let dirty = false;
-
-            if (scene.pov && scene.pov.toLowerCase() === lowerOld) {
-                updates.pov = newName;
-                dirty = true;
-            }
-
-            if (scene.characters) {
-                const newChars = scene.characters.map(c =>
-                    c.toLowerCase() === lowerOld ? newName : c
-                );
-                if (newChars.some((c, i) => c !== scene.characters![i])) {
-                    updates.characters = newChars;
-                    dirty = true;
-                }
-            }
-
-            if (dirty) {
-                await this.sceneManager.updateScene(scene.filePath, updates);
+            const file = this.app.vault.getAbstractFileByPath(scene.filePath);
+            if (file instanceof TFile
+                && await MetadataParser.renameCharacterReferences(this.app, file, oldName, newName)) {
+                await this.sceneManager.handleFileChange(file);
                 totalUpdated++;
             }
         }

@@ -1,13 +1,12 @@
 {
   "name": "obsidian-storyline",
-  "version": "1.10.82",
+  "version": "1.11.0",
   "description": "Transform your vault into a powerful book planning and writingtool with StoryLine",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
-    "lint:obsidian": "eslint \"**/*.ts\"",
-    "version": "node version-bump.mjs && git add manifest.json versions.json"
+    "lint:obsidian": "eslint \"**/*.ts\""
   },
   "keywords": [
     "obsidian",

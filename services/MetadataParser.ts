@@ -143,7 +143,7 @@ export class MetadataParser {
             chapter: frontmatter.chapter,
             sequence: frontmatter.sequence,
             chronologicalOrder: frontmatter.chronologicalOrder ?? (frontmatter.chronological_order as number | undefined),
-            pov: this.cleanWikilink(frontmatter.pov),
+            pov: this.cleanEntityWikilinkTarget(frontmatter.pov),
             characters: this.parseCharacters(frontmatter.characters),
             location: parseSceneLocations(frontmatter.location).join(', ') || undefined,
             timeline: frontmatter.timeline,
@@ -180,9 +180,9 @@ export class MetadataParser {
             universalFields: hydrateUniversalFieldsFromTopLevel(
                 frontmatter,
                 frontmatter.universalFields && typeof frontmatter.universalFields === 'object'
-                    ? (frontmatter.universalFields as Record<string, string | string[]>)
+                        ? (frontmatter.universalFields as Record<string, string | string[] | boolean | number>)
                     : undefined,
-            ) as Record<string, string | string[]> | undefined,
+                    ) as Record<string, string | string[] | boolean | number> | undefined,
             beatsheet: frontmatter.beatsheet,
             arcAnchor: this.parseBooleanFlag(frontmatter.arcAnchor ?? (frontmatter.arc_anchor as boolean | undefined)),
         };
@@ -329,6 +329,71 @@ export class MetadataParser {
         // metadata edits do not normalize headings or blank-line spacing.
         const newContent = `---\n${stringifyYaml(frontmatter)}---\n${finalBody}`;
         await app.vault.modify(file, newContent);
+    }
+
+    /**
+     * Rename exact character references while preserving wikilink display text
+     * and the existing scalar/list shape of the frontmatter values.
+     */
+    static async renameCharacterReferences(
+        app: App,
+        file: TFile,
+        oldName: string,
+        newName: string,
+    ): Promise<boolean> {
+        const content = await app.vault.read(file);
+        const frontmatter = this.extractFrontmatter(content);
+        if (!frontmatter) return false;
+
+        const replaceReference = (value: unknown): { value: unknown; changed: boolean } => {
+            if (typeof value !== 'string') return { value, changed: false };
+            const leading = value.match(/^\s*/)?.[0] ?? '';
+            const trailing = value.match(/\s*$/)?.[0] ?? '';
+            const trimmed = value.trim();
+            const wikilink = trimmed.match(/^\[\[([^|\]#]+)(#[^|\]]+)?(?:\|([^\]]*))?\]\]$/);
+            if (wikilink) {
+                const target = wikilink[1].trim();
+                if (target.localeCompare(oldName, undefined, { sensitivity: 'accent' }) !== 0) {
+                    return { value, changed: false };
+                }
+                const heading = wikilink[2] ?? '';
+                const display = wikilink[3] !== undefined ? `|${wikilink[3]}` : '';
+                return { value: `${leading}[[${newName}${heading}${display}]]${trailing}`, changed: true };
+            }
+            if (trimmed.localeCompare(oldName, undefined, { sensitivity: 'accent' }) !== 0) {
+                return { value, changed: false };
+            }
+            return { value: `${leading}${newName}${trailing}`, changed: true };
+        };
+
+        let changed = false;
+        const pov = replaceReference(frontmatter.pov);
+        if (pov.changed) {
+            frontmatter.pov = pov.value;
+            changed = true;
+        }
+
+        if (Array.isArray(frontmatter.characters)) {
+            frontmatter.characters = frontmatter.characters.map(value => {
+                const replaced = replaceReference(value);
+                changed = changed || replaced.changed;
+                return replaced.value;
+            });
+        } else if (typeof frontmatter.characters === 'string') {
+            const parts = frontmatter.characters.split(/([,;\n])/);
+            frontmatter.characters = parts.map(part => {
+                if (/^[,;\n]$/.test(part)) return part;
+                const replaced = replaceReference(part);
+                changed = changed || replaced.changed;
+                return replaced.value;
+            }).join('');
+        }
+
+        if (!changed) return false;
+        frontmatter.modified = new Date().toISOString().split('T')[0];
+        const body = this.extractBody(content);
+        await app.vault.modify(file, `---\n${stringifyYaml(frontmatter)}---\n${body}`);
+        return true;
     }
 
     /**
@@ -479,6 +544,17 @@ export class MetadataParser {
         return MetadataParser.stripPathAndExtension(inner);
     }
 
+    /** Resolve an entity wikilink by target while leaving its display alias presentation-only. */
+    private static cleanEntityWikilinkTarget(value: unknown): string | undefined {
+        if (value === undefined || value === null) return undefined;
+        if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return undefined;
+        const source = String(value).trim();
+        const match = source.match(/^\[\[([^|\]]+)(?:\|[^\]]*)?\]\]$/);
+        if (!match) return this.cleanWikilink(source);
+        const target = match[1].split('#')[0].trim();
+        return this.stripPathAndExtension(target);
+    }
+
     /**
      * Normalise a plain scene-reference string to its title form:
      * drop any folder path prefix and a trailing `.md` extension.
@@ -499,9 +575,12 @@ export class MetadataParser {
      * Parse characters array, cleaning wikilinks
      */
     private static parseCharacters(chars: unknown): string[] | undefined {
-        if (!Array.isArray(chars)) return undefined;
-        return chars
-            .map((c: unknown) => this.cleanWikilink(String(c)) ?? '')
+        const values = Array.isArray(chars)
+            ? chars
+            : (typeof chars === 'string' ? chars.split(/[,;\n]/) : []);
+        if (values.length === 0) return undefined;
+        return values
+            .map((c: unknown) => this.cleanEntityWikilinkTarget(c) ?? '')
             .filter(s => s.length > 0);
     }
 

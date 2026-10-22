@@ -1286,6 +1286,7 @@ export class ManuscriptView extends ItemView {
 
         if (this._focusMode) {
             body.addClass('sl-focus-active-global');
+            body.toggleClass('sl-focus-dim-text', s.focusDimText === true);
 
             const darkenFilter = darken > 0 ? `brightness(${1 - darken})` : '';
             const blurFilter = blur > 0 ? `blur(${blur}px)` : '';
@@ -1297,13 +1298,16 @@ export class ManuscriptView extends ItemView {
             body.style.setProperty('--sl-focus-toolbar-opacity', String(opacity));
             body.style.setProperty('--sl-focus-bg', darkBg);
             body.style.setProperty('--sl-focus-filter', combinedFilter);
+            body.style.setProperty('--sl-focus-text-opacity', String((s.focusTextOpacity ?? 35) / 100));
             body.toggleClass('sl-focus-has-darken', darken > 0);
         } else {
             body.removeClass('sl-focus-active-global');
             body.removeClass('sl-focus-has-darken');
+            body.removeClass('sl-focus-dim-text');
             body.style.removeProperty('--sl-focus-toolbar-opacity');
             body.style.removeProperty('--sl-focus-bg');
             body.style.removeProperty('--sl-focus-filter');
+            body.style.removeProperty('--sl-focus-text-opacity');
         }
     }
 

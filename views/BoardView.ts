@@ -370,10 +370,10 @@ export class BoardView extends ItemView {
 
             const fitBtn = iconGroup.createEl('button', {
                 cls: 'clickable-icon',
-                attr: { 'aria-label': 'Fit Corkboard to viewport' },
+                attr: { 'aria-label': 'Fit corkboard to viewport' },
             });
             obsidian.setIcon(fitBtn, 'maximize');
-            attachTooltip(fitBtn, 'Fit Corkboard to viewport');
+            attachTooltip(fitBtn, 'Fit corkboard to viewport');
             fitBtn.addEventListener('click', () => this.fitCorkboardToViewport());
 
             const focusBtn = iconGroup.createEl('button', {
@@ -1657,7 +1657,7 @@ export class BoardView extends ItemView {
         const backingFile = this.app.vault.getAbstractFileByPath(scenePath);
         if (backingFile instanceof TFile) {
             menu.addItem(item => item
-                .setTitle('Open in Editor')
+                .setTitle('Open in editor')
                 .setIcon('file-text')
                 .onClick(() => { void this.openScene(scene); }));
         }

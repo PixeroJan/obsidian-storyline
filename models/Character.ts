@@ -19,6 +19,8 @@ export interface Character {
     gallery?: Array<{ path: string; caption: string }>;
     /** Nicknames or aliases */
     nickname?: string;
+    /** Additional explicit aliases, stored independently from nickname */
+    aliases?: string;
     /** Age or date of birth */
     age?: string;
     /** Role in the story (string or list of roles — issue #72 Tier 1) */
@@ -185,7 +187,7 @@ export interface Character {
      * 1.10.43); older data stores `'true'` / `'false'` strings and the
      * checkbox renderer accepts both shapes.
      */
-    universalFields?: Record<string, string | string[] | boolean>;
+    universalFields?: Record<string, string | string[] | boolean | number>;
 
     // ── Series sharing ─────────────────────────────
     /**
@@ -688,15 +690,13 @@ export const CHARACTER_CATEGORIES: CharacterFieldCategory[] = [
         ],
     },
     // ── Linking & Matching (Issue #228) ───────────────────────────
-    // Mirrors the shared section Codex entries already have. Aliases are
-    // intentionally omitted — Characters already expose `nickname` in Basic
-    // Information, which the LinkScanner reads as a comma-separated alias
-    // list. The fields here control sub-type display and matching rules.
+    // Mirrors the shared section Codex entries already have.
     {
         title: 'Linking & Matching',
         icon: 'link',
         fields: [
             { key: 'entryType', label: 'Type', placeholder: 'Sub-type (e.g. Antagonist, Mentor, Deuteragonist…)' },
+            { key: 'aliases', label: 'Aliases', placeholder: 'Additional explicit names, separated by commas, semicolons, or new lines', multiline: true },
             { key: 'caseSensitive', label: 'Case-sensitive matching', placeholder: 'Off — match regardless of case', toggle: true },
             { key: 'excludeTerms', label: 'Exclude terms', placeholder: 'Comma-separated phrases that should NOT link here (e.g. "Saint John")', multiline: true },
         ],
@@ -716,7 +716,7 @@ export const CHARACTER_FIELD_KEYS: (keyof Character)[] = [
     'habits', 'props',
     'books',
     'booksById', 'sortOrder',
-    'entryType', 'caseSensitive', 'excludeTerms',
+    'entryType', 'aliases', 'caseSensitive', 'excludeTerms',
 ];
 
 export const CHARACTER_RELATION_ARRAY_FIELDS: (keyof Character)[] = [

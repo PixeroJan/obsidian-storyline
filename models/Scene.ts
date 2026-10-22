@@ -169,7 +169,7 @@ export interface Scene {
      * Custom universal field values (keyed by template id).
      * `boolean` is supported for `checkbox`-type templates (1.10.43+).
      */
-    universalFields?: Record<string, string | string[] | boolean>;
+    universalFields?: Record<string, string | string[] | boolean | number>;
     /** Name of the beat sheet template used to create this scene */
     beatsheet?: string;
     /** Issue #89 — names of detected codex links the user explicitly ignored in this scene */

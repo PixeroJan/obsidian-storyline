@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, no-useless-escape -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { addIcon, App, ButtonComponent, DropdownComponent, FuzzySuggestModal, ItemView, Modal, Notice, Platform, Plugin, Setting, TFile, TextComponent, ToggleComponent, WorkspaceLeaf, normalizePath, parseYaml, setIcon } from 'obsidian';
-import { SceneCardsSettings, SceneCardsSettingTab, DEFAULT_SETTINGS } from './settings';
+import { SceneCardsSettings, SceneCardsSettingTab, DEFAULT_SETTINGS, migrateSectionStateKeys } from './settings';
 import { asRecord, isRecord } from './utils/narrow';
 import type { FilterPreset } from './models/Scene';
 import { SceneManager } from './services/SceneManager';
 import { registerCustomStatuses } from './models/Scene';
-import { setWriteSceneFieldsAsWikilinks, setWordcountExclusions, setWordcountLocale } from './services/MetadataParser';
-import { normalizeStoryLineLocale } from './utils/locale';
+import { MetadataParser, setWriteSceneFieldsAsWikilinks, setWordcountExclusions, setWordcountLocale } from './services/MetadataParser';
+import { normalizeStoryLineLocale, tokenizeWords } from './utils/locale';
 import { setActiveTemplatesProvider, setTopLevelMirrorEnabled, mirrorUniversalFieldsToTopLevel, hydrateUniversalFieldsFromTopLevel, isReservedTopLevelKey, type FieldTemplateChange } from './services/FieldTemplateService';
 import {
     BOARD_VIEW_TYPE,
@@ -50,6 +50,7 @@ import { CharacterManager } from './services/CharacterManager';
 import { CodexManager } from './services/CodexManager';
 import { makeCustomCodexCategory } from './models/Codex';
 import { QuickAddModal } from './components/QuickAddModal';
+import { SceneFilenameSyncModal } from './components/SceneFilenameSyncModal';
 import { ExportModal } from './components/ExportModal';
 import { WritingTracker } from './services/WritingTracker';
 import { SnapshotManager } from './services/SnapshotManager';
@@ -63,6 +64,7 @@ import { buildFormattingToolbar } from './components/FormattingToolbar';
 import { setupMobileKeyboardHandling } from './components/MobileAdapter';
 import { EditorView } from '@codemirror/view';
 import { getQuotePair } from './utils/locale';
+import { createFocusTextExtension } from './services/FocusTextExtension';
 
 /**
  * StoryLine Plugin for Obsidian
@@ -98,6 +100,7 @@ export default class SceneCardsPlugin extends Plugin {
     private writingStatsSaveTimer: number | null = null;
     /** Issue #238 — periodic autosave interval id (5 min) */
     private writingStatsIntervalId: number | null = null;
+    private pendingWritingChanges = new Map<string, { before: string; after: string; timer: number }>();
     /** Invalidates overlapping view refresh pipelines during project switches. */
     private openViewsRefreshGeneration = 0;
     /** Single-flight refresh queue; prevents overlapping disk/index pipelines. */
@@ -141,6 +144,22 @@ export default class SceneCardsPlugin extends Plugin {
                 return true;
             },
         }));
+        this.registerEditorExtension(EditorView.updateListener.of(update => {
+            if (!update.docChanged || !update.view.hasFocus) return;
+            const activeFile = this.app.workspace.getActiveFile();
+            const embeddedPath = update.view.dom.closest<HTMLElement>('.sl-manuscript-editor-wrap')?.dataset.scenePath;
+            const scenePath = embeddedPath || activeFile?.path;
+            if (!scenePath || !this.sceneManager?.getScene(scenePath)) return;
+            const userChange = update.transactions.some(transaction =>
+                transaction.isUserEvent('input')
+                || transaction.isUserEvent('delete')
+                || transaction.isUserEvent('undo')
+                || transaction.isUserEvent('redo'));
+            if (!userChange) return;
+
+            this.queueWritingChange(scenePath, update.startState.doc.toString(), update.state.doc.toString());
+        }));
+        this.registerEditorExtension(createFocusTextExtension());
         // Issue #189 — disable native spell-check in all StoryLine UI inputs,
         // textareas and contenteditables. Obsidian's "Disable spell check" only
         // applies to its own editor; plugin-rendered form fields inherit the
@@ -410,6 +429,27 @@ export default class SceneCardsPlugin extends Plugin {
         this.addCommand({
             id: 'create-new-scene',
             name: 'Create new scene',            callback: () => this.openQuickAdd(),
+        });
+
+        this.addCommand({
+            id: 'synchronize-scene-filenames',
+            name: 'Synchronize scene filenames from metadata',
+            checkCallback: (checking: boolean) => {
+                if (!this.sceneManager.activeProject) return false;
+                if (!checking) {
+                    const changes = this.sceneManager.getSceneFilenameSyncPreview();
+                    if (changes.length === 0) {
+                        new Notice('Scene filenames are already synchronized.');
+                        return true;
+                    }
+                    new SceneFilenameSyncModal(this.app, changes, async () => {
+                        const count = await this.sceneManager.synchronizeSceneFileNames();
+                        this.refreshOpenViews();
+                        new Notice(`Synchronized ${count} scene filename${count === 1 ? '' : 's'}.`);
+                    }).open();
+                }
+                return true;
+            },
         });
 
         this.addCommand({
@@ -1058,6 +1098,7 @@ export default class SceneCardsPlugin extends Plugin {
             window.clearTimeout(this.writingStatsSaveTimer);
             this.writingStatsSaveTimer = null;
         }
+        this.flushPendingWritingChanges();
         // Flush writing session into daily history and persist to System/stats.json
         try {
             const stats = this.sceneManager.queryService.getStatistics();
@@ -1202,6 +1243,8 @@ export default class SceneCardsPlugin extends Plugin {
 
     async loadSettings(): Promise<void> {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        const sectionStateKeysMigrated = migrateSectionStateKeys(this.settings);
+        if (sectionStateKeysMigrated) await this.saveSettings();
         // Issue #73 — propagate the wikilink-writer toggle to MetadataParser
         setWriteSceneFieldsAsWikilinks(this.settings.writeFieldsAsWikilinks !== false);
         // Issue #78 — propagate wordcount-exclusion toggles to MetadataParser
@@ -1812,6 +1855,7 @@ export default class SceneCardsPlugin extends Plugin {
             window.clearTimeout(this.writingStatsSaveTimer);
             this.writingStatsSaveTimer = null;
         }
+
         const flush = () => {
             try {
                 if (!this.sceneManager?.activeProject) return;
@@ -1826,6 +1870,52 @@ export default class SceneCardsPlugin extends Plugin {
             flush();
         } else {
             this.writingStatsSaveTimer = window.setTimeout(flush, 60_000);
+        }
+    }
+
+    private queueWritingChange(scenePath: string, before: string, after: string): void {
+        const pending = this.pendingWritingChanges.get(scenePath);
+        if (pending) window.clearTimeout(pending.timer);
+        const entry = {
+            before: pending?.before ?? before,
+            after,
+            timer: window.setTimeout(() => this.flushWritingChange(scenePath), 750),
+        };
+        this.pendingWritingChanges.set(scenePath, entry);
+    }
+
+    private flushWritingChange(scenePath: string): void {
+        const pending = this.pendingWritingChanges.get(scenePath);
+        if (!pending) return;
+        window.clearTimeout(pending.timer);
+        this.pendingWritingChanges.delete(scenePath);
+
+        const locale = this.sceneManager?.getEffectiveLocale();
+        const oldTokens = tokenizeWords(MetadataParser.extractBody(pending.before), locale)
+            .map(token => token.toLocaleLowerCase(locale));
+        const newTokens = tokenizeWords(MetadataParser.extractBody(pending.after), locale)
+            .map(token => token.toLocaleLowerCase(locale));
+        const counts = (tokens: string[]): Map<string, number> => {
+            const result = new Map<string, number>();
+            for (const token of tokens) result.set(token, (result.get(token) ?? 0) + 1);
+            return result;
+        };
+        const oldCounts = counts(oldTokens);
+        const newCounts = counts(newTokens);
+        let added = 0;
+        let deleted = 0;
+        for (const token of new Set([...oldCounts.keys(), ...newCounts.keys()])) {
+            const difference = (newCounts.get(token) ?? 0) - (oldCounts.get(token) ?? 0);
+            if (difference > 0) added += difference;
+            if (difference < 0) deleted -= difference;
+        }
+        this.writingTracker.recordChange(added, deleted);
+        this.scheduleWritingStatsSave();
+    }
+
+    flushPendingWritingChanges(): void {
+        for (const scenePath of [...this.pendingWritingChanges.keys()]) {
+            this.flushWritingChange(scenePath);
         }
     }
 

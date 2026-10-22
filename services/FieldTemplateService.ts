@@ -9,7 +9,7 @@ import { App, normalizePath } from 'obsidian';
 // ═══════════════════════════════════════════════════════
 
 /** Type of input control for a universal field */
-export type UniversalFieldType = 'text' | 'textarea' | 'dropdown' | 'multi-select' | 'checkbox';
+export type UniversalFieldType = 'text' | 'textarea' | 'dropdown' | 'multi-select' | 'checkbox' | 'number';
 
 /** A single universal field template definition */
 export interface UniversalFieldTemplate {

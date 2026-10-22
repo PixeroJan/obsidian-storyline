@@ -47,37 +47,6 @@ export interface EntityReference {
 }
 
 /**
- * Issue #228 — common title words that should NOT be auto-aliased as a
- * first name. When a character's name starts with one of these (e.g.
- * "Lady of Dreams", "Lord Blackwood", "Sir Galahad"), the first word is a
- * title, not a first name, and auto-aliasing it would tag the character
- * in every scene that uses the title word.
- */
-const TITLE_WORDS = new Set([
-    'lady', 'lord', 'sir', 'dame', 'madam', 'madame', 'mister', 'mr', 'mrs',
-    'ms', 'dr', 'doctor', 'professor', 'prof', 'captain', 'cap', 'lieutenant',
-    'lt', 'sergeant', 'sgt', 'general', 'gen', 'colonel', 'col', 'major',
-    'maj', 'admiral', 'adm', 'commander', 'cmdr', 'king', 'queen', 'prince',
-    'princess', 'duke', 'duchess', 'earl', 'count', 'countess', 'baron',
-    'baroness', 'marquis', 'marchioness', 'emperor', 'empress', 'pope',
-    'father', 'mother', 'sister', 'brother', 'reverend', 'rev', 'saint',
-    'st', 'elder', 'master', 'mistress', 'sheriff', 'deputy', 'officer',
-    'agent', 'director', 'president', 'senator', 'judge', 'justice',
-]);
-
-/**
- * Issue #228 — connector words that indicate a descriptive phrase rather
- * than a "[FirstName] [LastName]" pattern. When the second word of a name
- * is one of these (e.g. "Lady **of** Dreams", "Keeper **of** the Keys"),
- * the first word is not a first name and should not be auto-aliased.
- */
-const CONNECTOR_WORDS = new Set([
-    'of', 'the', 'de', 'la', 'le', 'du', 'von', 'van', 'der', 'den', 'das',
-    'di', 'da', 'del', 'della', 'des', 'du', 'el', 'al', 'bin', 'ibn',
-    'from', 'in', 'on', 'at', 'for', 'to', 'and',
-]);
-
-/**
  * Scans scene body text for [[wikilinks]] and plain-text name mentions,
  * then classifies them.
  */
@@ -275,58 +244,24 @@ export class LinkScanner {
             if (rule.caseSensitive) this.codexCaseSensitiveNames.push(originalName);
         };
 
-        // Count first-name occurrences to avoid ambiguous auto-aliases
-        const firstNameCount = new Map<string, number>();
         for (const c of this.characterManager.getAllCharacters()) {
-            const first = c.name.split(/\s+/)[0]?.toLowerCase();
-            if (first) firstNameCount.set(first, (firstNameCount.get(first) || 0) + 1);
-        }
-
-        for (const c of this.characterManager.getAllCharacters()) {
-            const nameLower = c.name.toLowerCase();
+            const canonical = c.name.trim();
+            const nameLower = canonical.toLowerCase();
             this.charNames.add(nameLower);
-            this.charCanonical.set(nameLower, c.name);
+            this.charCanonical.set(nameLower, canonical);
 
             // Issue #228 — Linking & Matching rules for characters.
             const cRule = buildRule(c as unknown as Record<string, unknown>);
-            registerRule(nameLower, c.name, cRule);
+            registerRule(nameLower, canonical, cRule);
 
-            // Auto-add first name as alias (only if unique across characters).
-            // Issue #228 — skip the auto-alias when the first word is a title
-            // (Lady, Lord, Sir, …) or when the name is a descriptive phrase
-            // ("Lady of Dreams", "Keeper of the Keys"). These aren't first
-            // names and auto-aliasing them causes false positives in every
-            // scene that uses the title word.
-            const firstName = c.name.split(/\s+/)[0]?.toLowerCase();
-            const nameWords = c.name.split(/\s+/);
-            const secondWord = nameWords[1]?.toLowerCase();
-            const isTitleOrPhrase =
-                TITLE_WORDS.has(firstName) ||
-                (secondWord && CONNECTOR_WORDS.has(secondWord));
-            if (
-                firstName &&
-                firstName !== nameLower &&
-                (firstNameCount.get(firstName) || 0) <= 1 &&
-                !isTitleOrPhrase
-            ) {
-                this.charNames.add(firstName);
-                this.charCanonical.set(firstName, c.name);
-                // Issue #228 — always register original casing so the
-                // case-sensitive regex can use it when a rule exists.
-                registerRule(firstName, c.name.split(/\s+/)[0], cRule);
-            }
-
-            if ((c as unknown as Record<string, unknown>).nickname) {
-                // Support comma-, semicolon-, and line-separated nicknames
-                const nicknames = String((c as unknown as Record<string, unknown>).nickname)
-                    .split(/[,;\n]/)
-                    .map((n: string) => n.trim())
-                    .filter(Boolean);
-                for (const nick of nicknames) {
-                    const nickLower = nick.toLowerCase();
-                    this.charNames.add(nickLower);
-                    this.charCanonical.set(nickLower, c.name);
-                    registerRule(nickLower, nick, cRule);
+            for (const source of [c.nickname, c.aliases]) {
+                if (!source) continue;
+                const aliases = source.split(/[,;\n]/).map(value => value.trim()).filter(Boolean);
+                for (const alias of aliases) {
+                    const aliasLower = alias.toLowerCase();
+                    this.charNames.add(aliasLower);
+                    this.charCanonical.set(aliasLower, canonical);
+                    registerRule(aliasLower, alias, cRule);
                 }
             }
         }

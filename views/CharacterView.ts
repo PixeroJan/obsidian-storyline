@@ -1705,7 +1705,7 @@ export class CharacterView extends ItemView {
         // `value` is the coerced string used by text / dropdown paths; the
         // checkbox path reads `rawValue` to detect the actual boolean.
         const rawValue = draft.universalFields[tpl.id];
-        const value: string = typeof rawValue === 'string' ? rawValue : '';
+        const value: string = typeof rawValue === 'string' || typeof rawValue === 'number' ? String(rawValue) : '';
 
         const row = parent.createDiv('character-field-row character-universal-field-row');
 
@@ -1923,6 +1923,19 @@ export class CharacterView extends ItemView {
                 draft.universalFields![tpl.id] = textarea.value;
                 this.scheduleSave(draft);
                 autoGrow();
+            });
+        } else if (tpl.type === 'number') {
+            const input = row.createEl('input', {
+                cls: 'character-field-input',
+                type: 'number',
+                attr: { placeholder: tpl.placeholder, step: 'any' },
+            });
+            input.value = value;
+            input.addEventListener('input', () => {
+                const parsed = input.value.trim() === '' ? undefined : Number(input.value);
+                if (parsed === undefined || !Number.isFinite(parsed)) delete draft.universalFields![tpl.id];
+                else draft.universalFields![tpl.id] = parsed;
+                this.scheduleSave(draft);
             });
         } else if (tpl.type === 'checkbox') {
             const checked = rawValue === true || rawValue === 'true' || rawValue === 'yes';
@@ -3226,8 +3239,10 @@ export class CharacterView extends ItemView {
         const preview = service.previewCharacterRename(oldName, newName);
         const total = preview.sceneCount + preview.relationCount;
         if (total === 0) {
-            // No references to update — just silently update the tracked name
             this.originalCharacterName = newName;
+            void service.cascadeCharacterRename(oldName, newName).then(async () => {
+                await this.updateManualAliasTargets(oldName, newName);
+            });
             return;
         }
 
@@ -3241,6 +3256,7 @@ export class CharacterView extends ItemView {
             summary,
             async () => {
                 await service.cascadeCharacterRename(oldName, newName);
+                await this.updateManualAliasTargets(oldName, newName);
                 this.originalCharacterName = newName;
                 new Notice(`Updated ${total} reference${total !== 1 ? 's' : ''} from "${oldName}" to "${newName}"`);
             },
@@ -3252,6 +3268,19 @@ export class CharacterView extends ItemView {
             },
         );
         modal.open();
+    }
+
+    private async updateManualAliasTargets(oldName: string, newName: string): Promise<void> {
+        let changed = false;
+        for (const [alias, canonical] of Object.entries(this.plugin.settings.characterAliases)) {
+            if (canonical.trim().toLowerCase() === oldName.trim().toLowerCase()) {
+                this.plugin.settings.characterAliases[alias] = newName;
+                changed = true;
+            }
+        }
+        this.characterManager.setManualAliases(this.plugin.settings.characterAliases);
+        this.plugin.linkScanner.rebuildLookups(this.plugin.settings.characterAliases);
+        if (changed) await this.plugin.saveSettings();
     }
 
     /** Immediately flush any pending debounced save */

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { App, ItemView, WorkspaceLeaf, Modal, Setting, Notice, TFile } from 'obsidian';
+import { App, ItemView, WorkspaceLeaf, Modal, Setting, Notice } from 'obsidian';
 import * as obsidian from 'obsidian';
 import type SceneCardsPlugin from '../main';
 import type { CodexVisualGroup } from '../settings';
@@ -1233,7 +1233,7 @@ export class CodexView extends ItemView {
         // `value` is the coerced string used by text / dropdown paths; the
         // checkbox path reads `rawValue` to detect the actual boolean.
         const rawValue = draft.universalFields[tpl.id];
-        const value: string = typeof rawValue === 'string' ? rawValue : '';
+        const value: string = typeof rawValue === 'string' || typeof rawValue === 'number' ? String(rawValue) : '';
 
         const row = parent.createDiv('codex-field-row codex-universal-field-row');
 
@@ -1447,6 +1447,19 @@ export class CodexView extends ItemView {
                 draft.universalFields![tpl.id] = textarea.value;
                 this.scheduleSave(draft);
                 autoGrow();
+            });
+        } else if (tpl.type === 'number') {
+            const input = row.createEl('input', {
+                cls: 'codex-field-input',
+                type: 'number',
+                attr: { placeholder: tpl.placeholder, step: 'any' },
+            });
+            input.value = value;
+            input.addEventListener('input', () => {
+                const parsed = input.value.trim() === '' ? undefined : Number(input.value);
+                if (parsed === undefined || !Number.isFinite(parsed)) delete draft.universalFields![tpl.id];
+                else draft.universalFields![tpl.id] = parsed;
+                this.scheduleSave(draft);
             });
         } else if (tpl.type === 'checkbox') {
             const checked = rawValue === true || rawValue === 'true' || rawValue === 'yes';

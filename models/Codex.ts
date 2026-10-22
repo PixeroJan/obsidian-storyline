@@ -34,7 +34,7 @@ export interface CodexEntry {
      * Universal field template values (keyed by template id).
      * `boolean` is supported for `checkbox`-type templates (1.10.43+).
      */
-    universalFields?: Record<string, string | string[] | boolean>;
+    universalFields?: Record<string, string | string[] | boolean | number>;
 
     // ── Series-ready fields ────────────────────────
     /** Which books (project titles) this entry appears in — for future series sharing */

@@ -19,8 +19,62 @@ export interface WritingTrackerData {
     history: Record<string, number>;
     /** Daily revision counts (absolute word changes — adds + deletes) keyed by ISO date */
     revisionHistory?: Record<string, number>;
+    /** Daily added/deleted word counts keyed by local ISO date */
+    changeHistory?: Record<string, DailyChangeEntry>;
+    /** Optional project deadline in local YYYY-MM-DD form */
+    projectDeadline?: string;
+    /** Whether weekend days count toward the project deadline */
+    projectDeadlineIncludeWeekends?: boolean;
     /** Persisted sprint log entries */
     sprintLog?: SprintLogEntry[];
+}
+
+export interface DailyChangeEntry {
+    added: number;
+    deleted: number;
+}
+
+export interface DeadlinePlan {
+    deadline: string;
+    remainingWords: number;
+    availableDays: number;
+    wordsPerDay: number;
+    overdue: boolean;
+}
+
+export function buildDeadlinePlan(
+    deadline: string,
+    target: number,
+    total: number,
+    includeWeekends: boolean,
+    today = new Date(),
+): DeadlinePlan | null {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) return null;
+    const [year, month, day] = deadline.split('-').map(Number);
+    const end = new Date(year, month - 1, day);
+    if (end.getFullYear() !== year || end.getMonth() !== month - 1 || end.getDate() !== day) return null;
+
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const remainingWords = Math.max(0, Math.trunc(target) - Math.trunc(total));
+    const overdue = end < start && remainingWords > 0;
+    let availableDays = 0;
+    if (!overdue) {
+        const cursor = new Date(start);
+        while (cursor <= end) {
+            const weekday = cursor.getDay();
+            if (includeWeekends || (weekday !== 0 && weekday !== 6)) availableDays++;
+            cursor.setDate(cursor.getDate() + 1);
+        }
+    }
+    return {
+        deadline,
+        remainingWords,
+        availableDays,
+        wordsPerDay: remainingWords > 0 && availableDays > 0
+            ? Math.ceil(remainingWords / availableDays)
+            : 0,
+        overdue,
+    };
 }
 
 /** A completed sprint record */
@@ -40,6 +94,9 @@ export class WritingTracker {
     private history: Record<string, number> = {};
     /** Persisted daily revision (absolute change) history */
     private revisionHistory: Record<string, number> = {};
+    private changeHistory: Record<string, DailyChangeEntry> = {};
+    private projectDeadline = '';
+    private projectDeadlineIncludeWeekends = false;
     /** Last known total word count — used to measure revision deltas between flushes */
     private lastKnownTotal: number | null = null;
     /** Session words already flushed to daily history — avoids double-counting */
@@ -177,6 +234,40 @@ export class WritingTracker {
     /** Return the raw daily revision history record (date→words) */
     getFullRevisionHistory(): Record<string, number> {
         return { ...this.revisionHistory };
+    }
+
+    recordChange(added: number, deleted: number): void {
+        const safeAdded = Math.max(0, Number.isFinite(added) ? Math.trunc(added) : 0);
+        const safeDeleted = Math.max(0, Number.isFinite(deleted) ? Math.trunc(deleted) : 0);
+        if (safeAdded === 0 && safeDeleted === 0) return;
+        const today = this.todayKey();
+        const current = this.changeHistory[today] ?? { added: 0, deleted: 0 };
+        this.changeHistory[today] = {
+            added: current.added + safeAdded,
+            deleted: current.deleted + safeDeleted,
+        };
+    }
+
+    getFullChangeHistory(): Record<string, DailyChangeEntry> {
+        return Object.fromEntries(Object.entries(this.changeHistory).map(([date, entry]) => [
+            date,
+            {
+                added: Math.max(0, Number(entry?.added) || 0),
+                deleted: Math.max(0, Number(entry?.deleted) || 0),
+            },
+        ]));
+    }
+
+    setProjectDeadline(deadline: string, includeWeekends: boolean): void {
+        this.projectDeadline = deadline;
+        this.projectDeadlineIncludeWeekends = includeWeekends;
+    }
+
+    getProjectDeadline(): { deadline: string; includeWeekends: boolean } {
+        return {
+            deadline: this.projectDeadline,
+            includeWeekends: this.projectDeadlineIncludeWeekends,
+        };
     }
 
     /** Get the last N days of history (most recent first) */
@@ -343,21 +434,32 @@ export class WritingTracker {
         return {
             history: { ...this.history },
             revisionHistory: { ...this.revisionHistory },
+            changeHistory: this.getFullChangeHistory(),
+            projectDeadline: this.projectDeadline || undefined,
+            projectDeadlineIncludeWeekends: this.projectDeadlineIncludeWeekends,
             sprintLog: [...this._sprintLog],
         };
     }
 
     /** Import previously saved data */
     importData(data: WritingTrackerData | undefined): void {
-        if (data?.history) {
-            this.history = { ...data.history };
-        }
-        if (data?.revisionHistory) {
-            this.revisionHistory = { ...data.revisionHistory };
-        }
-        if (data?.sprintLog) {
-            this._sprintLog = [...data.sprintLog];
-        }
+        this.history = data?.history ? { ...data.history } : {};
+        this.revisionHistory = data?.revisionHistory ? { ...data.revisionHistory } : {};
+        this.changeHistory = data?.changeHistory
+            ? Object.fromEntries(Object.entries(data.changeHistory).map(([date, entry]) => [
+                date,
+                {
+                    added: Math.max(0, Number(entry?.added) || 0),
+                    deleted: Math.max(0, Number(entry?.deleted) || 0),
+                },
+            ]))
+            : {};
+        this.projectDeadline = typeof data?.projectDeadline === 'string' ? data.projectDeadline : '';
+        this.projectDeadlineIncludeWeekends = data?.projectDeadlineIncludeWeekends === true;
+        this._sprintLog = data?.sprintLog ? [...data.sprintLog] : [];
+        this.baselineWords = null;
+        this.lastKnownTotal = null;
+        this._flushedSessionWords = 0;
     }
 
     // ── Helpers ────────────────────────────────────────

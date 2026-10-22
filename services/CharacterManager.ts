@@ -99,20 +99,18 @@ export class CharacterManager {
     }
 
     /**
-     * Find a character by name (case-insensitive).
-     * Checks full name, nickname(s), and first name.
+     * Find a character by canonical name or an explicitly stored alias.
      */
     findByName(name: string): Character | undefined {
         const lower = MetadataParser.cleanWikilink(name)?.toLowerCase() || name.trim().toLowerCase();
         const canonical = this.buildAliasMap().get(lower);
-        return this.getAllCharacters().find(char => char.name.toLowerCase() === (canonical || lower));
+        return this.getAllCharacters().find(char => char.name.toLowerCase() === (canonical?.toLowerCase() || lower));
     }
 
     /**
      * Build a map from lowercased alias → canonical character name (display casing).
-     * Aliases include: full name, each comma-separated nickname, the first
-     * word of the full name (only if it's unique — i.e. no other character
-     * shares the same first name), and any manual aliases passed in.
+     * Aliases include the canonical name, explicit nickname and aliases fields,
+     * and any manual aliases passed in.
      *
      * @param manualAliases  Optional user-defined alias → canonical mappings
      *                       (from plugin settings.characterAliases).
@@ -124,41 +122,32 @@ export class CharacterManager {
         const aliasMap = new Map<string, string>();
         const allChars = sourceCharacters;
 
-        // Count first-name usage to avoid ambiguity
-        const firstNameCount = new Map<string, number>();
-        for (const char of allChars) {
-            const first = char.name.split(/\s+/)[0]?.toLowerCase();
-            if (first) firstNameCount.set(first, (firstNameCount.get(first) || 0) + 1);
-        }
-
         // Register every canonical profile first so a nickname-named duplicate
         // cannot overwrite the canonical target when aliases are applied.
         for (const char of allChars) {
-            aliasMap.set(char.name.toLowerCase(), char.name);
+            const canonical = char.name.trim();
+            if (canonical) aliasMap.set(canonical.toLowerCase(), canonical);
         }
 
         for (const char of allChars) {
-            const canonical = char.name;
-
-            // Nicknames
-            if (char.nickname) {
-                const nicks = char.nickname.split(/[,;\n]/).map(n => n.trim()).filter(Boolean);
-                for (const nick of nicks) {
-                    aliasMap.set(nick.toLowerCase(), canonical);
+            const canonical = char.name.trim();
+            for (const source of [char.nickname, char.aliases]) {
+                if (!source) continue;
+                const aliases = source.split(/[,;\n]/).map(value => value.trim()).filter(Boolean);
+                for (const alias of aliases) {
+                    aliasMap.set(alias.toLowerCase(), canonical);
                 }
-            }
-
-            // First name (only if unique across all characters)
-            const first = canonical.split(/\s+/)[0];
-            if (first && (firstNameCount.get(first.toLowerCase()) || 0) <= 1) {
-                aliasMap.set(first.toLowerCase(), canonical);
             }
         }
 
         // Apply manual aliases (these always win over auto-detected ones)
         if (manualAliases) {
             for (const [alias, canonical] of Object.entries(manualAliases)) {
-                aliasMap.set(alias.toLowerCase(), canonical);
+                const normalizedAlias = alias.trim();
+                const normalizedCanonical = canonical.trim();
+                if (normalizedAlias && normalizedCanonical) {
+                    aliasMap.set(normalizedAlias.toLowerCase(), normalizedCanonical);
+                }
             }
         }
 
@@ -260,9 +249,6 @@ export class CharacterManager {
                 delete fm[key]; // Remove empty fields to keep frontmatter clean
             }
         }
-        const aliases = this.parseStringList(character.nickname);
-        if (aliases?.length) fm.aliases = aliases;
-        else if (character.nickname === undefined || character.nickname === '') delete fm.aliases;
         // Clean up legacy keys
         delete fm['coreBeliefs'];
         delete fm['romanticHistory'];
@@ -384,7 +370,8 @@ export class CharacterManager {
             tagline: safeFm.tagline,
             image: safeFm.image,
             gallery: this.parseGallery(safeFm.gallery),
-            nickname: safeFm.nickname || this.parseStringList(safeFm.aliases)?.join(', '),
+            nickname: typeof safeFm.nickname === 'string' ? safeFm.nickname : undefined,
+            aliases: this.parseStringList(safeFm.aliases)?.join(', '),
             age: safeFm.age != null ? String(safeFm.age) : undefined,
             role: safeFm.role,
             roles: normalizeRoleEntries(safeFm.roles),

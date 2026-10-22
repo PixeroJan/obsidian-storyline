@@ -47,6 +47,11 @@ interface SceneUpdateOptions {
     moveFile?: boolean;
 }
 
+export interface SceneFilenameSyncChange {
+    currentPath: string;
+    newPath: string;
+}
+
 /**
  * Manages CRUD operations, indexing, and project management for scenes.
  *
@@ -508,6 +513,7 @@ export class SceneManager implements ISceneStore {
      */
     async setActiveProject(project: StoryLineProject): Promise<void> {
         // Save per-project data for the previous project before switching
+        this.plugin.flushPendingWritingChanges();
         await this.plugin.saveProjectSystemData();
 
         this._activeProject = project;
@@ -1037,7 +1043,7 @@ export class SceneManager implements ISceneStore {
         // Issue #77 \u2014 seed universalFields with template defaults for any
         // scene-category fields that have a defaultValue and aren't already set.
         if (!isNote) {
-            sceneData.universalFields = this.seedSceneUniversalDefaults(sceneData.universalFields) as Record<string, string | string[]> | undefined;
+            sceneData.universalFields = this.seedSceneUniversalDefaults(sceneData.universalFields) as Record<string, string | string[] | boolean | number> | undefined;
         }
 
         // Issue #238 feedback \u2014 apply the default PoV character when the
@@ -1272,6 +1278,101 @@ export class SceneManager implements ISceneStore {
         await this.renameSceneNotesFile(newPath);
 
         return newPath;
+    }
+
+    /** Preview an explicit filename synchronization without changing files. */
+    getSceneFilenameSyncPreview(): SceneFilenameSyncChange[] {
+        const sceneFolder = normalizePath(this.getSceneFolder());
+        const scenes = [...this.scenes.entries()]
+            .filter(([filePath, scene]) => {
+                const normalized = normalizePath(filePath);
+                return !scene.corkboardNote
+                    && normalized.startsWith(`${sceneFolder}/`)
+                    && this.app.vault.getAbstractFileByPath(filePath) instanceof TFile;
+            })
+            .sort(([a], [b]) => a.localeCompare(b));
+
+        const currentPaths = new Set(scenes.map(([filePath]) => normalizePath(filePath)));
+        const preferred = scenes.map(([filePath, scene]) => {
+            const file = this.app.vault.getAbstractFileByPath(filePath);
+            if (!(file instanceof TFile)) return { filePath, scene, preferredPath: normalizePath(filePath) };
+            const folder = file.parent?.path ? normalizePath(file.parent.path) : sceneFolder;
+            return {
+                filePath,
+                scene,
+                preferredPath: normalizePath(`${folder}/${this.getSceneFileNameForMetadata(scene, file)}`),
+            };
+        });
+        const movingPaths = new Set(
+            preferred
+                .filter(item => normalizePath(item.filePath) !== item.preferredPath)
+                .map(item => normalizePath(item.filePath)),
+        );
+        const occupied = new Set<string>();
+        const changes: SceneFilenameSyncChange[] = [];
+
+        for (const item of preferred) {
+            const currentPath = normalizePath(item.filePath);
+            const file = this.app.vault.getAbstractFileByPath(item.filePath);
+            if (!(file instanceof TFile)) continue;
+            const dot = item.preferredPath.lastIndexOf('.');
+            const preferredName = item.preferredPath.slice(item.preferredPath.lastIndexOf('/') + 1);
+            const base = dot >= 0 ? preferredName.slice(0, preferredName.lastIndexOf('.')) : preferredName;
+            const ext = dot >= 0 ? item.preferredPath.slice(dot) : '';
+            const folder = file.parent?.path ? normalizePath(file.parent.path) : sceneFolder;
+            let candidate = item.preferredPath;
+            let dedupe = 1;
+            while (
+                occupied.has(candidate)
+                || (this.app.vault.getAbstractFileByPath(candidate)
+                    && (!currentPaths.has(candidate) || !movingPaths.has(candidate)))
+            ) {
+                candidate = normalizePath(`${folder}/${base} (${dedupe})${ext}`);
+                dedupe++;
+            }
+            occupied.add(candidate);
+            if (currentPath !== candidate) changes.push({ currentPath: item.filePath, newPath: candidate });
+        }
+        return changes;
+    }
+
+    /** Apply an explicit filename synchronization using temporary paths for swaps. */
+    async synchronizeSceneFileNames(): Promise<number> {
+        const changes = this.getSceneFilenameSyncPreview();
+        if (changes.length === 0) return 0;
+
+        const staged: Array<SceneFilenameSyncChange & { temporaryPath: string }> = [];
+        const token = `__storyline_filename_sync_${Date.now()}__`;
+        for (let i = 0; i < changes.length; i++) {
+            const change = changes[i];
+            const slash = change.currentPath.lastIndexOf('/');
+            const folder = slash >= 0 ? change.currentPath.slice(0, slash) : '';
+            let temporaryPath = normalizePath(`${folder}/${token}${i}.md`);
+            let suffix = 1;
+            while (this.app.vault.getAbstractFileByPath(temporaryPath)) {
+                temporaryPath = normalizePath(`${folder}/${token}${i}-${suffix}.md`);
+                suffix++;
+            }
+            const file = this.app.vault.getAbstractFileByPath(change.currentPath);
+            if (!(file instanceof TFile)) continue;
+            await this.app.fileManager.renameFile(file, temporaryPath);
+            staged.push({ ...change, temporaryPath });
+        }
+
+        for (const change of staged) {
+            const file = this.app.vault.getAbstractFileByPath(change.temporaryPath);
+            if (!(file instanceof TFile)) continue;
+            await this.app.fileManager.renameFile(file, change.newPath);
+            const updated = this.app.vault.getAbstractFileByPath(change.newPath);
+            if (updated instanceof TFile) {
+                const scene = await MetadataParser.parseFile(this.app, updated);
+                if (scene) this.scenes.set(change.newPath, scene);
+            }
+            this.scenes.delete(change.currentPath);
+            await this.migrateCorkboardPosition(change.currentPath, change.newPath);
+        }
+        this.bumpVersion();
+        return staged.length;
     }
 
     /**
@@ -2730,6 +2831,9 @@ export class SceneManager implements ISceneStore {
             const dv = t.defaultValue!;
             if (t.type === 'multi-select') {
                 out[t.id] = dv.split(',').map(s => s.trim()).filter(Boolean);
+            } else if (t.type === 'number') {
+                const numberValue = Number(dv);
+                if (Number.isFinite(numberValue)) out[t.id] = numberValue;
             } else {
                 out[t.id] = dv;
             }

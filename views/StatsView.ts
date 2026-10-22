@@ -3,7 +3,7 @@ import { SceneManager } from '../services/SceneManager';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import * as obsidian from 'obsidian';
 import type SceneCardsPlugin from '../main';
-import type { WritingTracker } from '../services/WritingTracker';
+import { buildDeadlinePlan, type WritingTracker } from '../services/WritingTracker';
 
 import { STATS_VIEW_TYPE } from '../constants';
 import { applyMobileClass } from '../components/MobileAdapter';
@@ -91,9 +91,65 @@ export class StatsView extends ItemView {
         renderViewSwitcher(toolbar, STATS_VIEW_TYPE, this.plugin, this.leaf);
 
         const content = container.createDiv('story-line-stats-content');
+        const redesigned = this.plugin.settings.statsViewMode !== 'original';
+        content.toggleClass('sl-stats-redesigned', redesigned);
+        content.toggleClass('sl-stats', redesigned);
+        if (redesigned) {
+            content.createEl('h2', {
+                cls: 'sl-stats__heading sl-stats-redesigned__heading',
+                text: 'Project statistics',
+            });
+        }
         const stats = this.sceneManager.queryService.getStatistics(this.plugin.settings.excludeArcAnchorFromWordcount ?? true);
         const allScenes = this.sceneManager.getAllScenes()
             .filter(scene => !scene.inactive && !scene.corkboardNote);
+
+        if (redesigned) {
+            // Section order, icons, and default open states follow Scribe's
+            // redesigned Statistics view so both apps stay interchangeable.
+            this.renderOverview(content, stats);
+            this.renderWritingSprint(content, stats.totalWords);
+
+            this.renderCollapsible(content, 'target', 'Progress Breakdown', true, body =>
+                this.renderProgressBreakdown(body, stats, allScenes));
+
+            this.renderCollapsible(content, 'calendar', 'Writing History', false, body =>
+                this.renderWritingHistory(body));
+
+            this.renderCollapsible(content, 'history', 'Writing Trail', false, body =>
+                this.renderWritingTrail(body, allScenes, stats.totalWords));
+
+            this.renderCollapsible(content, 'users', 'Characters & World', true, body =>
+                this.renderCharactersWorld(body, stats, allScenes));
+
+            this.renderCollapsible(content, 'activity', 'Pacing & Tension', true, body =>
+                this.renderPacingTension(body, allScenes, false));
+
+            this.renderCollapsible(content, 'activity', 'Pacing Coach', false, body =>
+                this.renderPacingCoach(body, allScenes));
+
+            this.renderCollapsible(content, 'file-text', 'Prose Analysis', true, body =>
+                this.renderProseAnalysisPlaceholder(body, allScenes));
+
+            this.renderCollapsible(content, 'message-square', 'Dialogue vs Narrative', true, body =>
+                this.renderDialogueRatio(body, allScenes));
+
+            this.renderCollapsible(content, 'link-2', 'Setup & Payoff Map', false, body =>
+                this.renderSetupPayoffMap(body, allScenes));
+
+            this.renderCollapsible(content, 'search', 'Echo Finder', false, body =>
+                this.renderEchoFinderPlaceholder(body, allScenes));
+
+            this.renderCollapsible(content, 'book-open', 'Folder Word Counts', false, body =>
+                this.renderFolderWordCounts(body, allScenes));
+
+            this.renderCollapsible(content, 'alert-triangle', 'Warnings', false, body =>
+                this.renderWarnings(body, allScenes));
+
+            this.renderCollapsible(content, 'book-open', 'Project Info', false, body =>
+                this.renderProjectInfo(body));
+            return;
+        }
 
         // 1. Overview (always open)
         this.renderOverview(content, stats);
@@ -104,6 +160,9 @@ export class StatsView extends ItemView {
         // 3. Writing History (collapsible, default open)
         this.renderCollapsible(content, 'calendar', 'Writing History', true, body =>
             this.renderWritingHistory(body));
+
+        this.renderCollapsible(content, 'footprints', 'Writing Trail', false, body =>
+            this.renderWritingTrail(body, allScenes, stats.totalWords));
 
         // 4. Progress Breakdown (collapsible, default open)
         this.renderCollapsible(content, 'list-checks', 'Progress Breakdown', true, body =>
@@ -119,7 +178,7 @@ export class StatsView extends ItemView {
 
         // 6. Pacing & Tension (collapsible, default collapsed)
         this.renderCollapsible(content, 'activity', 'Pacing & Tension', false, body =>
-            this.renderPacingTension(body, allScenes));
+            this.renderPacingTension(body, allScenes, true));
 
         // 7. Prose Analysis (collapsible, default collapsed — lazy)
         this.renderCollapsible(content, 'text', 'Prose Analysis', false, body =>
@@ -129,9 +188,106 @@ export class StatsView extends ItemView {
         this.renderCollapsible(content, 'repeat', 'Echo Finder', false, body =>
             this.renderEchoFinderPlaceholder(body, allScenes));
 
-        // 8. Warnings & Plot Holes (collapsible, default collapsed)
-        this.renderCollapsible(content, 'alert-triangle', 'Warnings & Plot Holes', false, body =>
+        // 8. Warnings (collapsible, default collapsed)
+        this.renderCollapsible(content, 'alert-triangle', 'Warnings', false, body =>
             this.renderWarnings(body, allScenes));
+    }
+
+    /** True when the Statistics view renders in Scribe-compatible redesigned mode. */
+    private get isRedesigned(): boolean {
+        return this.plugin.settings.statsViewMode !== 'original';
+    }
+
+    /**
+     * Scribe-compatible conic-gradient progress ring.
+     * Matches `Ring` in Scribe's StatsViewRedesigned component.
+     */
+    private renderRing(
+        parent: HTMLElement,
+        label: string,
+        value: number,
+        color = 'var(--sl-accent)',
+    ): void {
+        const pct = Math.max(0, Math.min(100, value));
+        const ring = parent.createDiv('sl-stats-redesigned__ring');
+        ring.style.setProperty('--ring-value', `${pct}%`);
+        ring.style.setProperty('--ring-color', color);
+        ring.createSpan().createEl('strong', { text: `${Math.round(value)}%` });
+        ring.createEl('small', { text: label });
+    }
+
+    /**
+     * Scribe-compatible conic-gradient donut.
+     * Matches `Donut` in Scribe's StatsViewRedesigned component.
+     */
+    private renderDonut(
+        parent: HTMLElement,
+        segments: { value: number; color: string }[],
+        center: string,
+        label: string,
+    ): void {
+        let cursor = 0;
+        const stops = segments.map(segment => {
+            const start = cursor;
+            cursor += segment.value;
+            return `${segment.color} ${start}% ${cursor}%`;
+        }).join(', ');
+        const donut = parent.createDiv('sl-stats-redesigned__donut');
+        donut.setCssStyles({ background: `conic-gradient(${stops})` });
+        const span = donut.createSpan();
+        span.createEl('strong', { text: center });
+        span.appendText(label);
+    }
+
+    /** Scribe-compatible thin progress track used by goals and named bars. */
+    private renderTrackBar(
+        parent: HTMLElement,
+        value: number,
+        color = 'var(--sl-accent)',
+    ): void {
+        const track = parent.createDiv('sl-stats-redesigned__track');
+        const fill = track.createDiv('sl-stats-redesigned__fill');
+        fill.setCssStyles({
+            width: `${Math.max(0, Math.min(100, value))}%`,
+            backgroundColor: color,
+        });
+    }
+
+    /** Scribe-compatible label + value + bar row. */
+    private renderNamedBar(
+        parent: HTMLElement,
+        label: string,
+        value: string,
+        pct: number,
+        color = 'var(--sl-accent-hover)',
+    ): void {
+        const wrap = parent.createDiv('sl-stats-redesigned__named-bar');
+        const head = wrap.createDiv();
+        head.createSpan({ text: label });
+        head.createEl('b', { text: value });
+        this.renderTrackBar(wrap, pct, color);
+    }
+
+    /** Scribe-compatible donut legend entry list. */
+    private renderLegend(
+        parent: HTMLElement,
+        entries: { label: string; value: string; color: string }[],
+    ): void {
+        const legend = parent.createDiv('sl-stats-redesigned__legend');
+        for (const entry of entries) {
+            const row = legend.createDiv();
+            row.createEl('i').setCssStyles({ background: entry.color });
+            row.appendText(entry.label);
+            row.createEl('b', { text: entry.value });
+        }
+    }
+
+    /** Palette Scribe uses for donut segments and legends. */
+    private segmentColor(index: number): string {
+        if (index === 0) return 'var(--sl-accent)';
+        if (index === 1) return 'var(--sl-warning)';
+        if (index === 2) return 'var(--sl-success)';
+        return 'var(--sl-text-muted)';
     }
 
     // ════════════════════════════════════════════════════
@@ -145,8 +301,10 @@ export class StatsView extends ItemView {
         defaultOpen: boolean,
         renderFn: (body: HTMLElement) => void,
     ): void {
-        const details = parent.createEl('details', { cls: 'stats-collapsible' });
-        const stateKey = `stats::${title}`;
+        const details = parent.createEl('details', {
+            cls: 'stats-collapsible sl-stats-redesigned__section',
+        });
+        const stateKey = `stats:${title.replace(/\s*\(.*/, '')}`;
         const override = this.sectionStateOverrides.get(stateKey);
         const collapsed = override ?? isSectionCollapsed(this.plugin.settings, stateKey, !defaultOpen);
         if (!collapsed) details.setAttribute('open', '');
@@ -156,11 +314,17 @@ export class StatsView extends ItemView {
             rememberSectionState(this.plugin.settings, stateKey, nextCollapsed);
             if (this.plugin.settings.sectionDefaultState === 'remember') void this.plugin.saveSettings();
         });
-        const summary = details.createEl('summary', { cls: 'stats-collapsible-summary' });
-        const iconEl = summary.createSpan({ cls: 'stats-collapsible-icon' });
+        const summary = details.createEl('summary', {
+            cls: 'stats-collapsible-summary sl-stats-redesigned__section-header',
+        });
+        const iconEl = summary.createSpan({
+            cls: 'stats-collapsible-icon sl-stats-redesigned__section-icon',
+        });
         obsidian.setIcon(iconEl, icon);
-        summary.createSpan({ text: title });
-        const body = details.createDiv('stats-collapsible-body');
+        summary.createSpan({ cls: 'sl-stats-redesigned__section-title', text: title });
+        const body = details.createDiv(
+            'stats-collapsible-body sl-stats-redesigned__section-body',
+        );
         renderFn(body);
     }
 
@@ -172,10 +336,16 @@ export class StatsView extends ItemView {
         parent: HTMLElement,
         stats: ReturnType<SceneManager['getStatistics']>,
     ): void {
-        const section = parent.createDiv('stats-section');
-        section.createEl('h4', { text: 'Overview' });
-
-        const row = section.createDiv('stats-sprint-row');
+        const redesigned = this.plugin.settings.statsViewMode !== 'original';
+        const overviewContainer = redesigned
+            ? parent
+            : parent.createDiv('stats-section');
+        if (!redesigned) overviewContainer.createEl('h4', { text: 'Overview' });
+        const row = overviewContainer.createDiv(
+            redesigned
+                ? 'stats-sprint-row sl-stats-redesigned__overview'
+                : 'stats-sprint-row',
+        );
         this.createStatCard(row, 'file-text', 'Scenes', String(stats.totalScenes));
         this.createStatCard(row, 'pen-tool', this.getSceneCountLabel(), this.getTotalSceneCount(stats).toLocaleString());
 
@@ -199,41 +369,73 @@ export class StatsView extends ItemView {
         this.createStatCard(row, 'book-open', 'Read Time',
             readH > 0 ? `${readH}h ${readM}m` : `${readMinutes}m`);
 
-        // Word-goal progress bar
-        const totalTarget = this.plugin.settings.projectWordGoal || stats.totalTargetWords || 80000;
-        const wordPct = Math.round((stats.totalWords / totalTarget) * 100);
-        const goalRow = section.createDiv('stats-sprint-goal');
-        goalRow.createSpan({
-            text: `${stats.totalWords.toLocaleString()} / ${totalTarget.toLocaleString()} words (${wordPct}%)`,
-        });
-        const bar = goalRow.createDiv('stats-bar stats-bar-wide');
-        const fill = bar.createDiv('stats-bar-fill');
-        fill.setCssStyles({
-            width: `${Math.min(100, wordPct)}%`,
-            backgroundColor: 'var(--sl-success, #4CAF50)',
-        });
+        const renderProjectOverview = (section: HTMLElement): void => {
+            const totalTarget = this.plugin.settings.projectWordGoal || stats.totalTargetWords || 80000;
+            const wordPct = Math.round((stats.totalWords / totalTarget) * 100);
+            const goalRow = section.createDiv('stats-sprint-goal sl-stats-redesigned__goal');
+            goalRow.createSpan({
+                text: `${stats.totalWords.toLocaleString()} / ${totalTarget.toLocaleString()} words (${wordPct}%)`,
+            });
+            const bar = goalRow.createDiv(
+                'stats-bar stats-bar-wide sl-stats-redesigned__track',
+            );
+            const fill = bar.createDiv('stats-bar-fill sl-stats-redesigned__fill');
+            fill.setCssStyles({
+                width: `${Math.min(100, wordPct)}%`,
+                backgroundColor: 'var(--sl-success, #4CAF50)',
+            });
 
-        // Pace-to-deadline projection
-        const tracker = this.plugin.writingTracker;
-        const history = tracker.getFullHistory();
-        const activeDays = Object.entries(history).filter(([, w]) => w > 0);
-        if (activeDays.length >= 3) {
-            const totalHistWords = activeDays.reduce((s, [, w]) => s + w, 0);
-            const avgDaily = Math.round(totalHistWords / activeDays.length);
-            const remaining = Math.max(0, totalTarget - stats.totalWords);
-            if (remaining > 0 && avgDaily > 0) {
-                const daysLeft = Math.ceil(remaining / avgDaily);
-                const finishDate = new Date();
-                finishDate.setDate(finishDate.getDate() + daysLeft);
-                const dateStr = finishDate.toLocaleDateString(undefined, {
-                    month: 'short', day: 'numeric', year: 'numeric',
-                });
-                section.createDiv({
-                    cls: 'stats-pace-projection',
-                    text: `${remaining.toLocaleString()} words remaining · ~${daysLeft} days at `
-                        + `${avgDaily.toLocaleString()} words/day · est. ${dateStr}`,
-                });
+            const tracker = this.plugin.writingTracker;
+            const deadline = tracker.getProjectDeadline();
+            const deadlinePlan = buildDeadlinePlan(
+                deadline.deadline,
+                totalTarget,
+                stats.totalWords,
+                deadline.includeWeekends,
+            );
+            if (deadlinePlan) {
+                const deadlineRow = section.createDiv(
+                    'stats-deadline-plan sl-stats-redesigned__deadline',
+                );
+                deadlineRow.createEl('strong', { text: `Deadline: ${deadlinePlan.deadline}` });
+                if (deadlinePlan.overdue) {
+                    deadlineRow.createSpan({
+                        cls: 'stats-deadline-overdue',
+                        text: `Overdue · ${deadlinePlan.remainingWords.toLocaleString()} words remaining`,
+                    });
+                } else {
+                    deadlineRow.createSpan({
+                        text: `${deadlinePlan.remainingWords.toLocaleString()} remaining · `
+                            + `${deadlinePlan.availableDays} writing days · `
+                            + `${deadlinePlan.wordsPerDay.toLocaleString()} words/day`,
+                    });
+                }
             }
+            const history = tracker.getFullHistory();
+            const activeDays = Object.entries(history).filter(([, w]) => w > 0);
+            if (activeDays.length >= 3) {
+                const totalHistWords = activeDays.reduce((s, [, w]) => s + w, 0);
+                const avgDaily = Math.round(totalHistWords / activeDays.length);
+                const remaining = Math.max(0, totalTarget - stats.totalWords);
+                if (remaining > 0 && avgDaily > 0) {
+                    const daysLeft = Math.ceil(remaining / avgDaily);
+                    const finishDate = new Date();
+                    finishDate.setDate(finishDate.getDate() + daysLeft);
+                    const dateStr = finishDate.toLocaleDateString(undefined, {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                    });
+                    section.createDiv({
+                        cls: 'stats-pace-projection sl-stats-redesigned__callout',
+                        text: `${remaining.toLocaleString()} words remaining · ~${daysLeft} days at `
+                            + `${avgDaily.toLocaleString()} words/day · est. ${dateStr}`,
+                    });
+                }
+            }
+        };
+        if (redesigned) {
+            this.renderCollapsible(parent, 'target', 'Project Overview', true, renderProjectOverview);
+        } else {
+            renderProjectOverview(overviewContainer);
         }
     }
 
@@ -242,15 +444,29 @@ export class StatsView extends ItemView {
     // ════════════════════════════════════════════════════
 
     private renderWritingSprint(parent: HTMLElement, currentTotalWords: number): void {
+        if (this.plugin.settings.statsViewMode === 'original') {
+            const section = parent.createDiv('stats-section');
+            section.createEl('h4', { text: 'Writing sprint' });
+            this.renderWritingSprintContent(section, currentTotalWords);
+            return;
+        }
+        this.renderCollapsible(parent, 'timer', 'Writing Sprint', true, section => {
+            this.renderWritingSprintContent(section, currentTotalWords);
+        });
+    }
+
+    private renderWritingSprintContent(section: HTMLElement, currentTotalWords: number): void {
         const tracker = this.plugin.writingTracker;
-        const section = parent.createDiv('stats-section');
-        section.createEl('h4', { text: 'Writing sprint' });
 
         // ── Sprint Timer Controls ──────────────────────
-        const sprintPanel = section.createDiv('stats-sprint-controls');
+        const sprintPanel = section.createDiv(
+            'stats-sprint-controls sl-stats-redesigned__sprint',
+        );
 
         // Duration selector
-        const durationRow = sprintPanel.createDiv('stats-sprint-duration-row');
+        const durationRow = sprintPanel.createDiv(
+            'stats-sprint-duration-row sl-stats-redesigned__sprint-controls',
+        );
         durationRow.createSpan({ cls: 'stats-sprint-duration-label', text: 'Duration:' });
         const durationInput = durationRow.createEl('input', {
             cls: 'stats-sprint-duration-input',
@@ -265,16 +481,29 @@ export class StatsView extends ItemView {
         durationRow.createSpan({ cls: 'stats-sprint-duration-unit', text: 'min' });
 
         // Timer display
-        const timerEl = sprintPanel.createDiv('stats-sprint-timer');
+        const timerEl = sprintPanel.createDiv(
+            'stats-sprint-timer sl-stats-redesigned__timer',
+        );
         const timerDisplay = timerEl.createSpan({ cls: 'stats-sprint-timer-display' });
         const sprintWordsEl = timerEl.createSpan({ cls: 'stats-sprint-timer-words' });
         const sprintWpmEl = timerEl.createSpan({ cls: 'stats-sprint-timer-wpm' });
 
         // Buttons
-        const btnRow = sprintPanel.createDiv('stats-sprint-btn-row');
-        const startBtn = btnRow.createEl('button', { cls: 'stats-sprint-btn stats-sprint-btn-start', text: 'Start' });
-        const stopBtn = btnRow.createEl('button', { cls: 'stats-sprint-btn stats-sprint-btn-stop', text: 'Stop' });
-        const resetBtn = btnRow.createEl('button', { cls: 'stats-sprint-btn stats-sprint-btn-reset', text: 'Reset' });
+        const btnRow = sprintPanel.createDiv(
+            'stats-sprint-btn-row sl-stats-redesigned__sprint-controls',
+        );
+        const startBtn = btnRow.createEl('button', {
+            cls: 'stats-sprint-btn stats-sprint-btn-start sl-stats-redesigned__sprint-btn sl-stats-redesigned__sprint-btn--start',
+            text: 'Start',
+        });
+        const stopBtn = btnRow.createEl('button', {
+            cls: 'stats-sprint-btn stats-sprint-btn-stop sl-stats-redesigned__sprint-btn sl-stats-redesigned__sprint-btn--stop',
+            text: 'Stop',
+        });
+        const resetBtn = btnRow.createEl('button', {
+            cls: 'stats-sprint-btn stats-sprint-btn-reset sl-stats-redesigned__sprint-btn sl-stats-redesigned__sprint-btn--reset',
+            text: 'Reset',
+        });
 
         // Track whether the sprint-end chime has fired for this sprint
         let sprintEndChimePlayed = false;
@@ -353,15 +582,42 @@ export class StatsView extends ItemView {
         }
         updateTimerDisplay();
 
+        const redesigned = this.isRedesigned;
+        const dailyGoal = this.plugin.settings.dailyWordGoal || 1000;
+        const weeklyGoal = this.plugin.settings.weeklyWordGoal || 7000;
+        const monthlyGoal = this.plugin.settings.monthlyWordGoal || 30000;
+        const todayWords = tracker.getTodayWords();
+        const weekWords = tracker.getThisWeekWords();
+        const monthWords = tracker.getThisMonthWords();
+        const goalPct = Math.min(100, Math.round((todayWords / dailyGoal) * 100));
+
+        // Scribe places the goal rings directly below the sprint timer.
+        if (redesigned) {
+            const ringsRow = section.createDiv('stats-rings sl-stats-redesigned__ring-row');
+            this.renderRing(ringsRow, 'Today', goalPct, 'var(--sl-accent-hover)');
+            this.renderRing(ringsRow, 'This week',
+                Math.min(100, Math.round((weekWords / Math.max(1, weeklyGoal)) * 100)));
+            this.renderRing(ringsRow, 'This month',
+                Math.min(100, Math.round((monthWords / Math.max(1, monthlyGoal)) * 100)),
+                'var(--sl-warning, var(--sl-accent-hover))');
+        }
+
         // ── Overall Session Stats ──────────────────────
-        section.createEl('h5', { cls: 'stats-subsection-title', text: 'Session (since project opened)' });
+        const sessionSec = redesigned
+            ? section.createDiv('sl-stats-redesigned__session')
+            : section;
+        sessionSec.createEl('h5', { cls: 'stats-subsection-title', text: 'Session (since project opened)' });
 
         const sessionWords = tracker.getSessionWords(currentTotalWords);
         const wpm = tracker.getWordsPerMinute(currentTotalWords);
         const minutes = Math.floor(tracker.getSessionDuration() / 60_000);
         const streak = tracker.getStreak();
 
-        const sessionRow = section.createDiv('stats-sprint-row');
+        const sessionRow = sessionSec.createDiv(
+            redesigned
+                ? 'stats-sprint-row sl-stats-redesigned__stat-grid'
+                : 'stats-sprint-row',
+        );
         this.createStatCard(sessionRow, 'pencil', 'Session', `${sessionWords.toLocaleString()} words`);
         this.createStatCard(sessionRow, 'clock', 'Duration', `${minutes} min`);
         this.createStatCard(sessionRow, 'zap', 'Speed', `${wpm} wpm`);
@@ -375,27 +631,38 @@ export class StatsView extends ItemView {
             this.createStatCard(sessionRow, 'rotate-cw', 'Revisions', `${todayRevisions.toLocaleString()} words`);
         }
 
+        // ── Daily goal bar ─────────────────────────────
+        const goalRow = sessionSec.createDiv(
+            redesigned
+                ? 'stats-sprint-goal sl-stats-redesigned__goal'
+                : 'stats-sprint-goal',
+        );
+        if (redesigned) {
+            const head = goalRow.createDiv();
+            head.createSpan({
+                text: `Today: ${todayWords.toLocaleString()} / ${dailyGoal.toLocaleString()} words`,
+            });
+            head.createEl('b', { text: `${goalPct}%` });
+            this.renderTrackBar(goalRow, goalPct,
+                goalPct >= 100 ? 'var(--sl-success)' : 'var(--sl-accent-hover)');
+        } else {
+            goalRow.createSpan({ text: `Today: ${todayWords.toLocaleString()} / ${dailyGoal.toLocaleString()} words (${goalPct}%)` });
+            const goalBar = goalRow.createDiv('stats-bar stats-bar-wide');
+            const goalFill = goalBar.createDiv('stats-bar-fill');
+            goalFill.setCssStyles({
+                width: `${goalPct}%`,
+                backgroundColor: goalPct >= 100 ? 'var(--sl-success, #4CAF50)' : 'var(--sl-info, #2196F3)',
+            });
+        }
+
         // ── Sprint Log Summary ─────────────────────────
         const logSection = section.createDiv('stats-sprint-log');
         this.renderSprintLog(logSection, tracker);
 
-        // ── Daily / Weekly / Monthly goal rings ────────
-        const dailyGoal = this.plugin.settings.dailyWordGoal || 1000;
-        const weeklyGoal = this.plugin.settings.weeklyWordGoal || 7000;
-        const monthlyGoal = this.plugin.settings.monthlyWordGoal || 30000;
-        const todayWords = tracker.getTodayWords();
-        const weekWords = tracker.getThisWeekWords();
-        const monthWords = tracker.getThisMonthWords();
-
-        const goalPct = Math.min(100, Math.round((todayWords / dailyGoal) * 100));
-        const goalRow = section.createDiv('stats-sprint-goal');
-        goalRow.createSpan({ text: `Today: ${todayWords.toLocaleString()} / ${dailyGoal.toLocaleString()} words (${goalPct}%)` });
-        const goalBar = goalRow.createDiv('stats-bar stats-bar-wide');
-        const goalFill = goalBar.createDiv('stats-bar-fill');
-        goalFill.setCssStyles({
-            width: `${goalPct}%`,
-            backgroundColor: goalPct >= 100 ? 'var(--sl-success, #4CAF50)' : 'var(--sl-info, #2196F3)',
-        });
+        if (redesigned) {
+            // Scribe stops here: no sparkline rows in the redesigned sprint card.
+            return;
+        }
 
         // Trio of progress rings (Today / This week / This month)
         const ringsRow = section.createDiv('stats-rings');
@@ -496,6 +763,7 @@ export class StatsView extends ItemView {
 
     private renderWritingHistory(parent: HTMLElement): void {
         const history = this.plugin.writingTracker.getFullHistory();
+        const changes = this.plugin.writingTracker.getFullChangeHistory();
         const entries = Object.entries(history)
             .map(([date, words]) => ({ date, words }))
             .sort((a, b) => a.date.localeCompare(b.date));
@@ -506,7 +774,12 @@ export class StatsView extends ItemView {
         }
 
         // Range selector
-        const rangeBar = parent.createDiv('stats-history-range-bar');
+        const redesigned = this.isRedesigned;
+        const rangeBar = parent.createDiv(
+            redesigned
+                ? 'stats-history-range-bar sl-stats-redesigned__range'
+                : 'stats-history-range-bar',
+        );
         const ranges = [7, 30, 90, 0];
         const labels = ['7d', '30d', '90d', 'All'];
         const defaultRange = entries.length <= 30 ? 0 : 30;
@@ -518,18 +791,43 @@ export class StatsView extends ItemView {
 
             // Daily bar chart
             this.renderHistoryBarChart(wrap, sliced);
-
-
+            if (redesigned && sliced.length > 0) {
+                const axis = wrap.createDiv('sl-stats-redesigned__axis');
+                axis.createSpan({ text: sliced[0].date });
+                axis.createSpan({ text: sliced[sliced.length - 1].date });
+            }
+            const selectedDates = new Set(sliced.map(entry => entry.date));
+            const summary = Object.entries(changes)
+                .filter(([date]) => selectedDates.has(date))
+                .reduce((totals, [, entry]) => ({
+                    added: totals.added + entry.added,
+                    deleted: totals.deleted + entry.deleted,
+                }), { added: 0, deleted: 0 });
+            const changeSummary = wrap.createDiv(
+                redesigned
+                    ? 'stats-change-summary sl-stats-redesigned__change-summary'
+                    : 'stats-change-summary',
+            );
+            changeSummary.createSpan({ cls: 'is-added', text: `+ ${summary.added.toLocaleString()} added` });
+            changeSummary.createSpan({ cls: 'is-deleted', text: `− ${summary.deleted.toLocaleString()} deleted` });
+            changeSummary.createSpan({ text: `${(summary.added - summary.deleted).toLocaleString()} net` });
         };
 
         ranges.forEach((days, i) => {
+            const active = days === defaultRange;
             const btn = rangeBar.createSpan({
-                cls: `stats-range-btn${days === defaultRange ? ' active' : ''}`,
+                cls: redesigned
+                    ? `stats-range-btn${active ? ' active is-active' : ''}`
+                    : `stats-range-btn${active ? ' active' : ''}`,
                 text: labels[i],
             });
             btn.addEventListener('click', () => {
-                rangeBar.querySelectorAll('.stats-range-btn').forEach(b => b.removeClass('active'));
+                rangeBar.querySelectorAll('.stats-range-btn').forEach(b => {
+                    b.removeClass('active');
+                    b.removeClass('is-active');
+                });
                 btn.addClass('active');
+                if (redesigned) btn.addClass('is-active');
                 renderChart(days);
             });
         });
@@ -539,6 +837,16 @@ export class StatsView extends ItemView {
 
     private renderHistoryBarChart(parent: HTMLElement, data: { date: string; words: number }[]): void {
         const maxVal = Math.max(...data.map(d => d.words), 1);
+        if (this.isRedesigned) {
+            // Scribe renders the history as a flat row of <i> bars with no per-day labels.
+            const chart = parent.createDiv('sl-stats-redesigned__history');
+            for (const entry of data) {
+                const bar = chart.createEl('i');
+                bar.setCssStyles({ height: `${Math.max(3, (entry.words / maxVal) * 100)}%` });
+                bar.setAttribute('title', `${entry.date}: ${entry.words.toLocaleString()} words`);
+            }
+            return;
+        }
         const chart = parent.createDiv('stats-history-chart');
         for (const entry of data) {
             const col = chart.createDiv('stats-history-col');
@@ -561,12 +869,92 @@ export class StatsView extends ItemView {
         stats: ReturnType<SceneManager['getStatistics']>,
         allScenes: Scene[],
     ): void {
+        const redesigned = this.isRedesigned;
+        const allStatuses = getStatusOrder();
+
+        // ── Chapter scene lengths (data prepared up front so the redesigned
+        //    two-column layout can place the donut beside the bars) ──
+        const chapterMap: Record<string, { count: number; scenes: number }> = {};
+        for (const s of allScenes) {
+            const aKey = s.act !== undefined ? String(s.act) : '?';
+            const cKey = s.chapter !== undefined ? String(s.chapter) : '?';
+            const key = `Act ${aKey}, Ch ${cKey}`;
+            if (!chapterMap[key]) chapterMap[key] = { count: 0, scenes: 0 };
+            chapterMap[key].count += this.getSceneCount(s);
+            chapterMap[key].scenes += 1;
+        }
+        const chapEntries = Object.entries(chapterMap)
+            .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+
+        if (redesigned) {
+            const twoCol = parent.createDiv('sl-stats-redesigned__two-col');
+
+            // Status breakdown — donut + legend
+            const statusCol = twoCol.createDiv();
+            statusCol.createEl('h5', { cls: 'stats-subsection-title', text: 'Status breakdown' });
+            const present = allStatuses
+                .map(status => ({ status, count: stats.statusCounts[status] || 0 }))
+                .filter(entry => entry.count > 0);
+            if (present.length > 0) {
+                const total = Math.max(1, stats.totalScenes);
+                this.renderDonut(
+                    statusCol,
+                    present.map(entry => ({
+                        value: (entry.count / total) * 100,
+                        color: resolveStatusCfg(entry.status).color,
+                    })),
+                    String(stats.totalScenes),
+                    'scenes',
+                );
+                this.renderLegend(statusCol, present.map(entry => {
+                    const cfg = resolveStatusCfg(entry.status);
+                    const pct = Math.round((entry.count / total) * 100);
+                    return {
+                        label: cfg.label,
+                        value: `${entry.count} (${pct}%)`,
+                        color: cfg.color,
+                    };
+                }));
+            } else {
+                statusCol.createEl('p', { cls: 'stats-empty', text: 'No scenes yet.' });
+            }
+
+            // Chapter counts — vertical bars
+            const chapCol = twoCol.createDiv();
+            chapCol.createEl('h5', {
+                cls: 'stats-subsection-title',
+                text: `Chapter ${this.getSceneCountNoun()} counts`,
+            });
+            if (chapEntries.length > 0) {
+                const maxCw = Math.max(...chapEntries.map(([, v]) => v.count), 1);
+                const medianCw = this.median(chapEntries.map(([, v]) => v.count));
+                const outlierThresh = medianCw * 1.5;
+                const bars = chapCol.createDiv('sl-stats-redesigned__vertical-bars');
+                for (const [label, data] of chapEntries) {
+                    const outlier = data.count > outlierThresh && medianCw > 0;
+                    const bar = bars.createDiv();
+                    bar.setCssStyles({
+                        height: `${Math.max(4, (data.count / maxCw) * 100)}%`,
+                        backgroundColor: outlier ? 'var(--sl-warning)' : 'var(--sl-accent)',
+                    });
+                    bar.setAttribute('title',
+                        `${label}: ${data.count.toLocaleString()} ${this.getSceneCountLabel().toLowerCase()} (${data.scenes} scene${data.scenes !== 1 ? 's' : ''})`);
+                    bar.createEl('small', { text: data.count.toLocaleString() });
+                    bar.createSpan({ text: label.replace('Act ', 'A').replace(', Ch ', 'C') });
+                }
+            } else {
+                chapCol.createEl('p', { cls: 'stats-empty', text: 'No chapters yet.' });
+            }
+
+            this.renderActBalance(parent, stats);
+            return;
+        }
+
         // ── Status breakdown ──
         const statusSec = parent.createDiv('stats-subsection');
         statusSec.createEl('h5', { cls: 'stats-subsection-title', text: 'Status breakdown' });
         const statusList = statusSec.createEl('ul', { cls: 'stats-list' });
 
-        const allStatuses = getStatusOrder();
         for (const status of allStatuses) {
             const count = stats.statusCounts[status] || 0;
             const pct = stats.totalScenes > 0 ? Math.round((count / stats.totalScenes) * 100) : 0;
@@ -583,20 +971,6 @@ export class StatsView extends ItemView {
                 backgroundColor: cfg.color,
             });
         }
-
-        // ── Chapter scene lengths ──
-        const chapterMap: Record<string, { count: number; scenes: number }> = {};
-        for (const s of allScenes) {
-            const aKey = s.act !== undefined ? String(s.act) : '?';
-            const cKey = s.chapter !== undefined ? String(s.chapter) : '?';
-            const key = `Act ${aKey}, Ch ${cKey}`;
-            if (!chapterMap[key]) chapterMap[key] = { count: 0, scenes: 0 };
-            chapterMap[key].count += this.getSceneCount(s);
-            chapterMap[key].scenes += 1;
-        }
-
-        const chapEntries = Object.entries(chapterMap)
-            .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
 
         if (chapEntries.length > 1) {
             const chapSec = parent.createDiv('stats-subsection');
@@ -624,24 +998,47 @@ export class StatsView extends ItemView {
             }
         }
 
-        // ── Act balance ──
+        this.renderActBalance(parent, stats);
+    }
+
+    private renderActBalance(
+        parent: HTMLElement,
+        stats: ReturnType<SceneManager['getStatistics']>,
+    ): void {
         // Numeric-aware compare so "Act 2" sorts before "Act 10" and
         // hierarchical labels like "Act 1.1" / "Act 1.10" stay in order.
         const actEntries = Object.entries(stats.actCounts).sort(([a], [b]) =>
             a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }),
         );
-        if (actEntries.length > 0) {
+        if (actEntries.length === 0) return;
+
+        if (this.isRedesigned) {
             const actSec = parent.createDiv('stats-subsection');
             actSec.createEl('h5', { cls: 'stats-subsection-title', text: 'Act balance' });
-            for (const [act, count] of actEntries) {
+            const strip = actSec.createDiv('sl-stats-redesigned__act-balance');
+            actEntries.forEach(([act, count], index) => {
                 const pct = stats.totalScenes > 0 ? Math.round((count / stats.totalScenes) * 100) : 0;
-                const row = actSec.createDiv('stats-row');
-                row.createSpan({ text: `${act}: ${count} scenes` });
-                const bar = row.createDiv('stats-bar');
-                const fill = bar.createDiv('stats-bar-fill');
-                fill.setCssStyles({ width: `${pct}%` });
-                row.createSpan({ cls: 'stats-percent', text: `${pct}%` });
-            }
+                const seg = strip.createDiv();
+                seg.setCssStyles({
+                    flexGrow: String(Math.max(1, count)),
+                    backgroundColor: this.segmentColor(index),
+                });
+                seg.setAttribute('title', `${act}: ${count} scenes (${pct}%)`);
+                seg.setText(`${act} · ${pct}%`);
+            });
+            return;
+        }
+
+        const actSec = parent.createDiv('stats-subsection');
+        actSec.createEl('h5', { cls: 'stats-subsection-title', text: 'Act balance' });
+        for (const [act, count] of actEntries) {
+            const pct = stats.totalScenes > 0 ? Math.round((count / stats.totalScenes) * 100) : 0;
+            const row = actSec.createDiv('stats-row');
+            row.createSpan({ text: `${act}: ${count} scenes` });
+            const bar = row.createDiv('stats-bar');
+            const fill = bar.createDiv('stats-bar-fill');
+            fill.setCssStyles({ width: `${pct}%` });
+            row.createSpan({ cls: 'stats-percent', text: `${pct}%` });
         }
     }
 
@@ -676,12 +1073,97 @@ export class StatsView extends ItemView {
         };
 
         // ── POV distribution (merge aliases) ──
+        const redesigned = this.isRedesigned;
         const mergedPov: Record<string, number> = {};
         for (const [pov, count] of Object.entries(stats.povCounts)) {
             const canon = resolve(pov);
             mergedPov[canon] = (mergedPov[canon] || 0) + count;
         }
         const povEntries = Object.entries(mergedPov).sort(([, a], [, b]) => b - a);
+
+        // ── Character scene coverage (merge aliases + LinkScanner) ──
+        const charCounts: Record<string, number> = {};
+        for (const scene of allScenes) {
+            for (const c of sceneChars(scene)) charCounts[c] = (charCounts[c] || 0) + 1;
+        }
+        const charEntries = Object.entries(charCounts).sort(([, a], [, b]) => b - a);
+        const locEntries = Object.entries(stats.locationCounts).sort(([, a], [, b]) => b - a);
+
+        if (redesigned) {
+            const twoCol = parent.createDiv('sl-stats-redesigned__two-col');
+
+            const povCol = twoCol.createDiv();
+            povCol.createEl('h5', { cls: 'stats-subsection-title', text: 'Pov distribution' });
+            if (povEntries.length > 0) {
+                const povTotal = povEntries.reduce((sum, [, c]) => sum + c, 0) || 1;
+                this.renderDonut(
+                    povCol,
+                    povEntries.map(([, count], index) => ({
+                        value: (count / povTotal) * 100,
+                        color: this.segmentColor(index),
+                    })),
+                    String(povEntries.length),
+                    'POV voices',
+                );
+                this.renderLegend(povCol, povEntries.map(([pov, count], index) => ({
+                    label: pov,
+                    value: `${count} (${Math.round((count / povTotal) * 100)}%)`,
+                    color: this.segmentColor(index),
+                })));
+            } else {
+                povCol.createEl('p', { cls: 'stats-empty', text: 'No pov data.' });
+            }
+
+            const charCol = twoCol.createDiv();
+            charCol.createEl('h5', { cls: 'stats-subsection-title', text: 'Character scene coverage' });
+            if (charEntries.length > 0) {
+                const maxC = Math.max(...charEntries.map(([, c]) => c), 1);
+                const list = charCol.createDiv('sl-stats-redesigned__character-list');
+                const renderChars = (entries: [string, number][]) => {
+                    for (const [name, count] of entries) {
+                        const row = list.createDiv();
+                        this.renderRing(row, name, (count / maxC) * 100);
+                        const meta = row.createDiv();
+                        meta.createEl('b', { text: name });
+                        meta.createSpan({ text: `${count} scene${count !== 1 ? 's' : ''}` });
+                    }
+                };
+                const LIMIT = 15;
+                renderChars(charEntries.slice(0, LIMIT));
+                if (charEntries.length > LIMIT) {
+                    const btn = charCol.createEl('button', {
+                        cls: 'stats-show-more-btn',
+                        text: `Show ${charEntries.length - LIMIT} more…`,
+                    });
+                    btn.addEventListener('click', () => {
+                        btn.remove();
+                        renderChars(charEntries.slice(LIMIT));
+                    });
+                }
+            } else {
+                charCol.createEl('p', { cls: 'stats-empty', text: 'No character data.' });
+            }
+
+            const locSec = parent.createDiv('stats-subsection');
+            locSec.createEl('h5', { cls: 'stats-subsection-title', text: 'Location frequency' });
+            if (locEntries.length > 0) {
+                const maxL = Math.max(...locEntries.map(([, c]) => c), 1);
+                for (const [loc, count] of locEntries.slice(0, 15)) {
+                    this.renderNamedBar(
+                        locSec,
+                        loc,
+                        `${count} scene${count !== 1 ? 's' : ''}`,
+                        (count / maxL) * 100,
+                    );
+                }
+            } else {
+                locSec.createEl('p', { cls: 'stats-empty', text: 'No location data.' });
+            }
+
+            this.renderCharacterHeatmap(parent, allScenes, resolve, sceneChars);
+            return;
+        }
+
         if (povEntries.length > 0) {
             const sec = parent.createDiv('stats-subsection');
             sec.createEl('h5', { cls: 'stats-subsection-title', text: 'Pov distribution' });
@@ -695,12 +1177,6 @@ export class StatsView extends ItemView {
             }
         }
 
-        // ── Character scene coverage (merge aliases + LinkScanner) ──
-        const charCounts: Record<string, number> = {};
-        for (const scene of allScenes) {
-            for (const c of sceneChars(scene)) charCounts[c] = (charCounts[c] || 0) + 1;
-        }
-        const charEntries = Object.entries(charCounts).sort(([, a], [, b]) => b - a);
         if (charEntries.length > 0) {
             const sec = parent.createDiv('stats-subsection');
             sec.createEl('h5', { cls: 'stats-subsection-title', text: 'Character scene coverage' });
@@ -728,7 +1204,6 @@ export class StatsView extends ItemView {
         }
 
         // ── Location frequency ──
-        const locEntries = Object.entries(stats.locationCounts).sort(([, a], [, b]) => b - a);
         if (locEntries.length > 0) {
             const sec = parent.createDiv('stats-subsection');
             sec.createEl('h5', { cls: 'stats-subsection-title', text: 'Location frequency' });
@@ -797,8 +1272,16 @@ export class StatsView extends ItemView {
         // container so wide tables (many chapters) are clipped instead of
         // overflowing the Stats panel. A vertical max-height + scroll keeps
         // tall tables (many characters) readable too.
-        const scrollWrap = sec.createDiv('stats-heatmap-scroll');
-        const table = scrollWrap.createEl('table', { cls: 'stats-heatmap-table' });
+        const scrollWrap = sec.createDiv(
+            this.isRedesigned
+                ? 'stats-heatmap-scroll sl-stats-redesigned__heatmap-wrap'
+                : 'stats-heatmap-scroll',
+        );
+        const table = scrollWrap.createEl('table', {
+            cls: this.isRedesigned
+                ? 'stats-heatmap-table sl-stats-redesigned__heatmap'
+                : 'stats-heatmap-table',
+        });
 
         // Header row
         const thead = table.createEl('thead');
@@ -817,8 +1300,14 @@ export class StatsView extends ItemView {
                 const count = entry.counts[ch] || 0;
                 const cell = row.createEl('td', { cls: 'stats-heatmap-cell' });
                 if (count > 0) {
-                    const opacity = Math.max(0.15, count / maxCount);
-                    cell.setCssStyles({ backgroundColor: `rgba(var(--sl-accent-rgb, 66, 150, 252), ${opacity})` });
+                    if (this.isRedesigned) {
+                        // Scribe buckets cells into low/medium/high at ⅓ and ⅔ of the max.
+                        const ratio = count / maxCount;
+                        cell.addClass(ratio <= 0.33 ? 'low' : ratio <= 0.66 ? 'medium' : 'high');
+                    } else {
+                        const opacity = Math.max(0.15, count / maxCount);
+                        cell.setCssStyles({ backgroundColor: `rgba(var(--sl-accent-rgb, 66, 150, 252), ${opacity})` });
+                    }
                     cell.setAttribute('title', `${entry.name} in Ch ${ch}: ${count} scene${count !== 1 ? 's' : ''}`);
                     cell.textContent = String(count);
                 }
@@ -907,7 +1396,11 @@ export class StatsView extends ItemView {
         );
 
         for (const chain of sorted) {
-            const row = mapSec.createDiv('stats-setup-payoff-row');
+            const row = mapSec.createDiv(
+                this.isRedesigned
+                    ? 'stats-setup-payoff-row sl-stats-redesigned__links'
+                    : 'stats-setup-payoff-row',
+            );
 
             // From scene
             const fromEl = row.createDiv('stats-sp-from');
@@ -975,11 +1468,13 @@ export class StatsView extends ItemView {
     //  6. Pacing & Tension
     // ════════════════════════════════════════════════════
 
-    private renderPacingTension(parent: HTMLElement, allScenes: Scene[]): void {
+    private renderPacingTension(parent: HTMLElement, allScenes: Scene[], includeRelated = true): void {
         if (allScenes.length === 0) {
             parent.createEl('p', { cls: 'stats-empty', text: 'No scenes to analyze.' });
             return;
         }
+
+        const redesigned = this.isRedesigned;
 
         // ── Avg scene length per act ──
         const avgSec = parent.createDiv('stats-subsection');
@@ -997,19 +1492,36 @@ export class StatsView extends ItemView {
         );
         const maxAvg = Math.max(...actEntries.map(([, v]) => v.count > 0 ? v.total / v.count : 0), 1);
 
-        const avgTbl = avgSec.createDiv('pacing-avg-table');
-        for (const [act, data] of actEntries) {
-            const avg = data.count > 0 ? Math.round(data.total / data.count) : 0;
-            const pct = (avg / maxAvg) * 100;
-            const row = avgTbl.createDiv('pacing-avg-row');
-            row.createSpan({ cls: 'pacing-avg-label', text: act });
-            row.createSpan({ cls: 'pacing-avg-value', text: `${avg.toLocaleString()} avg ${this.getSceneCountLabel().toLowerCase()} (${data.count} scene${data.count !== 1 ? 's' : ''})` });
-            const bar = row.createDiv('stats-bar');
-            bar.createDiv('stats-bar-fill').setCssStyles({ width: `${pct}%`, background: 'var(--sl-info,#2196F3)' });
+        if (redesigned) {
+            const avgBars = avgSec.createDiv('sl-stats-redesigned__average-bars');
+            for (const [act, data] of actEntries) {
+                const avg = data.count > 0 ? Math.round(data.total / data.count) : 0;
+                this.renderNamedBar(
+                    avgBars,
+                    `${act} (${data.count} scene${data.count !== 1 ? 's' : ''})`,
+                    `${avg.toLocaleString()} avg`,
+                    (avg / maxAvg) * 100,
+                );
+            }
+        } else {
+            const avgTbl = avgSec.createDiv('pacing-avg-table');
+            for (const [act, data] of actEntries) {
+                const avg = data.count > 0 ? Math.round(data.total / data.count) : 0;
+                const pct = (avg / maxAvg) * 100;
+                const row = avgTbl.createDiv('pacing-avg-row');
+                row.createSpan({ cls: 'pacing-avg-label', text: act });
+                row.createSpan({ cls: 'pacing-avg-value', text: `${avg.toLocaleString()} avg ${this.getSceneCountLabel().toLowerCase()} (${data.count} scene${data.count !== 1 ? 's' : ''})` });
+                const bar = row.createDiv('stats-bar');
+                bar.createDiv('stats-bar-fill').setCssStyles({ width: `${pct}%`, background: 'var(--sl-info,#2196F3)' });
+            }
         }
 
+        // Scribe pairs the tension curve with the distribution histogram in one row.
+        const chartHost = redesigned ? parent.createDiv('sl-stats-redesigned__two-col') : parent;
+        if (redesigned) this.renderTensionSection(chartHost);
+
         // ── Scene-length distribution histogram ──
-        const distSec = parent.createDiv('stats-subsection');
+        const distSec = chartHost.createDiv('stats-subsection');
         distSec.createEl('h5', { cls: 'stats-subsection-title', text: `${this.getSceneCountNoun()} count distribution` });
 
         const wcs = allScenes.map(s => this.getSceneCount(s));
@@ -1028,14 +1540,25 @@ export class StatsView extends ItemView {
             buckets.push({ label: `${lo}–${hi}`, count: wcs.filter(w => w >= lo && w < hi).length });
         }
         const maxBkt = Math.max(...buckets.map(b => b.count), 1);
-        const chart = distSec.createDiv('pacing-dist-chart');
-        for (const bkt of buckets) {
-            const col = chart.createDiv('pacing-dist-col');
-            const bar = col.createDiv('pacing-dist-bar');
-            bar.setCssStyles({ height: `${Math.max(2, (bkt.count / maxBkt) * 100)}%` });
-            bar.setAttribute('title', `${bkt.label} ${this.getSceneCountLabel().toLowerCase()}: ${bkt.count} scene${bkt.count !== 1 ? 's' : ''}`);
-            col.createDiv({ cls: 'pacing-dist-count', text: String(bkt.count) });
-            col.createDiv({ cls: 'pacing-dist-label', text: bkt.label });
+        if (redesigned) {
+            const chart = distSec.createDiv('sl-stats-redesigned__distribution');
+            for (const bkt of buckets) {
+                const bar = chart.createDiv();
+                bar.setCssStyles({ height: `${Math.max(4, (bkt.count / maxBkt) * 100)}%` });
+                bar.setAttribute('title', `${bkt.label} ${this.getSceneCountLabel().toLowerCase()}: ${bkt.count} scene${bkt.count !== 1 ? 's' : ''}`);
+                bar.createEl('small', { text: String(bkt.count) });
+                bar.createSpan({ text: bkt.label });
+            }
+        } else {
+            const chart = distSec.createDiv('pacing-dist-chart');
+            for (const bkt of buckets) {
+                const col = chart.createDiv('pacing-dist-col');
+                const bar = col.createDiv('pacing-dist-bar');
+                bar.setCssStyles({ height: `${Math.max(2, (bkt.count / maxBkt) * 100)}%` });
+                bar.setAttribute('title', `${bkt.label} ${this.getSceneCountLabel().toLowerCase()}: ${bkt.count} scene${bkt.count !== 1 ? 's' : ''}`);
+                col.createDiv({ cls: 'pacing-dist-count', text: String(bkt.count) });
+                col.createDiv({ cls: 'pacing-dist-label', text: bkt.label });
+            }
         }
 
         // ── Scene-length outliers ──
@@ -1055,7 +1578,11 @@ export class StatsView extends ItemView {
                 cls: 'stats-hint',
                 text: `Median: ${medianWc.toLocaleString()} ${this.getSceneCountLabel().toLowerCase()} · Flagged outside ${Math.round(loThresh)}–${Math.round(hiThresh)} range`,
             });
-            const list = oSec.createEl('ul', { cls: 'stats-list' });
+            const list = oSec.createEl('ul', {
+                cls: redesigned
+                    ? 'stats-list sl-stats-redesigned__warning-list'
+                    : 'stats-list',
+            });
             for (const scene of outliers.sort((a, b) => this.getSceneCount(b) - this.getSceneCount(a))) {
                 const li = list.createEl('li', { cls: 'stats-outlier-item' });
                 const link = li.createEl('a', { text: scene.title || 'Untitled', cls: 'stats-scene-link' });
@@ -1066,17 +1593,23 @@ export class StatsView extends ItemView {
             }
         }
 
-        // ── Dialogue vs narrative ──
-        this.renderDialogueRatio(parent, allScenes);
+        if (includeRelated) {
+            this.renderDialogueRatio(parent, allScenes);
+            this.renderPacingCoach(parent, allScenes);
+            this.renderTensionSection(parent);
+        }
+    }
 
-        // ── Pacing Coach ──
-        this.renderPacingCoach(parent, allScenes);
-
-        // ── Tension curve ──
+    private renderTensionSection(parent: HTMLElement): void {
         const ordered = this.sceneManager.queryService.getFilteredScenes(undefined, { field: 'sequence', direction: 'asc' });
-        const intensityScenes = ordered.filter(s => s.intensity !== undefined);
+        const intensityScenes = ordered.filter(scene => scene.intensity !== undefined);
         if (intensityScenes.length > 2) {
             this.renderTensionCurve(parent, intensityScenes);
+        } else {
+            parent.createEl('p', {
+                cls: 'stats-empty',
+                text: 'Add intensity values from -10 to +10 to at least three scenes to draw the tension curve.',
+            });
         }
     }
 
@@ -1104,11 +1637,46 @@ export class StatsView extends ItemView {
         const overallPct = totalAll > 0 ? Math.round((totalDlg / totalAll) * 100) : 0;
         const sec = parent.createDiv('stats-subsection');
         sec.createEl('h5', { cls: 'stats-subsection-title', text: 'Dialogue vs narrative' });
+
+        const actRows = Object.entries(actDlg).sort(([a], [b]) =>
+            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }),
+        );
+
+        if (this.isRedesigned) {
+            const twoCol = sec.createDiv('sl-stats-redesigned__two-col');
+            const donutCol = twoCol.createDiv();
+            this.renderDonut(
+                donutCol,
+                [
+                    { value: overallPct, color: 'var(--sl-accent)' },
+                    { value: 100 - overallPct, color: 'var(--sl-text-muted)' },
+                ],
+                `${overallPct}%`,
+                'dialogue',
+            );
+            this.renderLegend(donutCol, [
+                { label: 'Dialogue', value: `${overallPct}%`, color: 'var(--sl-accent)' },
+                { label: 'Narrative', value: `${100 - overallPct}%`, color: 'var(--sl-text-muted)' },
+            ]);
+
+            const actCol = twoCol.createDiv('sl-stats-redesigned__dialogue');
+            for (const [act, data] of actRows) {
+                const pct = data.total > 0 ? Math.round((data.dialogue / data.total) * 100) : 0;
+                const row = actCol.createDiv('sl-stats-redesigned__dialogue-row');
+                row.createSpan({ text: act });
+                const track = row.createDiv('sl-stats-redesigned__track');
+                track.createDiv('sl-stats-redesigned__fill').setCssStyles({
+                    width: `${pct}%`,
+                    backgroundColor: 'var(--sl-accent)',
+                });
+                row.createEl('b', { text: `${pct}%` });
+            }
+            return;
+        }
+
         sec.createEl('p', { text: `Overall: ${overallPct}% dialogue, ${100 - overallPct}% narrative` });
 
-        for (const [act, data] of Object.entries(actDlg).sort(([a], [b]) =>
-            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }),
-        )) {
+        for (const [act, data] of actRows) {
             const pct = data.total > 0 ? Math.round((data.dialogue / data.total) * 100) : 0;
             const row = sec.createDiv('stats-row');
             row.createSpan({ text: `${act}: ${pct}% dialogue` });
@@ -1123,6 +1691,19 @@ export class StatsView extends ItemView {
     private renderTensionCurve(parent: HTMLElement, scenes: { title: string; intensity?: number }[]): void {
         const sec = parent.createDiv('stats-subsection');
         sec.createEl('h5', { cls: 'stats-subsection-title', text: 'Tension curve' });
+        if (this.isRedesigned) {
+            const curve = sec.createDiv('sl-stats-redesigned__curve');
+            for (const scene of scenes) {
+                const val = scene.intensity || 0;
+                const bar = curve.createDiv();
+                bar.setCssStyles({ height: `${Math.max(4, (Math.abs(val) / 10) * 100)}%` });
+                bar.setAttribute('title', `${scene.title || 'Untitled'}: ${val}/10`);
+            }
+            const axis = sec.createDiv('sl-stats-redesigned__curve-axis');
+            axis.createSpan({ text: 'Start' });
+            axis.createSpan({ text: 'End' });
+            return;
+        }
         const chart = sec.createDiv('tension-chart');
         for (const scene of scenes) {
             const col = chart.createDiv('tension-col');
@@ -1631,7 +2212,7 @@ export class StatsView extends ItemView {
     }
 
     // ════════════════════════════════════════════════════
-    //  8. Warnings & Plot Holes
+    //  8. Warnings
     // ════════════════════════════════════════════════════
 
     private renderWarnings(parent: HTMLElement, allScenes: Scene[]): void {
@@ -1653,7 +2234,11 @@ export class StatsView extends ItemView {
                 const warns = warnings.filter(w => w.severity === 'warning').length;
                 const infos = warnings.filter(w => w.severity === 'info').length;
 
-                const summary = parent.createDiv('stats-warning-summary');
+                const summary = parent.createDiv(
+                    this.isRedesigned
+                        ? 'stats-warning-summary sl-stats-redesigned__warning-summary'
+                        : 'stats-warning-summary',
+                );
                 if (errs > 0) summary.createSpan({ cls: 'stats-severity-error', text: `${errs} error${errs > 1 ? 's' : ''}` });
                 if (warns > 0) summary.createSpan({ cls: 'stats-severity-warning', text: `${warns} warning${warns > 1 ? 's' : ''}` });
                 if (infos > 0) summary.createSpan({ cls: 'stats-severity-info', text: `${infos} info` });
@@ -1661,9 +2246,14 @@ export class StatsView extends ItemView {
                 for (const [cat, cw] of byCategory) {
                     const catSec = parent.createDiv('stats-warning-category');
                     catSec.createEl('h5', { text: cat });
-                    const list = catSec.createEl('ul', { cls: 'stats-list stats-warning-list' });
+                    const list = catSec.createEl('ul', {
+                        cls: this.isRedesigned
+                            ? 'stats-list stats-warning-list sl-stats-redesigned__warning-list'
+                            : 'stats-list stats-warning-list',
+                    });
                     for (const w of cw) {
                         const li = list.createEl('li', { cls: `stats-severity-${w.severity}` });
+                        if (this.isRedesigned && w.severity === 'error') li.addClass('error');
                         const ic = li.createSpan({ cls: 'stats-warning-icon' });
                         switch (w.severity) {
                             case 'error': obsidian.setIcon(ic, 'x-circle'); break;
@@ -1681,6 +2271,186 @@ export class StatsView extends ItemView {
                 cls: 'stats-ok',
                 text: 'Plot hole detection is disabled. Enable it in settings — advanced.',
             });
+        }
+    }
+
+    private renderWritingTrail(parent: HTMLElement, scenes: Scene[], currentWords: number): void {
+        const tracker = this.plugin.writingTracker;
+        const history = tracker.getFullHistory();
+        const changes = tracker.getFullChangeHistory();
+        const revisions = tracker.getFullRevisionHistory();
+        const dates = Array.from(new Set([
+            ...Object.keys(history),
+            ...Object.keys(changes),
+            ...Object.keys(revisions),
+        ])).sort();
+        const wordsAdded = Object.values(changes).reduce((sum, entry) => sum + entry.added, 0);
+        const wordsDeleted = Object.values(changes).reduce((sum, entry) => sum + entry.deleted, 0);
+        const activeDays = Object.values(history).filter(words => words > 0).length;
+
+        const header = parent.createDiv('stats-writing-trail-header');
+        const note = header.createSpan({
+            cls: 'stats-hint',
+            text: dates.length > 0 ? `Tracked activity only · since ${dates[0]}` : 'Tracked activity only',
+        });
+        note.setAttribute('aria-label', 'This is the first tracked date, not the document creation date');
+        const exportButton = header.createEl('button', { text: 'Export CSV' });
+        exportButton.addEventListener('click', () => this.exportWritingTrailCsv(dates, history, changes, revisions));
+
+        const metrics = parent.createDiv('stats-writing-trail-metrics');
+        this.createStatCard(metrics, 'file-text', 'Current words', currentWords.toLocaleString());
+        this.createStatCard(metrics, 'activity', 'Net tracked', (wordsAdded - wordsDeleted).toLocaleString());
+        this.createStatCard(metrics, 'plus', 'Words added', wordsAdded.toLocaleString());
+        this.createStatCard(metrics, 'minus', 'Words deleted', wordsDeleted.toLocaleString());
+        this.createStatCard(metrics, 'calendar-check', 'Active days', activeDays.toLocaleString());
+
+        const activity = dates.slice(-60).map(date => ({ date, words: Math.max(0, Number(history[date]) || 0) }));
+        if (activity.length > 0) {
+            parent.createEl('h5', { cls: 'stats-subsection-title', text: 'Daily activity' });
+            this.renderHistoryBarChart(parent, activity);
+        } else {
+            parent.createEl('p', { cls: 'stats-empty', text: 'No tracked writing activity yet.' });
+        }
+
+        const milestones = parent.createDiv('stats-writing-trail-milestones');
+        milestones.createEl('h5', { cls: 'stats-subsection-title', text: 'Recent scene milestones' });
+        const loading = milestones.createEl('p', { cls: 'stats-hint', text: 'Loading milestones…' });
+        void this.renderWritingTrailMilestones(milestones, loading, scenes);
+    }
+
+    private async renderWritingTrailMilestones(
+        parent: HTMLElement,
+        loading: HTMLElement,
+        scenes: Scene[],
+    ): Promise<void> {
+        const milestones: Array<{ scene: Scene; timestamp: string; label: string; wordcount?: number }> = [];
+        for (let offset = 0; offset < scenes.length; offset += 8) {
+            const batch = scenes.slice(offset, offset + 8);
+            const results = await Promise.all(batch.map(async scene => {
+                try {
+                    return { scene, snapshots: await this.plugin.snapshotManager.listSnapshotMetadata(scene.filePath) };
+                } catch (error) {
+                    console.warn(`[StoryLine] Could not load snapshot metadata for ${scene.filePath}`, error);
+                    return { scene, snapshots: [] };
+                }
+            }));
+            for (const result of results) {
+                for (const snapshot of result.snapshots) {
+                    milestones.push({
+                        scene: result.scene,
+                        timestamp: snapshot.timestamp,
+                        label: snapshot.label,
+                        wordcount: snapshot.wordcount,
+                    });
+                }
+            }
+        }
+        loading.remove();
+        const recent = milestones.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 12);
+        if (recent.length === 0) {
+            parent.createEl('p', { cls: 'stats-empty', text: 'Future scene snapshots will appear here.' });
+            return;
+        }
+        const list = parent.createEl('ul', { cls: 'stats-list stats-writing-trail-list' });
+        for (const milestone of recent) {
+            const item = list.createEl('li');
+            item.createEl('strong', { text: milestone.scene.title });
+            item.createSpan({ text: ` · ${new Date(milestone.timestamp).toLocaleDateString()} · ${milestone.label}` });
+            if (milestone.wordcount !== undefined) {
+                item.createSpan({ text: ` · ${milestone.wordcount.toLocaleString()} words` });
+            }
+        }
+    }
+
+    private exportWritingTrailCsv(
+        dates: string[],
+        history: Record<string, number>,
+        changes: Record<string, { added: number; deleted: number }>,
+        revisions: Record<string, number>,
+    ): void {
+        const csvValue = (value: string | number): string => {
+            const text = String(value);
+            return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        };
+        const rows = ['date,words,added,deleted,net,revisions'];
+        for (const date of dates) {
+            const added = Math.max(0, Number(changes[date]?.added) || 0);
+            const deleted = Math.max(0, Number(changes[date]?.deleted) || 0);
+            rows.push([
+                date,
+                Math.max(0, Number(history[date]) || 0),
+                added,
+                deleted,
+                added - deleted,
+                Math.max(0, Number(revisions[date]) || 0),
+            ].map(csvValue).join(','));
+        }
+        const url = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' }));
+        const anchor = activeDocument.body.createEl('a');
+        anchor.href = url;
+        anchor.download = 'writing-trail.csv';
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    private renderFolderWordCounts(parent: HTMLElement, scenes: Scene[]): void {
+        const sceneRoot = this.sceneManager.getSceneFolder().replace(/\/$/, '');
+        const folders = new Map<string, { words: number; documents: number }>();
+        for (const scene of scenes) {
+            const relative = scene.filePath.startsWith(`${sceneRoot}/`)
+                ? scene.filePath.slice(sceneRoot.length + 1)
+                : scene.filePath;
+            const slash = relative.lastIndexOf('/');
+            const folder = slash >= 0 ? relative.slice(0, slash) : 'Scenes';
+            const value = folders.get(folder) ?? { words: 0, documents: 0 };
+            value.words += scene.wordcount ?? 0;
+            value.documents++;
+            folders.set(folder, value);
+        }
+        const entries = Array.from(folders.entries()).sort((a, b) => b[1].words - a[1].words);
+        if (entries.length === 0) {
+            parent.createEl('p', { cls: 'stats-empty', text: 'No scene folders to summarize.' });
+            return;
+        }
+        const maxWords = Math.max(...entries.map(([, value]) => value.words), 1);
+        if (this.isRedesigned) {
+            const wrap = parent.createDiv('sl-stats-redesigned__word-bars');
+            for (const [folder, value] of entries) {
+                this.renderNamedBar(
+                    wrap,
+                    folder,
+                    `${value.words.toLocaleString()} words · ${value.documents} documents`,
+                    value.words / maxWords * 100,
+                );
+            }
+            return;
+        }
+        for (const [folder, value] of entries) {
+            const row = parent.createDiv('stats-folder-row');
+            row.createSpan({ cls: 'stats-folder-label', text: folder });
+            const bar = row.createDiv('stats-bar stats-bar-wide');
+            bar.createDiv('stats-bar-fill').setCssStyles({ width: `${value.words / maxWords * 100}%` });
+            row.createSpan({ text: `${value.words.toLocaleString()} words · ${value.documents} documents` });
+        }
+    }
+
+    private renderProjectInfo(parent: HTMLElement): void {
+        const project = this.sceneManager.activeProject;
+        const rows: Array<[string, string]> = [
+            ['Project', project?.title || 'Untitled'],
+            ['Statuses', getStatusOrder().join(', ')],
+            ['Custom metadata fields', String(this.plugin.fieldTemplates.getAll().length)],
+            ['StoryLine version', this.plugin.manifest.version],
+        ];
+        const list = parent.createEl('dl', {
+            cls: this.isRedesigned
+                ? 'stats-project-info sl-stats-redesigned__info'
+                : 'stats-project-info',
+        });
+        for (const [label, value] of rows) {
+            list.createEl('dt', { text: label });
+            list.createEl('dd', { text: value });
         }
     }
 
@@ -1709,7 +2479,7 @@ export class StatsView extends ItemView {
     }
 
     private createStatCard(parent: HTMLElement, icon: string, label: string, value: string): void {
-        const card = parent.createDiv('stats-sprint-card');
+        const card = parent.createDiv('stats-sprint-card sl-stats-redesigned__stat');
         const iconEl = card.createSpan({ cls: 'stats-sprint-card-icon' });
         obsidian.setIcon(iconEl, icon);
         card.createDiv({ cls: 'stats-sprint-card-value', text: value });

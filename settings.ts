@@ -828,6 +828,12 @@ export interface SceneCardsSettings {
     focusDarkenAmount: number;
     /** Focus mode: blur radius in px for everything outside the text area (0–20) */
     focusBlurAmount: number;
+    /** Dim prose outside the current paragraph while focus mode is active */
+    focusDimText: boolean;
+    /** Opacity percentage for prose outside the current paragraph */
+    focusTextOpacity: number;
+    /** Statistics renderer */
+    statsViewMode: 'redesigned' | 'original';
 
     /** Timeline drag-scroll: pixels per animation frame when auto-scrolling (1–30) */
     timelineDragScrollSpeed: number;
@@ -931,6 +937,27 @@ export interface SceneCardsSettings {
 }
 
 export type SectionDefaultState = 'expanded' | 'collapsed' | 'remember';
+
+/** Move legacy section-state keys to their canonical Scribe-compatible names. */
+export function migrateSectionStateKeys(
+    settings: Pick<SceneCardsSettings, 'sectionCollapsedStates'>,
+): boolean {
+    const states = settings.sectionCollapsedStates;
+    if (!states) return false;
+
+    let changed = false;
+    const migrations: Record<string, string> = {
+        'stats::Writing Trail': 'stats:Writing Trail',
+        'stats::Warnings & Plot Holes': 'stats:Warnings',
+    };
+    for (const [legacyKey, canonicalKey] of Object.entries(migrations)) {
+        if (!(legacyKey in states)) continue;
+        if (!(canonicalKey in states)) states[canonicalKey] = states[legacyKey];
+        delete states[legacyKey];
+        changed = true;
+    }
+    return changed;
+}
 
 /** Resolve a section's initial state without changing legacy view behavior. */
 export function isSectionCollapsed(
@@ -1074,6 +1101,9 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
 
     focusDarkenAmount: 40,
     focusBlurAmount: 1,
+    focusDimText: false,
+    focusTextOpacity: 35,
+    statsViewMode: 'redesigned',
 
     timelineDragScrollSpeed: 8,
     timelineDragScrollZone: 60,
@@ -1717,6 +1747,31 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
+        const deadline = this.plugin.writingTracker.getProjectDeadline();
+        new Setting(writingBody)
+            .setName('Project deadline')
+            .setDesc('Optional deadline for the active project')
+            .addText(text => {
+                text.inputEl.type = 'date';
+                text.setValue(deadline.deadline);
+                text.onChange(async value => {
+                    this.plugin.writingTracker.setProjectDeadline(value, this.plugin.writingTracker.getProjectDeadline().includeWeekends);
+                    await this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                });
+            });
+
+        new Setting(writingBody)
+            .setName('Include weekends before deadline')
+            .setDesc('Count saturdays and sundays as available writing days')
+            .addToggle(toggle => toggle
+                .setValue(deadline.includeWeekends)
+                .onChange(async value => {
+                    this.plugin.writingTracker.setProjectDeadline(this.plugin.writingTracker.getProjectDeadline().deadline, value);
+                    await this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                }));
+
         new Setting(writingBody)
             .setName('Sprint end sound')
             .setDesc('Play a chime when the writing sprint timer reaches zero')
@@ -1908,6 +1963,19 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
         });
 
+        new Setting(displayBody)
+            .setName('Statistics view')
+            .setDesc('Use the redesigned statistics layout or keep the original renderer')
+            .addDropdown(dropdown => dropdown
+                .addOption('redesigned', 'Redesigned')
+                .addOption('original', 'Original')
+                .setValue(this.plugin.settings.statsViewMode)
+                .onChange(async value => {
+                    this.plugin.settings.statsViewMode = value === 'original' ? 'original' : 'redesigned';
+                    await this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                }));
+
         const focusDetails = displayBody.createEl('details', { cls: 'story-line-color-section' });
         focusDetails.createEl('summary', { text: 'Focus mode settings' });
         const focusBody = focusDetails.createDiv();
@@ -1916,6 +1984,17 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         const focusDesc = focusBody.createDiv({ cls: 'setting-item-description' });
         focusDesc.setCssStyles({ marginBottom: '16px' });
         focusDesc.setText('Control how the UI changes when focus mode is enabled in manuscript view.');
+
+        new Setting(focusBody)
+            .setName('Dim surrounding text')
+            .setDesc('Keep the current paragraph at full opacity in focus mode')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.focusDimText)
+                .onChange(async value => {
+                    this.plugin.settings.focusDimText = value;
+                    await this.plugin.saveSettings();
+                    this.plugin.refreshOpenViews();
+                }));
 
         const createFocusSlider = (
             parent: HTMLElement,
@@ -1990,6 +2069,14 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             (v) => { this.plugin.settings.focusBlurAmount = v; },
         );
 
+        createFocusSlider(
+            focusBody, 'Text opacity',
+            'Opacity of paragraphs outside the current selection',
+            this.plugin.settings.focusTextOpacity,
+            10, 90, 5, '%',
+            (v) => { this.plugin.settings.focusTextOpacity = v; },
+        );
+
         // Reset
         const focusResetRow = focusBody.createDiv();
         focusResetRow.setCssStyles({ marginTop: '8px' });
@@ -2001,6 +2088,8 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         focusResetBtn.addEventListener('click', async () => {
             this.plugin.settings.focusDarkenAmount = 40;
             this.plugin.settings.focusBlurAmount = 1;
+            this.plugin.settings.focusDimText = false;
+            this.plugin.settings.focusTextOpacity = 35;
             await this.plugin.saveSettings();
             this.plugin.refreshOpenViews();
             this.refreshSettingsView();

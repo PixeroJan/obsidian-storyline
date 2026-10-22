@@ -129,6 +129,28 @@ export class SnapshotManager {
         return snapshots;
     }
 
+    /** List snapshot milestones without reading snapshot body content. */
+    async listSnapshotMetadata(sceneFilePath: string): Promise<SceneSnapshot[]> {
+        const file = this.app.vault.getAbstractFileByPath(sceneFilePath);
+        if (!(file instanceof TFile)) return [];
+        await this.migrateLegacySnapshotsFolder(sceneFilePath);
+        const folder = this.app.vault.getAbstractFileByPath(this.getSnapshotDir(sceneFilePath));
+        if (!(folder instanceof TFolder)) return [];
+
+        return folder.children
+            .filter((child): child is TFile => child instanceof TFile && child.name.startsWith(`${file.basename}__`))
+            .map(child => {
+                const parts = child.basename.split('__');
+                return {
+                    filePath: child.path,
+                    sceneFilePath,
+                    label: parts.slice(2).join('__') || 'Snapshot',
+                    timestamp: new Date(child.stat.mtime).toISOString(),
+                };
+            })
+            .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    }
+
     /**
      * Read the content of a snapshot. Legacy snapshots had a leading HTML
      * comment header that is stripped here; modern snapshots are exact copies

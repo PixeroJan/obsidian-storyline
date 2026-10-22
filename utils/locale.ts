@@ -78,6 +78,8 @@ export interface LocaleProfile {
     charactersPerMinute?: number;
     /** Preferred dialogue quote pairs, in detection priority order. */
     dialogueQuotes: ReadonlyArray<readonly [string, string]>;
+    /** Whether dash-led paragraphs use dialogue/narration alternation. */
+    dashDialogue?: boolean;
     /** Regex matching sentence-terminator characters for this language. */
     sentenceTerminators: RegExp;
     /** Common stop words, used for prose-analysis & echo-finder filtering. */
@@ -322,7 +324,7 @@ const PROFILES: Record<string, LocaleProfile> = {
     de: { code: 'de', label: 'Deutsch', script: 'latin', wordsPerMinute: 220, dialogueQuotes: [['\u201e', '\u201c'], ['\u00bb', '\u00ab'], ['"', '"']], sentenceTerminators: LATIN_SENTENCE_RE, stopWords: STOP_DE, minSignificantLength: 3, supportsSyllables: false },
     it: { code: 'it', label: 'Italiano', script: 'latin', wordsPerMinute: 220, dialogueQuotes: [['\u00ab', '\u00bb'], ['\u201c', '\u201d'], ['"', '"']], sentenceTerminators: LATIN_SENTENCE_RE, stopWords: STOP_IT, minSignificantLength: 3, supportsSyllables: false },
     pt: { code: 'pt', label: 'Português', script: 'latin', wordsPerMinute: 220, dialogueQuotes: [['\u201c', '\u201d'], ['"', '"'], ['\u00ab', '\u00bb']], sentenceTerminators: LATIN_SENTENCE_RE, stopWords: STOP_PT, minSignificantLength: 3, supportsSyllables: false },
-    ru: { code: 'ru', label: 'Русский', script: 'cyrillic', wordsPerMinute: 180, dialogueQuotes: [['\u00ab', '\u00bb'], ['\u201e', '\u201c'], ['"', '"']], sentenceTerminators: LATIN_SENTENCE_RE, stopWords: STOP_RU, minSignificantLength: 3, supportsSyllables: false },
+    ru: { code: 'ru', label: 'Русский', script: 'cyrillic', wordsPerMinute: 180, dialogueQuotes: [['\u00ab', '\u00bb'], ['\u201e', '\u201c'], ['"', '"']], dashDialogue: true, sentenceTerminators: LATIN_SENTENCE_RE, stopWords: STOP_RU, minSignificantLength: 3, supportsSyllables: false },
     nl: { code: 'nl', label: 'Nederlands', script: 'latin', wordsPerMinute: 220, dialogueQuotes: [['\u201c', '\u201d'], ['"', '"'], ['\u201a', '\u2018']], sentenceTerminators: LATIN_SENTENCE_RE, stopWords: STOP_NL, minSignificantLength: 3, supportsSyllables: false },
     pl: { code: 'pl', label: 'Polski', script: 'latin', wordsPerMinute: 200, dialogueQuotes: [['\u201e', '\u201d'], ['\u00ab', '\u00bb'], ['"', '"']], sentenceTerminators: LATIN_SENTENCE_RE, stopWords: STOP_PL, minSignificantLength: 3, supportsSyllables: false },
     no: { code: 'no', label: 'Norsk', script: 'latin', wordsPerMinute: 220, dialogueQuotes: [['\u00ab', '\u00bb'], ['\u201c', '\u201d'], ['"', '"']], sentenceTerminators: LATIN_SENTENCE_RE, stopWords: STOP_NO, minSignificantLength: 3, supportsSyllables: false },
@@ -498,7 +500,18 @@ export function isCjkWrapToken(text: string): boolean {
 
 // ── Dialogue ────────────────────────────────────────────
 
-/** Sum character counts of all balanced dialogue quote pairs in `text`. */
+/**
+ * Count dialogue characters using Scribe's conventions.
+ *
+ * The configured quote pair is checked first, followed by all pairs supported
+ * by the active locale and the universal mixed-document fallbacks. Dash-led
+ * paragraphs are supported only for locales that opt into that convention.
+ * A marker buffer prevents overlapping conventions from counting the same
+ * characters more than once.
+ */
+const DIALOGUE_DASH_LEAD_RE = /^[ \t]*[\u2014\u2013][ \u00a0]/;
+const DIALOGUE_DASH_SWITCH_RE = /([,.!?\u2026])[ \t\u00a0]+[\u2014\u2013][ \t\u00a0]+/g;
+
 export function countDialogueCharacters(
     text: string,
     locale: StoryLineLocale = DEFAULT_STORYLINE_LOCALE,
@@ -506,15 +519,60 @@ export function countDialogueCharacters(
 ): number {
     const isWordChar = (char: string | undefined): boolean =>
         char !== undefined && /[\p{L}\p{N}]/u.test(char);
-    let total = 0;
-    const pairs: ReadonlyArray<readonly [string, string]> = selectedPair
-        ? [selectedPair]
-        : getDialogueQuotePairs(locale);
+    if (!text) return 0;
+
+    const pairs: Array<readonly [string, string]> = [];
+    const seen = new Set<string>();
+    const addPair = (pair: readonly [string, string]): void => {
+        const [open, close] = pair;
+        if (!open || !close) return;
+        const key = `${open}|${close}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        pairs.push(pair);
+    };
+
+    if (selectedPair) addPair(selectedPair);
+    for (const pair of getDialogueQuotePairs(locale)) addPair(pair);
+    addPair(['\u201d', '\u201d']); // Swedish right-curly quotes
+    addPair(['\u00bb', '\u00ab']); // Reverse guillemets
+
+    const marked = new Uint8Array(text.length);
+
+    if (getLocaleProfile(locale).dashDialogue) {
+        let position = 0;
+        for (const line of text.split(/\r?\n/)) {
+            const lineStart = position;
+            const lead = line.match(DIALOGUE_DASH_LEAD_RE);
+            if (lead) {
+                const dialogue = line.slice(lead[0].length);
+                let speechStart = 0;
+                let inSpeech = true;
+                let separator: RegExpExecArray | null;
+                DIALOGUE_DASH_SWITCH_RE.lastIndex = 0;
+                while ((separator = DIALOGUE_DASH_SWITCH_RE.exec(dialogue)) !== null) {
+                    const speechEnd = separator.index + separator[1].length;
+                    if (inSpeech) {
+                        const start = lineStart + lead[0].length + speechStart;
+                        for (let i = start; i < lineStart + lead[0].length + speechEnd && i < text.length; i++) {
+                            marked[i] = 1;
+                        }
+                    }
+                    speechStart = separator.index + separator[0].length;
+                    inSpeech = !inSpeech;
+                }
+                if (inSpeech) {
+                    const start = lineStart + lead[0].length + speechStart;
+                    for (let i = start; i < lineStart + line.length && i < text.length; i++) {
+                        marked[i] = 1;
+                    }
+                }
+            }
+            position += line.length + (text[position + line.length] === '\r' ? 2 : 1);
+        }
+    }
+
     for (const [open, close] of pairs) {
-        if (!open || !close) continue;
-        let start = 0;
-        // Same-character pairs (like `"`) need a different walk so we don't
-        // pair an opener with itself; toggle every match instead.
         if (open === close) {
             const positions: number[] = [];
             let i = text.indexOf(open);
@@ -525,21 +583,52 @@ export function countDialogueCharacters(
                 if (!isInsideWord) positions.push(i);
                 i = text.indexOf(open, i + open.length);
             }
-            for (let k = 0; k + 1 < positions.length; k += 2) {
-                total += Math.max(0, positions[k + 1] - (positions[k] + open.length));
+
+            let opening = -1;
+            for (const position of positions) {
+                if (opening < 0) {
+                    opening = position;
+                    continue;
+                }
+                const contentStart = opening + open.length;
+                const contentLength = position - contentStart;
+                if (
+                    contentLength >= 1 &&
+                    contentLength <= 400 &&
+                    !/[\r\n]/.test(text.slice(contentStart, position))
+                ) {
+                    for (let j = contentStart; j < position; j++) marked[j] = 1;
+                    opening = -1;
+                } else {
+                    opening = position;
+                }
             }
             continue;
         }
+
+        let start = 0;
         while (start < text.length) {
             const openAt = text.indexOf(open, start);
             if (openAt < 0) break;
             const contentStart = openAt + open.length;
             const closeAt = text.indexOf(close, contentStart);
             if (closeAt < 0) break;
-            total += Math.max(0, closeAt - contentStart);
-            start = closeAt + close.length;
+            const contentLength = closeAt - contentStart;
+            if (
+                contentLength >= 1 &&
+                contentLength <= 400 &&
+                !/[\r\n]/.test(text.slice(contentStart, closeAt))
+            ) {
+                for (let j = contentStart; j < closeAt; j++) marked[j] = 1;
+                start = closeAt + close.length;
+            } else {
+                start = openAt + open.length;
+            }
         }
     }
+
+    let total = 0;
+    for (const value of marked) total += value;
     return total;
 }
 

@@ -1593,7 +1593,7 @@ export class LocationView extends ItemView {
         // support, 1.10.43). Keep `rawValue` as the union for the checkbox
         // path and `value` as the coerced string for text / dropdown paths.
         const rawValue = draft.universalFields[tpl.id];
-        const value: string = typeof rawValue === 'string' ? rawValue : '';
+        const value: string = typeof rawValue === 'string' || typeof rawValue === 'number' ? String(rawValue) : '';
 
         const row = parent.createDiv('location-field-row codex-universal-field-row');
 
@@ -1786,6 +1786,19 @@ export class LocationView extends ItemView {
             textarea.value = value;
             textarea.addEventListener('input', () => {
                 draft.universalFields![tpl.id] = textarea.value;
+                this.scheduleSave(draft);
+            });
+        } else if (tpl.type === 'number') {
+            const input = row.createEl('input', {
+                cls: 'location-field-input',
+                type: 'number',
+                attr: { placeholder: tpl.placeholder, step: 'any' },
+            });
+            input.value = value;
+            input.addEventListener('input', () => {
+                const parsed = input.value.trim() === '' ? undefined : Number(input.value);
+                if (parsed === undefined || !Number.isFinite(parsed)) delete draft.universalFields![tpl.id];
+                else draft.universalFields![tpl.id] = parsed;
                 this.scheduleSave(draft);
             });
         } else if (tpl.type === 'checkbox') {

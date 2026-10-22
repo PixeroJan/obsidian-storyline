@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-floating-promises -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
+/* eslint-disable @typescript-eslint/no-floating-promises -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { Setting, Notice } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { SceneManager } from '../services/SceneManager';
@@ -14,7 +14,7 @@ export function cloneSceneFilter(filter?: SceneFilter): SceneFilter {
     try {
         const cloned: unknown = JSON.parse(JSON.stringify(filter));
         return cloned && typeof cloned === 'object' && !Array.isArray(cloned)
-            ? cloned as SceneFilter
+            ? cloned
             : {};
     } catch {
         return {};
@@ -522,4 +522,4 @@ export class FiltersComponent {
         return this.currentSort;
     }
 }
-/* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-floating-promises -- end of file-wide suppression block opened at line 1 */
+/* eslint-enable @typescript-eslint/no-floating-promises -- end of file-wide suppression block opened at line 1 */

@@ -37,7 +37,7 @@ interface LocationBase {
      * Universal field values (keyed by template id).
      * `boolean` is supported for `checkbox`-type templates (1.10.43+).
      */
-    universalFields?: Record<string, string | string[] | boolean>;
+    universalFields?: Record<string, string | string[] | boolean | number>;
     /** Alternative names / aliases (comma-separated) — used by LinkScanner for plain-text matching */
     nickname?: string;
     /**

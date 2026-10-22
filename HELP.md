@@ -25,6 +25,7 @@ StoryLine transforms your Obsidian vault into a full-featured book planning and 
   - [Scene Details Sidebar](#scene-details-sidebar)
   - [Research Sidebar](#research-sidebar)
 - [Scene Cards](#scene-cards)
+- [Scene Filename Synchronization](#scene-filename-synchronization)
 - [Scene Subtitles](#scene-subtitles)
 - [Scene Archive](#scene-archive)
 - [Inactive Scenes](#inactive-scenes)
@@ -160,6 +161,12 @@ The main workspace — a Kanban-style board that displays your scenes as cards.
 - **Search** — type in the search bar to filter scenes by title, content, characters, or tags.
 - **Beat Sheet Templates** — apply a beat sheet template (Save the Cat, 3-Act, Hero's Journey, Seven-Point, Story Circle, Romancing the Beat, 27 Chapter Method) from the Structure modal.
 - **Act labels** — custom labels on act dividers (e.g., beat names); inline-editable.
+
+### Scene Filename Synchronization
+
+Run the Command Palette command **Synchronize scene filenames from metadata** when a project is active. StoryLine shows a preview of every proposed filename before applying the changes. The command uses each scene's current act and sequence metadata, handles filename swaps safely, and does not change scene frontmatter or body content.
+
+Ordinary resequencing and act/chapter metadata edits do not rename scene files. This command is an explicit repair or normalization action for projects whose filenames have drifted from their metadata. If no changes are needed, StoryLine reports that scene filenames are already synchronized.
 
 ### Corkboard Mode
 
