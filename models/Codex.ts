@@ -29,7 +29,7 @@ export interface CodexEntry {
     /** Free-form notes (markdown body) */
     notes?: string;
     /** User-defined custom fields */
-    custom?: Record<string, string>;
+    custom?: Record<string, string | number | boolean | string[]>;
     /**
      * Universal field template values (keyed by template id).
      * `boolean` is supported for `checkbox`-type templates (1.10.43+).

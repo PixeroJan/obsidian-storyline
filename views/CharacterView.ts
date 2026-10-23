@@ -2094,6 +2094,41 @@ export class CharacterView extends ItemView {
         const relations: CharacterRelation[] = normalizeCharacterRelations(draft.relations);
         const NEW_CUSTOM_TYPE_VALUE = '__custom_new__';
 
+        const getCustomRelationOptions = (): Array<{ type: string; label: string; category: CharacterRelationCategory }> => {
+            const options = new Map<string, { type: string; label: string; category: CharacterRelationCategory }>();
+            for (const option of this.plugin.settings.characterCustomRelationTypes || []) {
+                if (option.type.trim()) options.set(option.type, option);
+            }
+            for (const character of this.characterManager.getAllCharacters()) {
+                for (const relation of normalizeCharacterRelations(character.relations)) {
+                    const isBuiltIn = RELATION_CATEGORIES.some(category => RELATION_TYPES_BY_CATEGORY[category.value].includes(relation.type));
+                    if (!isBuiltIn && relation.type !== NEW_CUSTOM_TYPE_VALUE && !options.has(relation.type)) {
+                        options.set(relation.type, {
+                            type: relation.type,
+                            label: relation.type,
+                            category: relation.category,
+                        });
+                    }
+                }
+            }
+            return Array.from(options.values()).sort((a, b) => a.label.localeCompare(b.label));
+        };
+
+        const rememberCustomRelationType = (type: string, label: string, category: CharacterRelationCategory): void => {
+            const normalized = type.trim().toLowerCase().replace(/\s+/g, '-');
+            if (!normalized || normalized === NEW_CUSTOM_TYPE_VALUE) return;
+            const options = this.plugin.settings.characterCustomRelationTypes || [];
+            const existing = options.find(option => option.type === normalized);
+            if (existing) {
+                existing.label = label.trim() || existing.label;
+                existing.category = category;
+            } else {
+                options.push({ type: normalized, label: label.trim() || normalized, category });
+            }
+            this.plugin.settings.characterCustomRelationTypes = options;
+            void this.plugin.saveSettings();
+        };
+
         const inferCategoryFromType = (type: string): CharacterRelationCategory => {
             for (const category of RELATION_CATEGORIES) {
                 const options = RELATION_TYPES_BY_CATEGORY[category.value];
@@ -2116,6 +2151,14 @@ export class CharacterView extends ItemView {
             }
 
             const customGroup = select.createEl('optgroup', { attr: { label: 'Custom' } });
+            const customOptions = getCustomRelationOptions();
+            if (currentType && !customOptions.some(option => option.type === currentType)) {
+                customOptions.push({ type: currentType, label: currentType, category: 'custom' });
+            }
+            for (const option of customOptions) {
+                const opt = customGroup.createEl('option', { text: option.label, value: option.type });
+                if (currentType === option.type) opt.selected = true;
+            }
             customGroup.createEl('option', { text: 'New', value: NEW_CUSTOM_TYPE_VALUE });
 
             if (!select.value) {
@@ -2134,9 +2177,10 @@ export class CharacterView extends ItemView {
                 const relRow = list.createDiv('character-field-row relation-builder-item');
                 relRow.draggable = false;
                 const inlineRow = relRow.createDiv('relation-builder-inline-row');
-                const typeSelect = inlineRow.createEl('select', { cls: 'character-field-input dropdown relation-builder-type' });
+                const typeControls = inlineRow.createDiv('relation-builder-type-controls');
+                const typeSelect = typeControls.createEl('select', { cls: 'character-field-input dropdown relation-builder-type' });
                 buildTypeOptions(typeSelect, relation.type);
-                const customTypeInput = inlineRow.createEl('input', {
+                const customTypeInput = typeControls.createEl('input', {
                     cls: 'character-field-input relation-builder-type relation-builder-custom-input',
                     type: 'text',
                     attr: { placeholder: 'Custom relation type (e.g. Bodyguard)' },
@@ -2146,7 +2190,7 @@ export class CharacterView extends ItemView {
                 // let the user assign it to an existing category (e.g. "mate"
                 // under "romantic") so the Character Map view groups it
                 // correctly. Defaults to 'custom' to preserve old behaviour.
-                const customCategorySelect = inlineRow.createEl('select', {
+                const customCategorySelect = typeControls.createEl('select', {
                     cls: 'character-field-input dropdown relation-builder-custom-category',
                 });
                 customCategorySelect.setCssStyles({ display: 'none' });
@@ -2203,7 +2247,10 @@ export class CharacterView extends ItemView {
                     customTypeInput.setCssStyles({ display: enabled ? '' : 'none' });
                     customCategorySelect.setCssStyles({ display: enabled ? '' : 'none' });
                     if (enabled) {
-                        customTypeInput.value = relation.type && relation.type !== NEW_CUSTOM_TYPE_VALUE ? relation.type : '';
+                        const savedCustomType = getCustomRelationOptions().find(option => option.type === relation.type);
+                        customTypeInput.value = relation.type && relation.type !== NEW_CUSTOM_TYPE_VALUE
+                            ? (savedCustomType?.label || relation.type)
+                            : '';
                         // Reflect the current category in the dropdown
                         customCategorySelect.value = relation.category || 'custom';
                         if (focus) customTypeInput.focus();
@@ -2225,7 +2272,8 @@ export class CharacterView extends ItemView {
                         return;
                     }
                     relation.type = selected;
-                    relation.category = inferCategoryFromType(relation.type);
+                    const savedCustomType = getCustomRelationOptions().find(option => option.type === selected);
+                    relation.category = savedCustomType?.category || inferCategoryFromType(relation.type);
                     draft.relations = normalizeCharacterRelations(relations);
                     this.scheduleSave(draft);
                     setCustomMode(false);
@@ -2252,6 +2300,12 @@ export class CharacterView extends ItemView {
                     relation.category = (customCategorySelect.value as CharacterRelationCategory) || 'custom';
                     draft.relations = normalizeCharacterRelations(relations);
                     this.scheduleSave(draft);
+                });
+
+                customTypeInput.addEventListener('blur', () => {
+                    if (relation.type !== NEW_CUSTOM_TYPE_VALUE) {
+                        rememberCustomRelationType(relation.type, customTypeInput.value, relation.category);
+                    }
                 });
 
                 twoWayCheckbox.addEventListener('change', () => {

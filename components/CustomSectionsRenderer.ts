@@ -25,7 +25,8 @@ export const CUSTOM_SECTION_KEY_SEP = ' :: ';
  * field template types so users get the same set of widgets they're already
  * familiar with from the universal fields feature.
  */
-export type CustomFieldType = 'text' | 'textarea' | 'dropdown' | 'multi-select' | 'checkbox';
+export type CustomFieldType = 'text' | 'textarea' | 'dropdown' | 'multi-select' | 'checkbox' | 'number';
+export type CustomFieldValue = string | number | boolean | string[];
 
 /**
  * Rich field definition stored inside a custom section. Legacy data may
@@ -83,7 +84,7 @@ export function fieldName(entry: CustomFieldEntry): string {
     return typeof entry === 'string' ? entry : entry.name;
 }
 
-export interface CustomSectionsHost<TDraft extends { custom?: Record<string, string> }> {
+export interface CustomSectionsHost<TDraft extends { custom?: Record<string, CustomFieldValue> }> {
     app: App;
     draft: TDraft;
     /**
@@ -165,7 +166,7 @@ export function isCustomSectionKey(key: string): boolean {
 /**
  * Ensure draft.custom has entries for every section field. Idempotent.
  */
-function seedDraftCustom<T extends { custom?: Record<string, string> }>(
+function seedDraftCustom<T extends { custom?: Record<string, CustomFieldValue> }>(
     host: CustomSectionsHost<T>
 ): void {
     const { draft, sections } = host;
@@ -184,7 +185,7 @@ function seedDraftCustom<T extends { custom?: Record<string, string> }>(
  * indexed by slot (0..builtinCount inclusive) where each entry is the list of
  * `CustomSection`s at that slot, in their array order.
  */
-function bucketBySlot<T extends { custom?: Record<string, string> }>(
+function bucketBySlot<T extends { custom?: Record<string, CustomFieldValue> }>(
     host: CustomSectionsHost<T>
 ): CustomSection[][] {
     const buckets: CustomSection[][] = [];
@@ -200,7 +201,7 @@ function bucketBySlot<T extends { custom?: Record<string, string> }>(
  * Move a section one step earlier in the interleaved order (slot+slot-internal).
  * Returns true if the move was applied.
  */
-function moveSectionUp<T extends { custom?: Record<string, string> }>(sec: CustomSection, host: CustomSectionsHost<T>): boolean {
+function moveSectionUp<T extends { custom?: Record<string, CustomFieldValue> }>(sec: CustomSection, host: CustomSectionsHost<T>): boolean {
     const builtinCount = host.builtinSectionCount;
     const buckets = bucketBySlot(host);
     const slot = effectivePosition(sec, builtinCount);
@@ -227,7 +228,7 @@ function moveSectionUp<T extends { custom?: Record<string, string> }>(sec: Custo
 /**
  * Move a section one step later. Returns true if applied.
  */
-function moveSectionDown<T extends { custom?: Record<string, string> }>(sec: CustomSection, host: CustomSectionsHost<T>): boolean {
+function moveSectionDown<T extends { custom?: Record<string, CustomFieldValue> }>(sec: CustomSection, host: CustomSectionsHost<T>): boolean {
     const builtinCount = host.builtinSectionCount;
     const buckets = bucketBySlot(host);
     const slot = effectivePosition(sec, builtinCount);
@@ -249,7 +250,7 @@ function moveSectionDown<T extends { custom?: Record<string, string> }>(sec: Cus
 }
 
 /** True if `sec` is the very first section in interleaved order. */
-function isFirstSection<T extends { custom?: Record<string, string> }>(sec: CustomSection, host: CustomSectionsHost<T>): boolean {
+function isFirstSection<T extends { custom?: Record<string, CustomFieldValue> }>(sec: CustomSection, host: CustomSectionsHost<T>): boolean {
     if (effectivePosition(sec, host.builtinSectionCount) !== 0) return false;
     // Slot 0 — only first iff host has zero built-ins AND sec is index 0 of slot 0.
     if (host.builtinSectionCount > 0) return false;
@@ -258,7 +259,7 @@ function isFirstSection<T extends { custom?: Record<string, string> }>(sec: Cust
 }
 
 /** True if `sec` is the very last section in interleaved order. */
-function isLastSection<T extends { custom?: Record<string, string> }>(sec: CustomSection, host: CustomSectionsHost<T>): boolean {
+function isLastSection<T extends { custom?: Record<string, CustomFieldValue> }>(sec: CustomSection, host: CustomSectionsHost<T>): boolean {
     const builtinCount = host.builtinSectionCount;
     if (effectivePosition(sec, builtinCount) !== builtinCount) return false;
     const buckets = bucketBySlot(host);
@@ -280,7 +281,7 @@ function isLastSection<T extends { custom?: Record<string, string> }>(sec: Custo
  *     }
  *     renderAddCustomSectionButton(parent, host);
  */
-export function renderCustomSectionsAtSlot<T extends { custom?: Record<string, string> }>(
+export function renderCustomSectionsAtSlot<T extends { custom?: Record<string, CustomFieldValue> }>(
     container: HTMLElement,
     host: CustomSectionsHost<T>,
     slot: number
@@ -296,7 +297,7 @@ export function renderCustomSectionsAtSlot<T extends { custom?: Record<string, s
 /**
  * Render the "+ Add custom section" button (placed once, at the bottom).
  */
-export function renderAddCustomSectionButton<T extends { custom?: Record<string, string> }>(
+export function renderAddCustomSectionButton<T extends { custom?: Record<string, CustomFieldValue> }>(
     container: HTMLElement,
     host: CustomSectionsHost<T>
 ): void {
@@ -329,7 +330,7 @@ export function renderAddCustomSectionButton<T extends { custom?: Record<string,
  * Hosts that want true interleaving should use `renderCustomSectionsAtSlot`
  * between their built-in render calls.
  */
-export function renderCustomSections<T extends { custom?: Record<string, string> }>(
+export function renderCustomSections<T extends { custom?: Record<string, CustomFieldValue> }>(
     container: HTMLElement,
     host: CustomSectionsHost<T>
 ): void {
@@ -344,7 +345,7 @@ export function renderCustomSections<T extends { custom?: Record<string, string>
  * Render a single custom section (header + body + add-field row).
  * Used internally by `renderCustomSectionsAtSlot`.
  */
-function renderOneSection<T extends { custom?: Record<string, string> }>(
+function renderOneSection<T extends { custom?: Record<string, CustomFieldValue> }>(
     container: HTMLElement,
     host: CustomSectionsHost<T>,
     sec: CustomSection
@@ -503,7 +504,8 @@ function renderOneSection<T extends { custom?: Record<string, string> }>(
             // Render the input element appropriate for the field's type.
             // Mirrors the universal field renderers so users get the same
             // widgets they're used to from `AddFieldModal`.
-            const currentValue = (draft.custom && draft.custom[key]) || '';
+            const rawValue = draft.custom?.[key];
+            const currentValue = Array.isArray(rawValue) ? rawValue.join(', ') : (rawValue === undefined ? '' : String(rawValue));
             const placeholderHint = def.placeholder || `Value for ${fname}`;
             switch (def.type) {
                 case 'textarea': {
@@ -665,6 +667,22 @@ function renderOneSection<T extends { custom?: Record<string, string> }>(
                     cb.addEventListener('change', () => {
                         if (!draft.custom) draft.custom = {};
                         draft.custom[key] = cb.checked ? 'true' : 'false';
+                        host.scheduleSave(draft);
+                    });
+                    break;
+                }
+                case 'number': {
+                    const input = row.createEl('input', {
+                        cls: fieldInputLabel,
+                        attr: { type: 'number', placeholder: placeholderHint, step: 'any' },
+                    });
+                    input.value = currentValue;
+                    input.addEventListener('input', () => {
+                        if (!draft.custom) draft.custom = {};
+                        const trimmed = input.value.trim();
+                        const parsed = trimmed === '' ? undefined : Number(trimmed);
+                        if (parsed === undefined || !Number.isFinite(parsed)) delete draft.custom[key];
+                        else draft.custom[key] = parsed;
                         host.scheduleSave(draft);
                     });
                     break;
@@ -961,6 +979,7 @@ export class AddSectionFieldModal extends Modal {
                 dd.addOption('dropdown', 'Dropdown');
                 dd.addOption('multi-select', 'Multi-select (tags)');
                 dd.addOption('checkbox', 'Checkbox (yes/no)');
+                dd.addOption('number', 'Number');
                 dd.setValue(type);
                 dd.onChange(v => {
                     type = v as CustomFieldType;

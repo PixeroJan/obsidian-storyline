@@ -180,7 +180,7 @@ export interface Character {
     /** Items they carry or use */
     props?: string;
     /** User-defined custom fields */
-    custom?: Record<string, string>;
+    custom?: Record<string, string | number | boolean | string[]>;
     /**
      * Universal field values keyed by template ID (from field-templates.json).
      * `boolean` is supported for `checkbox`-type templates (added in

@@ -5,6 +5,7 @@ import { SLPdfSettings, SL_DEFAULT_PDF_SETTINGS } from './services/PdfConverter'
 import { AddFieldModal } from './components/AddFieldModal';
 import type { UniversalFieldTemplate } from './services/FieldTemplateService';
 import { BeatSheetTemplate, ColorCodingMode, CustomStatusDef, SceneStatus, SceneTemplate, ViewType, getStatusConfig, getStatusOrder, registerCustomStatuses } from './models/Scene';
+import type { CharacterRelationCategory } from './models/Character';
 import { App, Modal, Notice, PluginSettingTab, Setting, SettingGroup, TFolder, TextAreaComponent, AbstractInputSuggest } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { QUOTE_STYLE_OPTIONS, SUPPORTED_STORYLINE_LOCALES, normalizeStoryLineLocale, type QuoteStyle } from './utils/locale';
@@ -691,6 +692,13 @@ export interface SceneCardsSettings {
     // e.g. { "sven": "Sven Andersson" } — user-defined via "Link to…" in Characters view
     characterAliases: Record<string, string>;
 
+    /** Reusable custom relationship types created in the character editor. */
+    characterCustomRelationTypes: Array<{
+        type: string;
+        label: string;
+        category: CharacterRelationCategory;
+    }>;
+
     // Which character field to show as the tagline on cards ('auto' = personality → occupation → age)
     characterTaglineField: string;
 
@@ -1052,6 +1060,8 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     tagTypeOverrides: {},
 
     characterAliases: {},
+
+    characterCustomRelationTypes: [],
 
     characterTaglineField: 'auto',
 
