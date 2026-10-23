@@ -28,8 +28,8 @@
     "@typescript-eslint/parser": "^8.60.1",
     "esbuild": "^0.28.1",
     "eslint": "^9.39.4",
-    "eslint-plugin-obsidianmd": "^0.4.1",
-    "obsidian": "^1.12.3",
+    "eslint-plugin-obsidianmd": "0.1.8",
+    "obsidian": "^1.14.4",
     "tslib": "2.6.2",
     "typescript": "5.3.3"
   },
@@ -38,7 +38,7 @@
     "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",
     "lucide": "^1.52.0",
-    "markdown-it": "^14.3.2",
+    "markdown-it": "^14.3.3",
     "markdown-it-emoji": "^3.0.0",
     "markdown-it-mark": "^4.0.0",
     "pdf-lib": "^1.17.1"

@@ -683,7 +683,7 @@ export default class SceneCardsPlugin extends Plugin {
                 if (!scrivPath.toLowerCase().endsWith('.scriv')) {
                     new Notice('Please select a .scriv folder.'); return;
                 }
-                let destination: string | undefined;
+                let destination: string | null;
                 try {
                     destination = await pickScrivenerDestination(this.app);
                 } catch (err: unknown) {
