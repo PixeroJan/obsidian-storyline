@@ -792,11 +792,13 @@ export class InspectorComponent {
         scene: Scene,
     ): void {
         if (!scene.universalFields) scene.universalFields = {};
-        // 1.10.43: `universalFields` values can be string | string[] | boolean.
+        // 1.10.43: `universalFields` values can be string | string[] | boolean | number.
         // `value` is the coerced string used by text / dropdown paths; the
         // checkbox path reads `rawValue` to detect the actual boolean.
         const rawValue = scene.universalFields[tpl.id];
-        const value: string = typeof rawValue === 'string' ? rawValue : '';
+        const value: string = typeof rawValue === 'string' || typeof rawValue === 'number'
+            ? String(rawValue)
+            : '';
 
         const row = parent.createDiv('inspector-universal-field-row');
 
@@ -902,6 +904,19 @@ export class InspectorComponent {
             cb.checked = checked;
             cb.addEventListener('change', async () => {
                 scene.universalFields![tpl.id] = cb.checked;
+                await this.sceneManager.updateScene(scene.filePath, { universalFields: { ...scene.universalFields } });
+            });
+        } else if (tpl.type === 'number') {
+            const input = row.createEl('input', {
+                cls: 'inspector-universal-input',
+                type: 'number',
+                attr: { placeholder: tpl.placeholder || '', step: 'any' },
+            });
+            input.value = value;
+            input.addEventListener('input', async () => {
+                const parsed = input.value.trim() === '' ? undefined : Number(input.value);
+                if (parsed === undefined || !Number.isFinite(parsed)) delete scene.universalFields![tpl.id];
+                else scene.universalFields![tpl.id] = parsed;
                 await this.sceneManager.updateScene(scene.filePath, { universalFields: { ...scene.universalFields } });
             });
         } else {

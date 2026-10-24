@@ -1739,6 +1739,8 @@ export class SceneManager implements ISceneStore {
      */
     async handleFileRename(file: TFile, oldPath: string): Promise<void> {
         this.scenes.delete(oldPath);
+        const isFilenameSyncRename = this.isFilenameSyncTemporaryPath(file.path)
+            || this.isFilenameSyncTemporaryPath(oldPath);
         const isSnapshot = file.path.split('/').some(segment => segment === '_snapshots' || segment === '.snapshots');
         if (isSnapshot) {
             this.scenes.delete(file.path);
@@ -1761,16 +1763,23 @@ export class SceneManager implements ISceneStore {
                 this.scenes.set(file.path, scene);
                 if (!scene.corkboardNote && inSceneFolder) {
                     await this.plugin.snapshotManager?.renameSceneSnapshots(oldPath, file.path);
-                    const titleFromFile = this.getTitleFromSceneFileName(file);
-                    if (titleFromFile && titleFromFile !== scene.title) {
-                        const oldTitle = scene.title;
-                        await this.updateScene(file.path, { title: titleFromFile });
-                        if (oldTitle) await this.updateSceneTitleReferences(oldTitle, titleFromFile);
+                    if (!isFilenameSyncRename) {
+                        const titleFromFile = this.getTitleFromSceneFileName(file);
+                        if (titleFromFile && titleFromFile !== scene.title) {
+                            const oldTitle = scene.title;
+                            await this.updateScene(file.path, { title: titleFromFile });
+                            if (oldTitle) await this.updateSceneTitleReferences(oldTitle, titleFromFile);
+                        }
                     }
                 }
             }
         }
         this.bumpVersion(file.path);
+    }
+
+    private isFilenameSyncTemporaryPath(filePath: string): boolean {
+        const basename = filePath.split('/').pop() ?? '';
+        return basename.startsWith('__storyline_filename_sync_');
     }
 
     private getTitleFromSceneFileName(file: TFile): string | undefined {
