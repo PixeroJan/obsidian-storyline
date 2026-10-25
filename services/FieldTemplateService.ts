@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { App, normalizePath } from 'obsidian';
+import { getVaultMarkdownFiles } from '../utils/vault';
 
 // ═══════════════════════════════════════════════════════
 //  Universal Field Template Service
@@ -27,6 +28,8 @@ export interface UniversalFieldTemplate {
     options: string[];
     /** Optional vault folder path whose note names are used as selectable options */
     folderSource?: string;
+    /** When enabled, selected folder options are persisted as wikilinks. */
+    linkTarget?: 'folder';
     /** Placeholder / hint text */
     placeholder: string;
     /** Sort order within the section (higher = further down, default 0) */
@@ -389,6 +392,7 @@ export class FieldTemplateService {
                     type: f.type ?? 'text',
                     options: Array.isArray(f.options) ? f.options : [],
                     folderSource: f.folderSource,
+                    linkTarget: f.linkTarget === 'folder' ? 'folder' : undefined,
                     placeholder: f.placeholder ?? '',
                     order: typeof f.order === 'number' ? f.order : 0,
                     topLevelKey: typeof f.topLevelKey === 'string' && f.topLevelKey.trim() ? f.topLevelKey.trim() : undefined,
@@ -509,6 +513,73 @@ export function stripWikilinks(value: unknown): unknown {
     }
     if (typeof value === 'string') return strip(value);
     return value;
+}
+
+/** Convert a linked folder option back to the name shown by the selector. */
+export function displayFolderSourceValue(value: unknown): unknown {
+    const display = (raw: unknown): unknown => {
+        if (typeof raw !== 'string') return raw;
+        const stripped = stripWikilinks(raw);
+        if (typeof stripped !== 'string') return stripped;
+        return stripped.split('/').pop() ?? stripped;
+    };
+    if (Array.isArray(value)) return value.map(display);
+    return display(value);
+}
+
+/** Persist a folder-sourced option as a path-backed Obsidian wikilink. */
+export function serializeFolderSourceValue(
+    app: App,
+    value: unknown,
+    folderSource?: string,
+): unknown {
+    const source = normalizePath(String(folderSource || '').replace(/^\/+|\/+$/g, ''));
+    if (!source) return value;
+    const serialize = (raw: string): string => {
+        const trimmed = raw.trim();
+        if (!trimmed || /^\[\[[^\]]+\]\]$/.test(trimmed)) return trimmed;
+        const file = getVaultMarkdownFiles(app).find(candidate => {
+            const path = normalizePath(candidate.path);
+            return path.startsWith(`${source}/`) && candidate.basename === trimmed;
+        });
+        const target = file
+            ? file.path.replace(/\.md$/i, '')
+            : `${source}/${trimmed}`;
+        return `[[${target}]]`;
+    };
+    if (Array.isArray(value)) return value.map(item => typeof item === 'string' ? serialize(item) : item);
+    return typeof value === 'string' ? serialize(value) : value;
+}
+
+/** Strip persisted relation links back to option names for the editor model. */
+export function normalizeLinkedUniversalFields(
+    universalFields: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+    if (!universalFields) return universalFields;
+    const result = { ...universalFields };
+    for (const template of getActiveTemplates()) {
+        if (template.folderSource
+            && (template.type === 'dropdown' || template.type === 'multi-select')
+            && result[template.id] !== undefined) {
+            result[template.id] = displayFolderSourceValue(result[template.id]);
+        }
+    }
+    return result;
+}
+
+/** Serialize only explicitly relation-enabled universal fields. */
+export function serializeLinkedUniversalFields(
+    app: App,
+    universalFields: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+    if (!universalFields) return universalFields;
+    const result = { ...universalFields };
+    for (const template of getActiveTemplates()) {
+        if (template.linkTarget === 'folder' && result[template.id] !== undefined) {
+            result[template.id] = serializeFolderSourceValue(app, result[template.id], template.folderSource);
+        }
+    }
+    return result;
 }
 
 /**

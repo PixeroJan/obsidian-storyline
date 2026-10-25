@@ -2,6 +2,7 @@
 import { App, Modal, Notice, Setting } from 'obsidian';
 import { UniversalFieldTemplate, UniversalFieldType, generateId, suggestTopLevelKey, isReservedTopLevelKey } from '../services/FieldTemplateService';
 import { CHARACTER_CATEGORIES } from '../models/Character';
+import { pickVaultFolder } from './FolderPicker';
 
 // ═══════════════════════════════════════════════════════
 //  Add / Edit Universal Field Modal
@@ -29,6 +30,7 @@ export class AddFieldModal extends Modal {
     private placeholder = '';
     private options: string[] = [];
     private folderSource = '';
+    private linkTarget = false;
     private topLevelKey = '';
     private topLevelKeyTouched = false;
     private defaultValue = '';
@@ -64,6 +66,7 @@ export class AddFieldModal extends Modal {
             this.placeholder = existing.placeholder;
             this.options = [...existing.options];
             this.folderSource = existing.folderSource ?? '';
+            this.linkTarget = existing.linkTarget === 'folder';
             this.topLevelKey = existing.topLevelKey ?? '';
             this.topLevelKeyTouched = !!existing.topLevelKey;
             this.defaultValue = existing.defaultValue ?? '';
@@ -122,6 +125,8 @@ export class AddFieldModal extends Modal {
         // ── Type ──
         let optionsContainer: HTMLElement | null = null;
         let folderSourceContainer: HTMLElement | null = null;
+        let folderSourceInput: HTMLInputElement | null = null;
+        let refreshLinkTargetVisibility = () => {};
         new Setting(contentEl)
             .setName('Input type')
             .addDropdown(dd => {
@@ -142,6 +147,7 @@ export class AddFieldModal extends Modal {
                         const showFolderSrc = this.type === 'multi-select' || this.type === 'dropdown';
                         folderSourceContainer.setCssStyles({ display: showFolderSrc ? '' : 'none' });
                     }
+                    refreshLinkTargetVisibility();
                 });
             });
 
@@ -214,8 +220,36 @@ export class AddFieldModal extends Modal {
             .addText(text => {
                 text.setPlaceholder('E.g. World/traits')
                     .setValue(this.folderSource)
-                    .onChange(v => { this.folderSource = v.trim(); });
+                    .onChange(v => {
+                        this.folderSource = v.trim();
+                        refreshLinkTargetVisibility();
+                    });
+                folderSourceInput = text.inputEl;
+            })
+            .addButton(button => button
+                .setIcon('folder-open')
+                .setTooltip('Browse vault folders')
+                .onClick(() => {
+                    pickVaultFolder(this.app, path => {
+                        this.folderSource = path;
+                        if (folderSourceInput) folderSourceInput.value = path;
+                        refreshLinkTargetVisibility();
+                    });
+                }));
+
+        const linkTargetSetting = new Setting(contentEl)
+            .setName('Link selected entries')
+            .setDesc('Save selected folder entries as Obsidian wikilinks so backlinks can find them.')
+            .addToggle(toggle => {
+                toggle.setValue(this.linkTarget);
+                toggle.onChange(value => { this.linkTarget = value; });
             });
+        refreshLinkTargetVisibility = () => {
+            const enabled = (this.type === 'dropdown' || this.type === 'multi-select') && !!this.folderSource.trim();
+            linkTargetSetting.settingEl.style.display = enabled ? '' : 'none';
+            if (!enabled) this.linkTarget = false;
+        };
+        refreshLinkTargetVisibility();
 
         // ── Top-level YAML key (issue #71) ──
         new Setting(contentEl)
@@ -322,6 +356,7 @@ export class AddFieldModal extends Modal {
                 type: this.type,
                 options: (this.type === 'dropdown' || this.type === 'multi-select') ? cleanOptions : [],
                 folderSource: (this.type === 'multi-select' || this.type === 'dropdown') && this.folderSource ? this.folderSource : undefined,
+                linkTarget: this.linkTarget && this.folderSource && (this.type === 'dropdown' || this.type === 'multi-select') ? 'folder' : undefined,
                 placeholder: this.placeholder,
                 topLevelKey: tlk || undefined,
                 defaultValue: this.defaultValue.trim() ? this.defaultValue.trim() : undefined,

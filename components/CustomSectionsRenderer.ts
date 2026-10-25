@@ -15,7 +15,9 @@
 import { App, Menu, Modal, Notice, Setting, setIcon } from 'obsidian';
 import { attachTooltip } from './Tooltip';
 import { openConfirmModal } from './ConfirmModal';
+import { pickVaultFolder } from './FolderPicker';
 import { getVaultMarkdownFiles } from '../utils/vault';
+import { displayFolderSourceValue, serializeFolderSourceValue } from '../services/FieldTemplateService';
 
 /** Composite-key separator used to namespace fields inside custom sections. */
 export const CUSTOM_SECTION_KEY_SEP = ' :: ';
@@ -44,6 +46,8 @@ export interface CustomFieldDef {
     options?: string[];
     /** Optional vault folder path whose note names are used as selectable options. */
     folderSource?: string;
+    /** When enabled, selected folder options are persisted as wikilinks. */
+    linkTarget?: 'folder';
 }
 
 /**
@@ -76,6 +80,7 @@ export function normalizeField(entry: CustomFieldEntry): CustomFieldDef {
         placeholder: entry.placeholder,
         options: entry.options,
         folderSource: entry.folderSource,
+        linkTarget: entry.linkTarget,
     };
 }
 
@@ -505,7 +510,27 @@ function renderOneSection<T extends { custom?: Record<string, CustomFieldValue> 
             // Mirrors the universal field renderers so users get the same
             // widgets they're used to from `AddFieldModal`.
             const rawValue = draft.custom?.[key];
-            const currentValue = Array.isArray(rawValue) ? rawValue.join(', ') : (rawValue === undefined ? '' : String(rawValue));
+            const displayValue = def.folderSource
+                && (def.type === 'dropdown' || def.type === 'multi-select')
+                ? displayFolderSourceValue(rawValue)
+                : rawValue;
+            const currentValue = Array.isArray(displayValue)
+                ? displayValue.join(', ')
+                : typeof displayValue === 'string'
+                    ? displayValue
+                    : typeof displayValue === 'number' || typeof displayValue === 'boolean'
+                        ? String(displayValue)
+                        : '';
+            const storeValue = (value: CustomFieldValue): CustomFieldValue =>
+                def.linkTarget === 'folder' && def.folderSource
+                    ? serializeFolderSourceValue(
+                        app,
+                        def.type === 'multi-select' && typeof value === 'string'
+                            ? value.split(',').map(item => item.trim()).filter(Boolean)
+                            : value,
+                        def.folderSource,
+                    ) as CustomFieldValue
+                    : value;
             const placeholderHint = def.placeholder || `Value for ${fname}`;
             switch (def.type) {
                 case 'textarea': {
@@ -535,7 +560,7 @@ function renderOneSection<T extends { custom?: Record<string, CustomFieldValue> 
                     }
                     sel.addEventListener('change', () => {
                         if (!draft.custom) draft.custom = {};
-                        draft.custom[key] = sel.value;
+                        draft.custom[key] = storeValue(sel.value);
                         host.scheduleSave(draft);
                     });
                     break;
@@ -581,7 +606,7 @@ function renderOneSection<T extends { custom?: Record<string, CustomFieldValue> 
                                 if (!values.includes(m)) {
                                     values.push(m);
                                     if (!draft.custom) draft.custom = {};
-                                    draft.custom[key] = values.join(', ');
+                                    draft.custom[key] = storeValue(values.join(', '));
                                     host.scheduleSave(draft);
                                     renderPills();
                                 }
@@ -629,7 +654,7 @@ function renderOneSection<T extends { custom?: Record<string, CustomFieldValue> 
                             if (!values.includes(v)) {
                                 values.push(v);
                                 if (!draft.custom) draft.custom = {};
-                                draft.custom[key] = values.join(', ');
+                                draft.custom[key] = storeValue(values.join(', '));
                                 host.scheduleSave(draft);
                                 renderPills();
                             }
@@ -649,7 +674,7 @@ function renderOneSection<T extends { custom?: Record<string, CustomFieldValue> 
                             x.addEventListener('click', () => {
                                 values.splice(i, 1);
                                 if (!draft.custom) draft.custom = {};
-                                draft.custom[key] = values.join(', ');
+                                draft.custom[key] = storeValue(values.join(', '));
                                 host.scheduleSave(draft);
                                 renderPills();
                             });
@@ -735,6 +760,7 @@ function renderOneSection<T extends { custom?: Record<string, CustomFieldValue> 
                         placeholder: result.placeholder,
                         options: result.options,
                         folderSource: result.folderSource,
+                        linkTarget: result.linkTarget,
                     };
                     host.persistSections();
                     host.scheduleSave(draft);
@@ -853,6 +879,7 @@ function renderOneSection<T extends { custom?: Record<string, CustomFieldValue> 
                     placeholder: result.placeholder,
                     options: result.options,
                     folderSource: result.folderSource,
+                    linkTarget: result.linkTarget,
                 });
                 if (!draft.custom) draft.custom = {};
                 draft.custom[compositeKey(sec.title, trimmed)] = '';
@@ -949,7 +976,10 @@ export class AddSectionFieldModal extends Modal {
         let placeholder = this.existing?.placeholder ?? '';
         let optionsCsv = (this.existing?.options ?? []).join(', ');
         let folderSource = this.existing?.folderSource ?? '';
+        let linkTarget = this.existing?.linkTarget === 'folder';
+        let refreshLinkTargetVisibility = () => {};
         let nameInput: HTMLInputElement | null = null;
+        let folderSourceInput: HTMLInputElement | null = null;
 
         new Setting(this.contentEl)
             .setName('Field name')
@@ -999,7 +1029,10 @@ export class AddSectionFieldModal extends Modal {
         const optionsContainer = this.contentEl.createDiv();
         const refreshOptionsRow = () => {
             optionsContainer.empty();
-            if (type !== 'dropdown' && type !== 'multi-select') return;
+            if (type !== 'dropdown' && type !== 'multi-select') {
+                refreshLinkTargetVisibility();
+                return;
+            }
             new Setting(optionsContainer)
                 .setName('Options')
                 .setDesc('Comma-separated list of choices.')
@@ -1015,10 +1048,39 @@ export class AddSectionFieldModal extends Modal {
                 .addText(text => {
                     text.setPlaceholder('E.g. World/traits');
                     text.setValue(folderSource);
-                    text.onChange(v => { folderSource = v.trim(); });
-                });
+                    text.onChange(v => {
+                        folderSource = v.trim();
+                        refreshLinkTargetVisibility();
+                    });
+                    folderSourceInput = text.inputEl;
+                })
+                .addButton(button => button
+                    .setIcon('folder-open')
+                    .setTooltip('Browse vault folders')
+                    .onClick(() => {
+                        pickVaultFolder(this.app, path => {
+                            folderSource = path;
+                            if (folderSourceInput) folderSourceInput.value = path;
+                            refreshLinkTargetVisibility();
+                        });
+                    }));
+            refreshLinkTargetVisibility();
         };
         refreshOptionsRow();
+
+        const linkTargetSetting = new Setting(this.contentEl)
+            .setName('Link selected entries')
+            .setDesc('Save selected folder entries as Obsidian wikilinks so backlinks can find them.')
+            .addToggle(toggle => {
+                toggle.setValue(linkTarget);
+                toggle.onChange(value => { linkTarget = value; });
+            });
+        refreshLinkTargetVisibility = () => {
+            const enabled = (type === 'dropdown' || type === 'multi-select') && !!folderSource.trim();
+            linkTargetSetting.settingEl.style.display = enabled ? '' : 'none';
+            if (!enabled) linkTarget = false;
+        };
+        refreshLinkTargetVisibility();
 
         new Setting(this.contentEl)
             .addButton(btn => btn
@@ -1039,6 +1101,7 @@ export class AddSectionFieldModal extends Modal {
                 placeholder: placeholder.trim() || undefined,
                 options: opts && opts.length > 0 ? opts : undefined,
                 folderSource: source || undefined,
+                linkTarget: linkTarget && source ? 'folder' : undefined,
             };
         }
         this.submit = () => {

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel } from './FieldTemplateService';
+import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel, normalizeLinkedUniversalFields, serializeLinkedUniversalFields } from './FieldTemplateService';
 import { App, TFile, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { CodexCategoryDef, CodexEntry, getBuiltinCodexCategory, withLinkingSection } from '../models/Codex';
 import { coerceString } from '../utils/narrow';
@@ -322,13 +322,14 @@ export class CodexManager {
         }
 
         // Universal field template values
-        if (entry.universalFields && Object.keys(entry.universalFields).length > 0) {
-            fm.universalFields = entry.universalFields;
+        const universalFields = serializeLinkedUniversalFields(this.app, entry.universalFields);
+        if (universalFields && Object.keys(universalFields).length > 0) {
+            fm.universalFields = universalFields;
         } else {
             delete fm.universalFields;
         }
         // Issue #71 — mirror to top-level YAML keys for templates that opt in
-        mirrorUniversalFieldsToTopLevel(fm, entry.universalFields);
+        mirrorUniversalFieldsToTopLevel(fm, universalFields);
 
         const finalBody = entry.notes ?? body;
         const newContent = `---\n${stringifyYaml(fm)}---\n${finalBody ? '\n' + finalBody : ''}`;
@@ -428,10 +429,10 @@ export class CodexManager {
             modified: safeFm.modified,
             notes: body || undefined,
             custom: safeFm.custom && typeof safeFm.custom === 'object' ? safeFm.custom as Record<string, string> : undefined,
-            universalFields: hydrateUniversalFieldsFromTopLevel(
+            universalFields: normalizeLinkedUniversalFields(hydrateUniversalFieldsFromTopLevel(
                 safeFm,
                 safeFm.universalFields && typeof safeFm.universalFields === 'object' ? safeFm.universalFields as Record<string, unknown> : undefined,
-            ) as Record<string, string | string[]> | undefined,
+            )) as Record<string, string | string[]> | undefined,
             books: Array.isArray(safeFm.books) ? safeFm.books.map(String) : undefined,
             aliases: this.parseList(safeFm.aliases)?.join(', '),
         };

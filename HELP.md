@@ -1714,6 +1714,19 @@ The multi-select type is ideal for traits, themes, categories, or any field wher
 - **Free entry** — Type a custom value and press Enter to add it even if it's not in the predefined list.
 - **Storage** — Values are saved as a YAML list in frontmatter (`universalFields`), making them queryable from Obsidian Bases and Dataview.
 
+### Linked folder-source entries
+
+Folder-sourced dropdowns and multi-select fields can optionally store selected entries as Obsidian wikilinks. This is useful when a Codex entry refers to another Codex entry, such as a martial-art technique selecting its associated martial-art style.
+
+1. Open the existing Add/Edit Field modal for a universal field or custom-section field.
+2. Choose **Dropdown** or **Multi-select (tags)**.
+3. Enter a **Folder source (optional)** path containing the target `.md` entries.
+4. Enable **Link selected entries**.
+
+The folder source can be entered manually or selected with the folder-open browse button. The picker lists the vault's folders and supports search. The **Link selected entries** setting is shown only when the field type is `dropdown` or `multi-select` and a folder source is present. Selected values are saved as path-backed wikilinks, so Obsidian can open the target and show native backlinks. The setting is opt-in; existing folder-source fields continue storing ordinary values until enabled.
+
+Existing plain-name values remain readable. If linked mode is later disabled, existing links are displayed as normal option names and are written back as plain values on the next save. Multi-select values are stored as separate wikilinks rather than one comma-containing link.
+
 Custom field data is stored in the entity's frontmatter under the `universalFields` key. For scenes, custom fields appear in the Inspector between the intensity slider and setup/payoff sections.
 
 Custom sections on Characters, Locations, and Codex entries use the same basic field types. Fields inside those user-created sections can be edited in place, reordered with the chevrons, moved to another custom section with the move icon, and configured with a folder source for dropdown or multi-select choices.
