@@ -11336,6 +11336,44 @@ body /* ── Plain-text mode: hide link/tag decorations ───────�
     color: var(--text-normal);
 }
 
+.codex-references-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.codex-references-header h3 {
+    margin-bottom: 0;
+}
+
+.reference-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.reference-item .reference-link {
+    flex: 1;
+}
+
+.codex-reference-add-btn,
+.codex-reference-remove-btn {
+    flex: 0 0 auto;
+}
+
+.codex-references-empty {
+    margin: 8px 0 0;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.codex-relation-modal-select {
+    display: block;
+    width: 100%;
+    margin: 8px 0;
+}
+
 .reference-group h4 {
     margin: 8px 0 4px;
     font-size: 0.85em;

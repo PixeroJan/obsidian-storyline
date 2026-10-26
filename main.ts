@@ -185,7 +185,7 @@ export default class SceneCardsPlugin extends Plugin {
                 ?? 'en',
         );
         this.viewSnapshotService = new ViewSnapshotService(this);
-        this.linkScanner = new LinkScanner(this.characterManager, this.locationManager);
+        this.linkScanner = new LinkScanner(this.app, this.characterManager, this.locationManager);
         this.linkScanner.setCodexManager(this.codexManager);
         this.linkScanner.setSceneProvider(() => this.sceneManager.getAllScenes());
         this.cascadeRename = new CascadeRenameService(this.app, this.sceneManager, this.characterManager, this.locationManager);
@@ -851,6 +851,23 @@ export default class SceneCardsPlugin extends Plugin {
                 });
             })
         );
+
+        // Opt-in: plain left-click on a StoryLine entity in the file explorer
+        // opens its StoryLine view. Modified clicks keep Obsidian's behaviour.
+        this.registerDomEvent(activeDocument, 'click', (evt: MouseEvent) => {
+            if (!this.settings.openEntitiesInStoryLineView) return;
+            if (evt.button !== 0 || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.altKey) return;
+            const target = evt.target as HTMLElement | null;
+            const titleEl = target?.closest?.('.nav-file-title');
+            const path = titleEl?.getAttribute('data-path');
+            if (!titleEl || !path || !titleEl.closest('.workspace-leaf-content[data-type="file-explorer"]')) return;
+            const file = this.app.vault.getAbstractFileByPath(path);
+            if (!(file instanceof TFile) || file.extension !== 'md') return;
+            if (!this.sceneManager.getProjectForFile(file.path) && !this.resolveEntityType(file.path)) return;
+            evt.preventDefault();
+            evt.stopPropagation();
+            void this.showEntityDetails(file.path);
+        }, true);
 
         // Issue #195 — add "Find & replace in manuscript" to the editor
         // right-click menu when the active view is the Manuscript view, so
@@ -2101,13 +2118,20 @@ export default class SceneCardsPlugin extends Plugin {
         if (p.startsWith(locFolder + '/') || p === locFolder) return 'location';
         const codexFolder = normalizePath(this.sceneManager.getCodexFolder());
         if (p.startsWith(codexFolder + '/') || p === codexFolder) return 'codex';
+        if (this.characterManager.getCharacter(p)) return 'character';
+        if (this.locationManager.getItem(p)) return 'location';
+        if (this.codexManager.getEntry(p)) return 'codex';
         return null;
     }
 
     /**
      * Open the appropriate StoryLine view and navigate to the entity's detail panel.
      */
-    private async showEntityDetails(filePath: string): Promise<void> {
+    async showEntityDetails(filePath: string): Promise<void> {
+        const project = this.sceneManager.getProjectForFile(filePath);
+        if (project && project.filePath !== this.sceneManager.activeProject?.filePath) {
+            await this.sceneManager.setActiveProject(project);
+        }
         const kind = this.resolveEntityType(filePath);
         switch (kind) {
             case 'character': {

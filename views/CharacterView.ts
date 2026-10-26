@@ -19,6 +19,7 @@ import {
 import type { UniversalFieldTemplate } from '../services/FieldTemplateService';
 import { formatActChapterPrefix } from '../utils/actChapter';
 import { coerceString } from '../utils/narrow';
+import { getVaultMarkdownFiles } from '../utils/vault';
 
 import type SceneCardsPlugin from '../main';
 
@@ -1814,9 +1815,25 @@ export class CharacterView extends ItemView {
                 pillsEl.empty();
                 for (const item of selected) {
                     const pill = pillsEl.createSpan({ cls: 'universal-multi-pill' });
-                    pill.createSpan({ text: item });
+                    const linkedFile = tpl.linkTarget === 'folder' && tpl.folderSource
+                        ? getVaultMarkdownFiles(this.app).find(file =>
+                            file.path.startsWith(`${tpl.folderSource!.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')}/`)
+                            && file.basename === item,
+                        )
+                        : undefined;
+                    if (linkedFile) {
+                        const link = pill.createEl('a', { text: item, cls: 'universal-multi-pill-link' });
+                        link.addEventListener('click', event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void this.plugin.showEntityDetails(linkedFile.path);
+                        });
+                    } else {
+                        pill.createSpan({ text: item });
+                    }
                     const x = pill.createSpan({ cls: 'universal-multi-pill-x', text: '\u00d7' });
-                    x.addEventListener('click', () => {
+                    x.addEventListener('click', (event) => {
+                        event.stopPropagation();
                         const idx = selected.indexOf(item);
                         if (idx >= 0) selected.splice(idx, 1);
                         draft.universalFields![tpl.id] = [...selected];

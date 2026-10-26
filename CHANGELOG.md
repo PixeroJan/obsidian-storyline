@@ -6,6 +6,16 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.11.4
+
+### Bug Fixes
+
+- **Project-aware entity opening** *([#323](https://github.com/PixeroJan/obsidian-storyline/issues/323))*  Opening a Character, Location, or Codex file now resolves and activates the project that owns the file, including shared series Codex folders.
+
+### Improvements
+
+- **Codex linked-folder relationships** *([#322](https://github.com/PixeroJan/obsidian-storyline/issues/322))*  Linked universal and custom-section fields now expose incoming Codex relationships through the derived **Referenced By** panel, with add/remove controls that keep the source wikilink as the only stored relationship.
+
 ## Version 1.11.3
 
 ### Bug Fixes

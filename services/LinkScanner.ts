@@ -9,6 +9,7 @@
  * or wrap every name in [[wikilinks]].
  */
 
+import { App, normalizePath } from 'obsidian';
 import { CharacterManager } from './CharacterManager';
 import { LocationManager } from './LocationManager';
 import { CodexManager } from './CodexManager';
@@ -51,6 +52,7 @@ export interface EntityReference {
  * then classifies them.
  */
 export class LinkScanner {
+    private app: App;
     /** Cache keyed by scene filePath → scan result */
     private cache: Map<string, LinkScanResult> = new Map();
     /** Cache keyed by scene filePath → the Scene object itself, so
@@ -103,7 +105,8 @@ export class LinkScanner {
     /** Last-used manual aliases (stored so internal calls can reuse them) */
     private lastManualAliases?: Record<string, string>;
 
-    constructor(characterManager: CharacterManager, locationManager: LocationManager) {
+    constructor(app: App, characterManager: CharacterManager, locationManager: LocationManager) {
+        this.app = app;
         this.characterManager = characterManager;
         this.locationManager = locationManager;
     }
@@ -734,7 +737,8 @@ export class LinkScanner {
 
         // Scan codex entries
         if (this.codexManager) {
-            for (const entry of this.codexManager.getAllEntries()) {
+            const codexEntries = this.codexManager.getAllEntries();
+            for (const entry of codexEntries) {
                 const textParts: string[] = [];
                 // Gather all string values from the entry
                 for (const [key, val] of Object.entries(entry)) {
@@ -747,6 +751,28 @@ export class LinkScanner {
                 if (entry.notes) textParts.push(entry.notes);
                 const codexCat = entry.type || undefined;
                 addRefs(entry.name, 'codex', entry.filePath, textParts.join('\n'), codexCat);
+            }
+
+            const codexByPath = new Map(
+                codexEntries.map(entry => [normalizePath(entry.filePath), entry]),
+            );
+            for (const source of codexEntries) {
+                const outgoing = this.app.metadataCache.resolvedLinks[normalizePath(source.filePath)] ?? {};
+                for (const targetPath of Object.keys(outgoing)) {
+                    const target = codexByPath.get(normalizePath(targetPath));
+                    if (!target || target.filePath === source.filePath) continue;
+                    const key = target.name.toLowerCase();
+                    if (!index.has(key)) index.set(key, []);
+                    const refs = index.get(key)!;
+                    if (!refs.some(ref => ref.filePath === source.filePath)) {
+                        refs.push({
+                            name: source.name,
+                            type: 'codex',
+                            filePath: source.filePath,
+                            codexCategory: source.type,
+                        });
+                    }
+                }
             }
         }
 

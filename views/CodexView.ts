@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { App, ItemView, WorkspaceLeaf, Modal, Setting, Notice } from 'obsidian';
+import { App, ItemView, WorkspaceLeaf, Modal, Setting, Notice, normalizePath } from 'obsidian';
 import * as obsidian from 'obsidian';
 import type SceneCardsPlugin from '../main';
 import type { CodexVisualGroup } from '../settings';
@@ -18,12 +18,27 @@ import { attachCodexVisualGroupReorder } from '../components/CodexVisualGroupMan
 import { openConfirmModal } from '../components/ConfirmModal';
 import {
     CUSTOM_SECTION_KEY_SEP,
+    normalizeField,
     renderCustomSectionsAtSlot,
     renderAddCustomSectionButton,
     type CustomSectionsHost,
     type CustomSection,
 } from '../components/CustomSectionsRenderer';
 import type { UniversalFieldTemplate } from '../services/FieldTemplateService';
+import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel } from '../services/FieldTemplateService';
+
+interface CodexRelationField {
+    label: string;
+    kind: 'universal' | 'custom';
+    key: string;
+    type: 'dropdown' | 'multi-select';
+    folderSource: string;
+}
+
+interface CodexRelationCandidate {
+    entry: CodexEntry;
+    fields: CodexRelationField[];
+}
 
 /**
  * Codex View — central hub for all codex categories.
@@ -782,7 +797,7 @@ export class CodexView extends ItemView {
         // Side panel — gallery + notes + references
         this.renderGallerySection(sidePanel, draft);
         this.renderNotesSection(sidePanel, draft);
-        this.renderReferencesPanel(sidePanel, entry.name);
+        this.renderReferencesPanel(sidePanel, entry);
 
         // Show stale-entry warning if codex content changed since last review
         void this.renderStaleWarning(sidePanel, entry);
@@ -1957,13 +1972,27 @@ export class CodexView extends ItemView {
         modal.open();
     }
 
-    private renderReferencesPanel(container: HTMLElement, entityName: string): void {
+    private renderReferencesPanel(container: HTMLElement, entry: CodexEntry): void {
         const index = this.plugin.linkScanner.buildEntityIndex();
-        const refs = index.get(entityName.toLowerCase());
-        if (!refs || refs.length === 0) return;
-
+        const refs = index.get(entry.name.toLowerCase()) ?? [];
         const section = container.createDiv('codex-references-panel');
-        section.createEl('h3', { text: 'Referenced by' });
+        const header = section.createDiv('codex-references-header');
+        header.createEl('h3', { text: 'Referenced by' });
+
+        const addBtn = header.createEl('button', {
+            cls: 'codex-reference-add-btn clickable-icon',
+            attr: { 'aria-label': 'Add linked Codex entry', title: 'Add linked Codex entry' },
+        });
+        obsidian.setIcon(addBtn, 'link-2');
+        addBtn.addEventListener('click', () => this.openAddCodexRelationModal(entry));
+
+        if (refs.length === 0) {
+            section.createEl('p', {
+                cls: 'codex-references-empty',
+                text: 'No linked entries yet.',
+            });
+            return;
+        }
 
         const groups: Record<string, typeof refs> = {};
         for (const ref of refs) {
@@ -1979,14 +2008,245 @@ export class CodexView extends ItemView {
             groupEl.createEl('h4', { text: groupLabel.charAt(0).toUpperCase() + groupLabel.slice(1) });
             const list = groupEl.createEl('ul', { cls: 'reference-list' });
             for (const ref of groupRefs) {
-                const li = list.createEl('li');
+                const li = list.createEl('li', { cls: 'reference-item' });
                 const link = li.createEl('a', { text: ref.name, cls: 'reference-link' });
                 link.addEventListener('click', (e) => {
                     e.preventDefault();
-                    this.app.workspace.openLinkText(ref.filePath, '', false);
+                    if (ref.type === 'scene') {
+                        this.app.workspace.openLinkText(ref.filePath, '', false);
+                    } else {
+                        void this.plugin.showEntityDetails(ref.filePath);
+                    }
+                });
+                if (ref.type === 'codex') {
+                    const removeBtn = li.createEl('button', {
+                        cls: 'codex-reference-remove-btn clickable-icon',
+                        attr: { 'aria-label': `Remove link from ${ref.name}`, title: 'Remove relationship' },
+                    });
+                    obsidian.setIcon(removeBtn, 'unlink');
+                    removeBtn.addEventListener('click', () => {
+                        void this.removeCodexRelation(ref.filePath, entry.filePath);
+                    });
+                }
+            }
+        }
+    }
+
+    private relationFolderContains(folderSource: string, filePath: string): boolean {
+        const folder = normalizePath(folderSource).replace(/^\/+|\/+$/g, '');
+        const file = normalizePath(filePath);
+        return folder.length > 0 && file.startsWith(`${folder}/`)
+            && file.slice(folder.length + 1).indexOf('/') < 0;
+    }
+
+    private getCodexRelationFields(entry: CodexEntry, targetPath: string): CodexRelationField[] {
+        const fields: CodexRelationField[] = [];
+        for (const template of this.plugin.fieldTemplates.getAll()) {
+            if (template.category !== entry.type
+                || template.linkTarget !== 'folder'
+                || !template.folderSource
+                || (template.type !== 'dropdown' && template.type !== 'multi-select')
+                || !this.relationFolderContains(template.folderSource, targetPath)) continue;
+            fields.push({
+                label: template.label,
+                kind: 'universal',
+                key: template.id,
+                type: template.type,
+                folderSource: template.folderSource,
+            });
+        }
+
+        const sections = this.plugin.settings.codexCategoryCustomSections?.[entry.type] ?? [];
+        for (const section of sections) {
+            for (const field of section.fields) {
+                const definition = normalizeField(field);
+                if (definition.linkTarget !== 'folder'
+                    || !definition.folderSource
+                    || (definition.type !== 'dropdown' && definition.type !== 'multi-select')
+                    || !this.relationFolderContains(definition.folderSource, targetPath)) continue;
+                fields.push({
+                    label: `${section.title}: ${definition.name}`,
+                    kind: 'custom',
+                    key: `${section.title}${CUSTOM_SECTION_KEY_SEP}${definition.name}`,
+                    type: definition.type,
+                    folderSource: definition.folderSource,
                 });
             }
         }
+        return fields;
+    }
+
+    private relationTargetName(targetPath: string): string {
+        return normalizePath(targetPath).split('/').pop()?.replace(/\.md$/i, '') ?? targetPath;
+    }
+
+    private relationValueMatchesTarget(value: unknown, targetPath: string, sourcePath: string): boolean {
+        if (typeof value !== 'string') return false;
+        const trimmed = value.trim();
+        if (!trimmed) return false;
+        if (!trimmed.startsWith('[[') || !trimmed.endsWith(']]')) {
+            return trimmed === this.relationTargetName(targetPath);
+        }
+        const linkText = trimmed.slice(2, -2).split('|')[0].split('#')[0].trim();
+        const resolved = this.app.metadataCache.getFirstLinkpathDest(linkText, sourcePath);
+        return normalizePath(resolved?.path ?? `${linkText}.md`) === normalizePath(targetPath);
+    }
+
+    private updateRelationValue(
+        value: unknown,
+        field: CodexRelationField,
+        targetPath: string,
+        sourcePath: string,
+        add: boolean,
+    ): { changed: boolean; value: unknown } {
+        const targetLink = `[[${normalizePath(targetPath).replace(/\.md$/i, '')}]]`;
+        const values = Array.isArray(value)
+            ? value.map(item => String(item))
+            : typeof value === 'string' && value.trim()
+                ? [value]
+                : [];
+        if (field.type === 'multi-select') {
+            if (add) {
+                if (values.some(item => this.relationValueMatchesTarget(item, targetPath, sourcePath))) {
+                    return { changed: false, value };
+                }
+                return { changed: true, value: [...values, targetLink] };
+            }
+            const remaining = values.filter(item => !this.relationValueMatchesTarget(item, targetPath, sourcePath));
+            return { changed: remaining.length !== values.length, value: remaining };
+        }
+        if (add) {
+            if (values.length === 1 && this.relationValueMatchesTarget(values[0], targetPath, sourcePath)) {
+                return { changed: false, value };
+            }
+            return { changed: true, value: targetLink };
+        }
+        if (values.length === 1 && this.relationValueMatchesTarget(values[0], targetPath, sourcePath)) {
+            return { changed: true, value: undefined };
+        }
+        return { changed: false, value };
+    }
+
+    private async updateCodexRelation(
+        sourcePath: string,
+        targetPath: string,
+        field: CodexRelationField,
+        add: boolean,
+    ): Promise<boolean> {
+        const source = this.codexManager.getEntry(sourcePath);
+        const file = this.app.vault.getAbstractFileByPath(normalizePath(sourcePath));
+        if (!source || !(file instanceof obsidian.TFile)) return false;
+
+        let changed = false;
+        await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+            if (field.kind === 'universal') {
+                const rawUniversal = fm.universalFields && typeof fm.universalFields === 'object'
+                    ? { ...(fm.universalFields as Record<string, unknown>) }
+                    : {};
+                const universal = hydrateUniversalFieldsFromTopLevel(fm, rawUniversal) ?? {};
+                const result = this.updateRelationValue(universal[field.key], field, targetPath, sourcePath, add);
+                if (!result.changed) return;
+                changed = true;
+                if (result.value === undefined || (Array.isArray(result.value) && result.value.length === 0)) {
+                    delete universal[field.key];
+                } else {
+                    universal[field.key] = result.value;
+                }
+                if (!add) {
+                    const template = this.plugin.fieldTemplates.getAll().find(item => item.id === field.key);
+                    if (template?.topLevelKey) delete fm[template.topLevelKey];
+                }
+                if (Object.keys(universal).length > 0) fm.universalFields = universal;
+                else delete fm.universalFields;
+                mirrorUniversalFieldsToTopLevel(fm, universal);
+                return;
+            }
+
+            const custom = fm.custom && typeof fm.custom === 'object'
+                ? { ...(fm.custom as Record<string, unknown>) }
+                : {};
+            const result = this.updateRelationValue(custom[field.key], field, targetPath, sourcePath, add);
+            if (!result.changed) return;
+            changed = true;
+            if (result.value === undefined || (Array.isArray(result.value) && result.value.length === 0)) {
+                delete custom[field.key];
+            } else {
+                custom[field.key] = result.value;
+            }
+            if (Object.keys(custom).length > 0) fm.custom = custom;
+            else delete fm.custom;
+        });
+        return changed;
+    }
+
+    private async removeCodexRelation(sourcePath: string, targetPath: string): Promise<void> {
+        const source = this.codexManager.getEntry(sourcePath);
+        if (!source) return;
+        const fields = this.getCodexRelationFields(source, targetPath);
+        let changed = false;
+        for (const field of fields) {
+            changed = await this.updateCodexRelation(sourcePath, targetPath, field, false) || changed;
+        }
+        if (!changed) return;
+        await this.plugin.reloadEntities();
+        if (this.rootContainer) this.renderView(this.rootContainer);
+    }
+
+    private openAddCodexRelationModal(target: CodexEntry): void {
+        const candidates: CodexRelationCandidate[] = this.codexManager.getAllEntries()
+            .filter(entry => entry.filePath !== target.filePath)
+            .map(entry => ({ entry, fields: this.getCodexRelationFields(entry, target.filePath) }))
+            .filter(candidate => candidate.fields.length > 0);
+        if (candidates.length === 0) {
+            new Notice('No linked Codex fields can target this entry.');
+            return;
+        }
+
+        const modal = new Modal(this.app);
+        modal.titleEl.setText('Add linked Codex entry');
+        modal.contentEl.createEl('p', {
+            cls: 'setting-item-description',
+            text: `Choose an entry and field that should link to "${target.name}".`,
+        });
+        const sourceSelect = modal.contentEl.createEl('select', { cls: 'codex-relation-modal-select' });
+        for (const candidate of candidates) {
+            sourceSelect.createEl('option', {
+                text: `${candidate.entry.name} (${candidate.entry.type})`,
+                value: candidate.entry.filePath,
+            });
+        }
+        const fieldSelect = modal.contentEl.createEl('select', { cls: 'codex-relation-modal-select' });
+        const renderFields = () => {
+            fieldSelect.empty();
+            const candidate = candidates.find(item => item.entry.filePath === sourceSelect.value);
+            for (const field of candidate?.fields ?? []) {
+                fieldSelect.createEl('option', {
+                    text: `${field.label} (${field.type})`,
+                    value: `${field.kind}:${field.key}`,
+                });
+            }
+        };
+        sourceSelect.addEventListener('change', renderFields);
+        renderFields();
+        new Setting(modal.contentEl)
+            .addButton(button => button
+                .setButtonText('Add link')
+                .setCta()
+                .onClick(async () => {
+                    const candidate = candidates.find(item => item.entry.filePath === sourceSelect.value);
+                    const field = candidate?.fields.find(item => `${item.kind}:${item.key}` === fieldSelect.value);
+                    if (!candidate || !field) return;
+                    const changed = await this.updateCodexRelation(candidate.entry.filePath, target.filePath, field, true);
+                    if (!changed) {
+                        new Notice('That relationship already exists.');
+                        return;
+                    }
+                    modal.close();
+                    await this.plugin.reloadEntities();
+                    if (this.rootContainer) this.renderView(this.rootContainer);
+                }))
+            .addButton(button => button.setButtonText('Cancel').onClick(() => modal.close()));
+        modal.open();
     }
 
     // ── Stale codex entry warning ──────────────────────

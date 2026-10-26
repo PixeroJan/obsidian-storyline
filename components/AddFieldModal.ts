@@ -215,8 +215,8 @@ export class AddFieldModal extends Modal {
         folderSourceContainer = contentEl.createDiv('storyline-field-folder-source-container');
         if (this.type !== 'multi-select' && this.type !== 'dropdown') folderSourceContainer.setCssStyles({ display: 'none' });
         new Setting(folderSourceContainer)
-            .setName('Folder source (optional)')
-            .setDesc('Vault folder path whose note names become selectable options (e.g. Traits/)')
+            .setName('Selectable notes folder (optional)')
+            .setDesc('Vault folder whose Markdown notes become selectable entries (e.g. Codex/Items/)')
             .addText(text => {
                 text.setPlaceholder('E.g. World/traits')
                     .setValue(this.folderSource)
@@ -238,8 +238,8 @@ export class AddFieldModal extends Modal {
                 }));
 
         const linkTargetSetting = new Setting(contentEl)
-            .setName('Link selected entries')
-            .setDesc('Save selected folder entries as Obsidian wikilinks so backlinks can find them.')
+            .setName('Link selected notes')
+            .setDesc('Save each selected note as an Obsidian wikilink. The folder only supplies the choices; the link points to the note.')
             .addToggle(toggle => {
                 toggle.setValue(this.linkTarget);
                 toggle.onChange(value => { this.linkTarget = value; });

@@ -137,6 +137,43 @@ export class SceneManager implements ISceneStore {
         return Array.from(this.projects.values());
     }
 
+    /**
+     * Find the project that owns an entity file path.
+     *
+     * A series-level Codex folder can belong to several projects, so the
+     * active project wins when it is one of the matching projects.
+     */
+    getProjectForFile(filePath: string): StoryLineProject | null {
+        const normalizedPath = normalizePath(filePath);
+        const matches = this.getProjects()
+            .map(project => {
+                const folders = [
+                    project.characterFolder,
+                    project.locationFolder,
+                    project.codexFolder,
+                ];
+                if (project.seriesId || project.seriesUuid) {
+                    const baseFolder = deriveProjectFoldersFromFilePath(project.filePath).baseFolder;
+                    const parentFolder = baseFolder.substring(0, baseFolder.lastIndexOf('/'));
+                    folders.push(`${parentFolder}/Codex`);
+                }
+                const matchingFolder = folders
+                    .map(folder => normalizePath(folder))
+                    .filter(folder => this.isWithinFolder(normalizedPath, folder))
+                    .sort((a, b) => b.length - a.length)[0];
+                return matchingFolder ? { project, specificity: matchingFolder.length } : null;
+            })
+            .filter((match): match is { project: StoryLineProject; specificity: number } => match !== null)
+            .sort((a, b) => b.specificity - a.specificity || a.project.filePath.localeCompare(b.project.filePath));
+
+        const activePath = this._activeProject?.filePath;
+        if (activePath) {
+            const activeMatch = matches.find(match => match.project.filePath === activePath);
+            if (activeMatch) return activeMatch.project;
+        }
+        return matches[0]?.project ?? null;
+    }
+
     /** Get the currently active project (may be null) */
     get activeProject(): StoryLineProject | null {
         return this._activeProject;

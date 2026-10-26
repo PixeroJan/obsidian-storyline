@@ -1043,8 +1043,8 @@ export class AddSectionFieldModal extends Modal {
                     ta.inputEl.rows = 2;
                 });
             new Setting(optionsContainer)
-                .setName('Folder source (optional)')
-                .setDesc('Vault folder path whose note names become selectable options.')
+                .setName('Selectable notes folder (optional)')
+                .setDesc('Vault folder whose Markdown notes become selectable entries.')
                 .addText(text => {
                     text.setPlaceholder('E.g. World/traits');
                     text.setValue(folderSource);
@@ -1069,8 +1069,8 @@ export class AddSectionFieldModal extends Modal {
         refreshOptionsRow();
 
         const linkTargetSetting = new Setting(this.contentEl)
-            .setName('Link selected entries')
-            .setDesc('Save selected folder entries as Obsidian wikilinks so backlinks can find them.')
+            .setName('Link selected notes')
+            .setDesc('Save each selected note as an Obsidian wikilink. The folder only supplies the choices; the link points to the note.')
             .addToggle(toggle => {
                 toggle.setValue(linkTarget);
                 toggle.onChange(value => { linkTarget = value; });

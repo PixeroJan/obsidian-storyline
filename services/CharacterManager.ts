@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { Character, CharacterRelation, CharacterRelationCategory, CHARACTER_FIELD_KEYS, LEGACY_RELATION_FIELDS_TO_CLEAN, normalizeCharacterRelations, normalizeRelationHistory, normalizeRoleEntries } from '../models/Character';
-import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel } from './FieldTemplateService';
+import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel, normalizeLinkedUniversalFields, serializeLinkedUniversalFields } from './FieldTemplateService';
 import { App, TFile, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { coerceString } from '../utils/narrow';
 import { MetadataParser, toWikilink } from './MetadataParser';
@@ -266,13 +266,14 @@ export class CharacterManager {
         }
 
         // Universal fields (values from field-templates)
-        if (character.universalFields && Object.keys(character.universalFields).length > 0) {
-            fm.universalFields = character.universalFields;
+        const universalFields = serializeLinkedUniversalFields(this.app, character.universalFields);
+        if (universalFields && Object.keys(universalFields).length > 0) {
+            fm.universalFields = universalFields;
         } else {
             delete fm.universalFields;
         }
         // Issue #71 — mirror to top-level YAML keys for templates that opt in
-        mirrorUniversalFieldsToTopLevel(fm, character.universalFields);
+        mirrorUniversalFieldsToTopLevel(fm, universalFields);
 
         // Write notes to body
         const finalBody = character.notes ?? body;
@@ -413,12 +414,12 @@ export class CharacterManager {
             custom: safeFm.custom && typeof safeFm.custom === 'object'
                 ? (safeFm.custom as Record<string, string>)
                 : undefined,
-            universalFields: hydrateUniversalFieldsFromTopLevel(
+            universalFields: normalizeLinkedUniversalFields(hydrateUniversalFieldsFromTopLevel(
                 safeFm,
                 safeFm.universalFields && typeof safeFm.universalFields === 'object'
                     ? (safeFm.universalFields as Record<string, string | string[]>)
                     : undefined,
-            ) as Record<string, string | string[]> | undefined,
+            )) as Record<string, string | string[]> | undefined,
             created: safeFm.created,
             modified: safeFm.modified,
             notes: body || undefined,
