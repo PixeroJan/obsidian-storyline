@@ -4,6 +4,7 @@ import { SceneManager } from '../services/SceneManager';
 import { SceneCardComponent } from '../components/SceneCard';
 import { InspectorComponent } from '../components/Inspector';
 import { QuickAddModal } from '../components/QuickAddModal';
+import { openStructureLabelModal } from '../components/StructureLabelModal';
 import { ShiftDatesModal } from '../components/ShiftDatesModal';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { enableDragToPan } from '../components/DragToPan';
@@ -15,7 +16,7 @@ import { attachTooltip } from '../components/Tooltip';
 import { ButtonComponent, DropdownComponent, ItemView, Menu, Modal, Notice, Setting, TFile, TextComponent, WorkspaceLeaf } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { BUILTIN_BEAT_SHEETS, Scene, SceneStatus, TIMELINE_MODES, TIMELINE_MODE_ICONS, TIMELINE_MODE_LABELS, TimelineMode, formatSceneLength, getStatusOrder, resolveStatusCfg } from '../models/Scene';
-import { getActDisplayLabel } from '../utils/actChapter';
+import { getActDisplayLabel, getChapterDisplayLabel } from '../utils/actChapter';
 import { parseSceneLocations } from '../services/MetadataParser';
 
 /**
@@ -457,11 +458,13 @@ export class TimelineView extends ItemView {
         // blocking the main thread with 1500+ DOM nodes in a single frame.
         type TLItem =
             | { kind: 'divider'; actLabel: string; actNum: number | undefined }
+            | { kind: 'chapter-divider'; label: string; chapterLabel?: string; chapterNum?: number }
             | { kind: 'scene'; scene: Scene; globalIdx: number; dateInvalid: boolean; timeInvalid: boolean }
             | { kind: 'empty-act'; actLabel: string; actNum: number };
 
         const tlItems: TLItem[] = [];
         let lastRenderedAct: number | undefined = undefined;
+        let lastRenderedChapter: number | string | undefined;
         for (let globalIdx = 0; globalIdx < scenes.length; globalIdx++) {
             const scene = scenes[globalIdx];
             const currentAct = scene.act !== undefined ? Number(scene.act) : undefined;
@@ -474,7 +477,22 @@ export class TimelineView extends ItemView {
                     : 'No Act';
                 tlItems.push({ kind: 'divider', actLabel, actNum: currentAct });
                 lastRenderedAct = currentAct;
+                lastRenderedChapter = undefined;
             }
+            if (scene.chapter !== undefined && String(scene.chapter) !== String(lastRenderedChapter)) {
+                const chapterNum = Number(scene.chapter);
+                const chapterLabel = Number.isFinite(chapterNum) ? this.sceneManager.getChapterLabel(chapterNum) : undefined;
+                const chapterDisplayLabel = getChapterDisplayLabel(scene.chapter, chapterLabel);
+                tlItems.push({
+                    kind: 'chapter-divider',
+                    label: `CHAPTER ${scene.chapter}`,
+                    chapterLabel: chapterLabel
+                        ? chapterDisplayLabel.slice(`Chapter ${scene.chapter}: `.length)
+                        : undefined,
+                    chapterNum: Number.isFinite(chapterNum) ? chapterNum : undefined,
+                });
+            }
+            lastRenderedChapter = scene.chapter;
             tlItems.push({ kind: 'scene', scene, globalIdx, dateInvalid: dateInvalidFlags[globalIdx], timeInvalid: timeInvalidFlags[globalIdx] });
         }
 
@@ -503,6 +521,32 @@ export class TimelineView extends ItemView {
                     addInAct.addEventListener('click', (e) => {
                         e.stopPropagation();
                         this.openQuickAdd(actForClosure);
+                    });
+                }
+            } else if (item.kind === 'chapter-divider') {
+                const divider = track.createDiv('timeline-chapter-divider');
+                divider.createSpan({ cls: 'timeline-chapter-label', text: item.label });
+                if (item.chapterLabel) {
+                    divider.createSpan({ cls: 'timeline-chapter-subtitle', text: `· ${item.chapterLabel}` });
+                }
+                if (item.chapterNum !== undefined) {
+                    divider.addEventListener('contextmenu', event => {
+                        event.preventDefault();
+                        const menu = new Menu();
+                        menu.addItem(menuItem => menuItem
+                            .setTitle('Rename chapter')
+                            .setIcon('pencil')
+                            .onClick(() => openStructureLabelModal(
+                                this.app,
+                                'Chapter',
+                                item.chapterNum!,
+                                this.sceneManager.getChapterLabel(item.chapterNum!) || '',
+                                async label => {
+                                    await this.sceneManager.setChapterLabel(item.chapterNum!, label);
+                                    this.refresh();
+                                },
+                            )));
+                        menu.showAtMouseEvent(event);
                     });
                 }
             } else if (item.kind === 'scene') {

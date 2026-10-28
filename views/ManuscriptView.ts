@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unused-vars -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { ItemView, WorkspaceLeaf, WorkspaceSplit, MarkdownRenderer, TFile, setIcon, Notice } from 'obsidian';
+import { ItemView, WorkspaceLeaf, WorkspaceSplit, MarkdownRenderer, TFile, setIcon, Notice, Menu } from 'obsidian';
 import { EditorView, Decoration } from '@codemirror/view';
 import { RangeSetBuilder, StateEffect, Compartment, EditorSelection } from '@codemirror/state';
 import { syntaxTree } from '@codemirror/language';
@@ -12,6 +12,8 @@ import { buildFormattingToolbar } from '../components/FormattingToolbar';
 import { compareActChapter, getActDisplayLabel } from '../utils/actChapter';
 import SceneCardsPlugin from '../main';
 import { MANUSCRIPT_VIEW_TYPE } from '../constants';
+import { openStructureLabelModal } from '../components/StructureLabelModal';
+import { getChapterDisplayLabel } from '../utils/actChapter';
 
 /**
  * Discussion #183 — module-level cursor/scroll snapshot.
@@ -476,11 +478,32 @@ export class ManuscriptView extends ItemView {
                 lastChapter = scene.chapter;
                 if (prevBlock) prevBlock.classList.add('is-before-divider');
                 const chapDiv = this.scrollArea.createDiv('sl-manuscript-chapter-divider');
-                const chapLabel = this.sceneManager.getChapterLabel(Number(scene.chapter));
+                const chapterNum = Number(scene.chapter);
+                const chapLabel = Number.isFinite(chapterNum) ? this.sceneManager.getChapterLabel(chapterNum) : undefined;
                 chapDiv.createSpan({
                     cls: 'sl-manuscript-chapter-label',
-                    text: chapLabel ? `Chapter ${scene.chapter}: ${chapLabel}` : `Chapter ${scene.chapter}`,
+                    text: getChapterDisplayLabel(scene.chapter, chapLabel),
                 });
+                if (Number.isFinite(chapterNum)) {
+                    chapDiv.addEventListener('contextmenu', event => {
+                        event.preventDefault();
+                        const menu = new Menu();
+                        menu.addItem(item => item
+                            .setTitle('Rename chapter')
+                            .setIcon('pencil')
+                            .onClick(() => openStructureLabelModal(
+                                this.app,
+                                'Chapter',
+                                chapterNum,
+                                chapLabel || '',
+                                async label => {
+                                    await this.sceneManager.setChapterLabel(chapterNum, label);
+                                    this.refresh();
+                                },
+                            )));
+                        menu.showAtMouseEvent(event);
+                    });
+                }
             }
 
             // Scene block

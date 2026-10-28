@@ -18,7 +18,7 @@ import { enableDragToPan } from '../components/DragToPan';
 import { isMobile } from '../components/MobileAdapter';
 import { PLOTGRID_VIEW_TYPE } from '../constants';
 import { resolveTagColor, getPlotlineHSL, resolveStickyNoteColors, contrastTextColor } from '../settings';
-import { compareActChapter, getActDisplayLabel } from '../utils/actChapter';
+import { compareActChapter, getActDisplayLabel, getChapterDisplayLabel } from '../utils/actChapter';
 import { attachTooltip } from '../components/Tooltip';
 import type SceneCardsPlugin from '../main';
 import { Scene, getStatusOrder, resolveStatusCfg } from '../models/Scene';
@@ -974,10 +974,9 @@ export class PlotgridView extends ItemView {
                     const chNum = typeof scene.chapter === 'number' ? scene.chapter : parseInt(String(scene.chapter), 10);
                     const chapterLabels = (activeProject as unknown as { chapterLabels?: Record<number, string> })?.chapterLabels;
                     const rawChLabel = !isNaN(chNum) ? (chapterLabels?.[chNum] || '') : '';
-                    const cleanChLabel = rawChLabel.replace(/^Ch(?:apter)?\s*\d+\s*[—:]\s*/i, '');
                     dividers.push({
                         type: 'chapter',
-                        label: cleanChLabel ? `Ch ${scene.chapter}: ${cleanChLabel}` : `Chapter ${scene.chapter}`,
+                        label: getChapterDisplayLabel(scene.chapter, rawChLabel),
                         key: `chapter:${String(scene.act)}:${String(scene.chapter)}`,
                     });
                 }

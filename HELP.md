@@ -161,6 +161,7 @@ The main workspace — a Kanban-style board that displays your scenes as cards.
 - **Search** — type in the search bar to filter scenes by title, content, characters, or tags.
 - **Beat Sheet Templates** — apply a beat sheet template (Save the Cat, 3-Act, Hero's Journey, Seven-Point, Story Circle, Romancing the Beat, 27 Chapter Method) from the Structure modal.
 - **Act labels** — custom labels on act dividers (e.g., beat names); inline-editable.
+- **Chapter labels** — give chapters project-level display names without changing the chapter number stored on scenes. Right-click a chapter column header to rename its label; the name is shown in chapter columns and other chapter headings, including manuscript exports.
 
 ### Scene Filename Synchronization
 
@@ -213,6 +214,7 @@ Visualize your scenes on a chronological timeline.
 - Click a scene to edit its time properties.
 - Supports multiple timelines for complex narratives.
 - Add acts and chapters from the toolbar.
+- **Chapter dividers** — dividers appear when the chapter changes. Right-click one to set or clear its project-level display label; scene chapter values and sorting remain unchanged.
 - **Order Toggle** — switch between **Reading Order** (scene sequence) and **Chronological Order** (in-story timeline). See [Reading Order vs Chronological Order](#reading-order-vs-chronological-order).
 - **Dual-order badges** — each scene card shows both its reading-order number and chronological-order number.
 - **Beat Sheet Templates** — apply a story structure template from the Structure modal.
@@ -251,7 +253,7 @@ A Scrivenings-style continuous document view that presents your entire story as 
 
 - **Embedded editing** — every scene is a fully functional Obsidian Live Preview editor. Click into any scene and start typing.
 - **Continuous reading** — scenes are arranged in reading order (act → chapter → sequence) with no frontmatter visible.
-- **Act & chapter headings** — automatic section dividers appear whenever the act or chapter changes.
+- **Act & chapter headings** — automatic section dividers appear whenever the act or chapter changes. Right-click a chapter divider to set or clear its project-level display label; the scene's chapter value is unchanged.
 - **Scene dividers** — each scene block shows a subtle header with the scene title and a color-coded status badge (idea, draft, written, etc.).
 - **Clickable titles** — click any scene title to open that scene file in a new tab.
 - **Plain Text toggle** — hides wiki-link styling, tag `#` prefixes, and external-link URLs so the text reads like clean prose. Defaults to ON for first-time users; the toolbar remembers your last choice (ON or OFF) across view switches and Obsidian restarts.

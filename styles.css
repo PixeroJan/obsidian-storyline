@@ -2288,6 +2288,38 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     border-radius: 12px;
 }
 
+.timeline-chapter-divider {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 2px 0 6px;
+    padding-left: 60px;
+    position: relative;
+}
+
+.timeline-chapter-label {
+    color: var(--text-faint);
+    font-size: 0.72em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.timeline-chapter-subtitle {
+    color: var(--text-muted);
+    font-size: 0.78em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.timeline-chapter-divider::after {
+    border-top: 1px solid var(--background-modifier-border);
+    content: '';
+    flex: 1;
+    margin-left: 5px;
+    opacity: 0.55;
+}
+
 /* Timeline entry row */
 .timeline-entry {
     display: flex;

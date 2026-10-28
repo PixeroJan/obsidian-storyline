@@ -80,6 +80,13 @@ export function getActLabelWithSubtitle(act: ActChapterValue, subtitle?: string)
     return subtitle ? `${label}: ${subtitle}` : label;
 }
 
+/** Returns a chapter heading, including its optional display label. */
+export function getChapterDisplayLabel(chapter: ActChapterValue, subtitle?: string): string {
+    if (chapter === undefined || chapter === null || chapter === '') return '';
+    const label = subtitle?.replace(/^Ch(?:apter)?\s*\d+\s*[—:]\s*/i, '').trim();
+    return label ? `Chapter ${chapter}: ${label}` : `Chapter ${chapter}`;
+}
+
 /**
  * Characters that are illegal in folder/file names on Windows.
  * Used by {@link sanitizeActChapterForPath}.

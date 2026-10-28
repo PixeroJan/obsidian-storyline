@@ -3,6 +3,7 @@ import { ItemView, WorkspaceLeaf, Menu, Notice, TFile, Modal, Setting, MarkdownR
 import * as obsidian from 'obsidian';
 import { Scene, SceneFilter, SortConfig, BoardGroupBy, SceneStatus, SceneTemplate, BeatSheetTemplate, BUILTIN_BEAT_SHEETS, getStatusOrder, getStatusConfig, resolveStatusCfg } from '../models/Scene';
 import { openConfirmModal } from '../components/ConfirmModal';
+import { openStructureLabelModal } from '../components/StructureLabelModal';
 import { SceneManager } from '../services/SceneManager';
 import { SceneCardComponent } from '../components/SceneCard';
 import { FiltersComponent } from '../components/Filters';
@@ -20,7 +21,7 @@ import { attachTooltip } from '../components/Tooltip';
 import { resolveImagePath } from '../components/ImagePicker';
 import { createElement as createLucideElement, ScanSquare } from 'lucide';
 import type SceneCardsPlugin from '../main';
-import { compareActChapter, parseActChapterInput, getActDisplayLabel } from '../utils/actChapter';
+import { compareActChapter, parseActChapterInput, getActDisplayLabel, getChapterDisplayLabel } from '../utils/actChapter';
 
 type BoardMode = 'kanban' | 'corkboard';
 
@@ -2901,7 +2902,7 @@ export class BoardView extends ItemView {
         if (chMatch) {
             const chNum = parseInt(chMatch[1], 10);
             const label = this.sceneManager.getChapterLabel(chNum);
-            return label ? label : groupKey;
+            return getChapterDisplayLabel(chNum, label);
         }
         return groupKey;
     }
@@ -3144,33 +3145,8 @@ export class BoardView extends ItemView {
     /**
      * Open a small modal to rename an act or chapter label.
      */
-    private openRenameModal(type: string, num: number, current: string, onSave: (label: string) => Promise<void>): void {
-        const modal = new Modal(this.app);
-        modal.titleEl.setText(`Rename ${type} ${num}`);
-        const { contentEl } = modal;
-
-        let value = current;
-        new Setting(contentEl)
-            .setName('Label')
-            .setDesc(`Display name for ${type} ${num}. Leave blank to remove.`)
-            .addText(text => {
-                text.setValue(current)
-                    .setPlaceholder(`E.g. "the beginning"`)
-                    .onChange(v => { value = v; });
-                // Auto-focus
-                window.setTimeout(() => text.inputEl.focus(), 50);
-            });
-
-        const btnRow = contentEl.createDiv('structure-close-row');
-        const saveBtn = btnRow.createEl('button', { text: 'Save', cls: 'mod-cta' });
-        saveBtn.addEventListener('click', async () => {
-            await onSave(value);
-            modal.close();
-        });
-        const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
-        cancelBtn.addEventListener('click', () => modal.close());
-
-        modal.open();
+    private openRenameModal(type: 'Act' | 'Chapter', num: number, current: string, onSave: (label: string) => Promise<void>): void {
+        openStructureLabelModal(this.app, type, num, current, onSave);
     }
 
     /**

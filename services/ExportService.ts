@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, no-useless-escape -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { StoryLineProject } from '../models/StoryLineProject';
 import { SceneManager } from './SceneManager';
-import { compareActChapter, getActDisplayLabel } from '../utils/actChapter';
+import { compareActChapter, getActDisplayLabel, getChapterDisplayLabel } from '../utils/actChapter';
 import { CharacterManager } from './CharacterManager';
 import { LocationManager } from './LocationManager';
 import { SLMarkdownToDocxConverter, SLDocxSettings, SLObsidianFontSettings } from './DocxConverter';
@@ -232,7 +232,7 @@ export class ExportService {
             if (scene.chapter !== undefined && scene.chapter !== currentChapter) {
                 currentChapter = scene.chapter;
                 const chapLabel = this.sceneManager.getChapterLabel(Number(currentChapter));
-                lines.push(chapLabel ? `### Chapter ${currentChapter}: ${chapLabel}` : `### Chapter ${currentChapter}`);
+                lines.push(`### ${getChapterDisplayLabel(currentChapter, chapLabel)}`);
                 lines.push('');
             }
 
@@ -620,7 +620,7 @@ ${body}
             if (scene.chapter !== undefined && scene.chapter !== currentChapter) {
                 currentChapter = scene.chapter;
                 const chapLabel = this.sceneManager.getChapterLabel(Number(currentChapter));
-                const chapText = chapLabel ? `Chapter ${currentChapter}: ${chapLabel}` : `Chapter ${currentChapter}`;
+                const chapText = getChapterDisplayLabel(currentChapter, chapLabel);
                 parts.push(`<h3>${this.escHtml(chapText)}</h3>`);
             }
 

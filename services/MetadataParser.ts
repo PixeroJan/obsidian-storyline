@@ -124,33 +124,6 @@ export class MetadataParser {
     }
 
     /**
-     * Persist derived scene metadata after body edits made outside StoryLine's
-     * metadata editors. The comparison keeps the vault modify handler stable.
-     */
-    static async syncDerivedFrontmatter(app: App, file: TFile): Promise<boolean> {
-        const content = await app.vault.read(file);
-        const frontmatter = this.extractFrontmatter(content);
-        if (!frontmatter || frontmatter.type !== 'scene') return false;
-
-        const body = this.extractBody(content);
-        const wordcount = this.countWords(body);
-        const charcount = this.countChars(body);
-        const modified = new Date().toISOString().split('T')[0];
-        const storedWordcount = Number(frontmatter.wordcount);
-        const storedCharcount = Number(frontmatter.charcount);
-        const storedModified = String(frontmatter.modified ?? '');
-
-        if (storedWordcount === wordcount
-            && storedCharcount === charcount
-            && storedModified === modified) {
-            return false;
-        }
-
-        await this.updateFrontmatter(app, file, {});
-        return true;
-    }
-
-    /**
      * Parse markdown content into a Scene object
      */
     static parseContent(content: string, filePath: string): Scene | null {

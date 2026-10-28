@@ -1756,13 +1756,7 @@ export class SceneManager implements ISceneStore {
 
         const scene = await MetadataParser.parseFile(this.app, file);
         if (scene && (inSceneFolder || scene.corkboardNote === true)) {
-            const metadataUpdated = await MetadataParser.syncDerivedFrontmatter(this.app, file);
-            this.scenes.set(
-                file.path,
-                metadataUpdated
-                    ? (await MetadataParser.parseFile(this.app, file) ?? scene)
-                    : scene,
-            );
+            this.scenes.set(file.path, scene);
         } else {
             this.scenes.delete(file.path);
         }
