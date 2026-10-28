@@ -1790,7 +1790,7 @@ export class TimelineView extends ItemView {
             if (scene) scenes.push(scene);
         }
         if (scenes.length < 2) {
-            new Notice('Select at least two scenes (ctrl/cmd-click) to shift dates.');
+            new Notice('Select at least two scenes (ctrl/Cmd-click) to shift dates.');
             return;
         }
         const modal = new ShiftDatesModal(this.app, this.sceneManager, scenes);

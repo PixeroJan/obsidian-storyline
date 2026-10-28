@@ -1501,7 +1501,7 @@ export class SceneManager implements ISceneStore {
         }
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!file || !(file instanceof TFile) || file.extension !== 'md') {
-            new Notice('Selected file is not a markdown note.');
+            new Notice('Selected file is not a Markdown note.');
             return null;
         }
 
@@ -1666,7 +1666,9 @@ export class SceneManager implements ISceneStore {
         if (!scene) return null;
 
          
-        const { filePath: _fp, body: _body, ...rest } = scene;
+        const rest: Partial<Scene> = { ...scene };
+        delete rest.filePath;
+        delete rest.body;
         const newScene: Partial<Scene> = {
             ...rest,
             title: `${scene.title} (copy)`,
@@ -2933,7 +2935,12 @@ export class SceneManager implements ISceneStore {
 
         // Scene B: create new file inheriting metadata
          
-        const { filePath: _fp, body: _body, wordcount: _wc, created: _cr, modified: _mod, ...inherited } = scene;
+        const inherited: Partial<Scene> = { ...scene };
+        delete inherited.filePath;
+        delete inherited.body;
+        delete inherited.wordcount;
+        delete inherited.created;
+        delete inherited.modified;
         const sceneB: Partial<Scene> = {
             ...inherited,
             title: titleB || `${scene.title} (part 2)`,

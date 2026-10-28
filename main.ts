@@ -423,7 +423,7 @@ export default class SceneCardsPlugin extends Plugin {
 
         this.addCommand({
             id: 'open-codex-view',
-            name: 'Open codex',            callback: () => this.activateView(CODEX_VIEW_TYPE),
+            name: 'Open Codex',            callback: () => this.activateView(CODEX_VIEW_TYPE),
         });
 
         this.addCommand({
@@ -3275,7 +3275,7 @@ export default class SceneCardsPlugin extends Plugin {
             // Series toggle at the top
             const seriesNameSetting = new Setting(modal.contentEl)
                 .setName('Series name')
-                .setDesc('Characters, locations, and codex entries will be shared across all books in this series.')
+                .setDesc('Characters, locations, and Codex entries will be shared across all books in this series.')
                 .addText((text: TextComponent) => {
                     text.setPlaceholder('My trilogy');
                     text.onChange((v: string) => (seriesName = v));
@@ -3284,7 +3284,7 @@ export default class SceneCardsPlugin extends Plugin {
 
             new Setting(modal.contentEl)
                 .setName('Create as series')
-                .setDesc('Wrap this book in a series folder with a shared codex.')
+                .setDesc('Wrap this book in a series folder with a shared Codex.')
                 .addToggle((toggle: ToggleComponent) => {
                     toggle.setValue(false);
                     toggle.onChange((v: boolean) => {
@@ -3410,7 +3410,7 @@ export default class SceneCardsPlugin extends Plugin {
         });
         const list = warningEl.createEl('ul');
         list.createEl('li', { text: 'All scenes' });
-        list.createEl('li', { text: 'All characters, locations and codex entries' });
+        list.createEl('li', { text: 'All characters, locations and Codex entries' });
         list.createEl('li', { text: 'All notes, research and archive items' });
         list.createEl('li', { text: 'Project settings and view data' });
         if (activeProject.seriesId || activeProject.seriesUuid) {
@@ -4064,7 +4064,7 @@ class SeriesManagementModal extends Modal {
         });
         const list = warningEl.createEl('ul');
         list.createEl('li', { text: 'All scenes' });
-        list.createEl('li', { text: 'All characters, locations and codex entries' });
+        list.createEl('li', { text: 'All characters, locations and Codex entries' });
         list.createEl('li', { text: 'All notes, research and archive items' });
         list.createEl('li', { text: 'The book will be removed from the series "' + meta.name + '".' });
         warningEl.createEl('p', {

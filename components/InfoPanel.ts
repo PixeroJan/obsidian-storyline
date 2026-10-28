@@ -437,7 +437,7 @@ export class InfoPanelComponent {
 
         const textarea = editorEl.createEl('textarea', {
             cls: 'sl-info-notes-textarea',
-            attr: { placeholder: 'Write notes in markdown — use - [ ] for checkboxes, **bold**, [[wikilinks]]' },
+            attr: { placeholder: 'Write notes in Markdown — use - [ ] for checkboxes, **bold**, [[wikilinks]]' },
         });
         textarea.value = scene.notes || '';
 

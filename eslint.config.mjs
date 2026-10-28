@@ -14,11 +14,23 @@ export default defineConfig([
       parserOptions: {
         project: "./tsconfig.json",
       },
+      globals: {
+        activeDocument: "readonly",
+        cancelAnimationFrame: "readonly",
+        console: "readonly",
+        createFragment: "readonly",
+        crypto: "readonly",
+        document: "readonly",
+        getComputedStyle: "readonly",
+        navigator: "readonly",
+        performance: "readonly",
+        window: "readonly",
+      },
     },
     rules: {
       // Preserve brand names with their canonical casing in UI strings.
       "obsidianmd/ui/sentence-case": ["error", {
-        brands: ["StoryLine", "Scrivener", "Obsidian"],
+        brands: ["StoryLine", "Scrivener", "Obsidian", "Codex", "Markdown", "Cmd"],
       }],
     },
   },

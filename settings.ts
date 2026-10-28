@@ -1275,7 +1275,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
 
         new Setting(generalBody)
             .setName('Default section state')
-            .setDesc('Choose whether character, location, codex, and stats sections start expanded, collapsed, or remember their last state.')
+            .setDesc('Choose whether character, location, Codex, and stats sections start expanded, collapsed, or remember their last state.')
             .addDropdown(dropdown => {
                 dropdown.addOption('expanded', 'Expanded');
                 dropdown.addOption('collapsed', 'Collapsed');
@@ -1818,7 +1818,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
 
         new Setting(writingBody)
             .setName('Sort suggestions by frequency')
-            .setDesc('When on, character and location suggestions in the scene inspector are sorted by how often they appear across scenes (most used first), then alphabetically. Off = alphabetical only. (Issue #238 feedback.)')
+            .setDesc('When on, character and location suggestions in the scene inspector are sorted by how often they appear across scenes (most used first), then alphabetically. Off = alphabetical only. (issue #238 feedback.)')
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.sortByFrequency === true)
                 .onChange(async (value) => {
@@ -1873,7 +1873,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
 
         new Setting(writingBody)
             .setName('Also ignore checkbox lines (`- [ ]`, `- [x]`)')
-            .setDesc('Issue #78 — also drop markdown task lines from the wordcount. Off by default because some authors keep checklists in the manuscript body.')
+            .setDesc('Issue #78 — also drop Markdown task lines from the wordcount. Off by default because some authors keep checklists in the manuscript body.')
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.excludeChecklistFromWordcount === true)
                 .onChange(async (value) => {
@@ -1970,7 +1970,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         // ── Issue #238 feedback — Default PoV character ──
         const povSetting = new Setting(writingBody)
             .setName('Default PoV character')
-            .setDesc('Auto-assign this character as the PoV of every newly-created scene. Useful for single-pov stories so you don\'t have to pick it each time. Leave blank to choose manually. (Issue #238 feedback.)')
+            .setDesc('Auto-assign this character as the PoV of every newly-created scene. Useful for single-pov stories so you don\'t have to pick it each time. Leave blank to choose manually. (issue #238 feedback.)')
         const povSelect = povSetting.controlEl.createEl('select');
         povSelect.setCssStyles({ width: '200px' });
         const noneOpt = povSelect.createEl('option', { value: '' });
@@ -2580,7 +2580,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
 
         new Setting(exportBody)
             .setName('Scene separator')
-            .setDesc('Separator used between scenes in manuscript exports (markdown, word, PDF, and HTML).')
+            .setDesc('Separator used between scenes in manuscript exports (Markdown, word, PDF, and HTML).')
             .addDropdown(dropdown => dropdown
                 .addOptions({
                     'blank': 'Blank Line',
@@ -2649,7 +2649,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             color: 'var(--text-warning, orange)',
             marginBottom: '12px',
         });
-        extraWarn.setText('⚠ Experimental — back up your files before linking external folders. Files in linked folders may be modified when you edit entities in StoryLine.');
+        extraWarn.setText('⚠ experimental — back up your files before linking external folders. Files in linked folders may be modified when you edit entities in StoryLine.');
 
         const extraDesc = extraBody.createDiv({ cls: 'setting-item-description' });
         extraDesc.setCssStyles({ marginBottom: '12px' });
@@ -3427,7 +3427,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         // Preserve formatting
         new Setting(body)
             .setName('Preserve formatting')
-            .setDesc('Maintain original markdown formatting in the output (bold, italic, code, etc.).')
+            .setDesc('Maintain original Markdown formatting in the output (bold, italic, code, etc.).')
             .addToggle(toggle => toggle
                 .setValue(ds.preserveFormatting)
                 .onChange(async (value) => {
@@ -3438,7 +3438,7 @@ export class SceneCardsSettingTab extends PluginSettingTab {
         // Enable preprocessing
         new Setting(body)
             .setName('Enable preprocessing')
-            .setDesc('Preprocess markdown before conversion (normalise line-breaks, clean up).')
+            .setDesc('Preprocess Markdown before conversion (normalise line-breaks, clean up).')
             .addToggle(toggle => toggle
                 .setValue(ds.enablePreprocessing)
                 .onChange(async (value) => {
@@ -3769,7 +3769,7 @@ class TemplateEditorModal extends Modal {
         new Setting(contentEl)
             .setName('Default status')
             .addDropdown(dd => {
-                dd.addOption('', '(None)');
+                dd.addOption('', '(none)');
                 const statuses = getStatusOrder();
                 const cfg = getStatusConfig();
                 statuses.forEach(s => dd.addOption(s, cfg[s]?.label ?? (s.charAt(0).toUpperCase() + s.slice(1))));

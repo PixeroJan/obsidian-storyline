@@ -1760,11 +1760,11 @@ export class PlotgridView extends ItemView {
                                 .onClick(() => { void this.setNoteColor(note, preset.color, key); }));
                         });
                         menu.addItem(item => item
-                            .setTitle('Color: Custom…')
+                            .setTitle('Color: custom…')
                             .setIcon('pipette')
                             .onClick(() => { this.openNoteColorModal(linkedScene, key); }));
                         menu.addItem(item => item
-                            .setTitle('Color: Default')
+                            .setTitle('Color: default')
                             .setIcon('rotate-ccw')
                             .onClick(() => { void this.setNoteColor(linkedScene, undefined, key); }));
 

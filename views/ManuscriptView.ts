@@ -426,7 +426,7 @@ export class ManuscriptView extends ItemView {
                 cls: 'sl-manuscript-empty',
                 text: 'No scenes match the current filters.',
             });
-            this.footerEl.setText('0 Words');
+            this.footerEl.setText('0 words');
             return;
         }
 

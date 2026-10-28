@@ -1351,7 +1351,7 @@ export class InspectorComponent {
 
         const textarea = editorEl.createEl('textarea', {
             cls: 'inspector-notes-textarea',
-            attr: { placeholder: 'Write notes in markdown — use - [ ] for checkboxes, **bold**, [[wikilinks]]', rows: '4' },
+            attr: { placeholder: 'Write notes in Markdown — use - [ ] for checkboxes, **bold**, [[wikilinks]]', rows: '4' },
         });
         textarea.value = currentNotes;
 

@@ -47,7 +47,7 @@ export class QuickAddModal extends Modal {
             .setName('Template')
             .setDesc('Pre-fill fields and body from a template')
             .addDropdown(dd => {
-                dd.addOption('', '(None)');
+                dd.addOption('', '(none)');
                 allTemplates.forEach((tpl, idx) => dd.addOption(String(idx), tpl.name));
                 dd.onChange(value => {
                     if (value === '') {

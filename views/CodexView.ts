@@ -1882,7 +1882,7 @@ export class CodexView extends ItemView {
 
         const textarea = section.createEl('textarea', {
             cls: 'codex-notes-textarea',
-            attr: { placeholder: 'Free-form notes (markdown)…', rows: '8' },
+            attr: { placeholder: 'Free-form notes (Markdown)…', rows: '8' },
         });
         textarea.value = draft.notes || '';
         textarea.addEventListener('input', () => {
@@ -2289,7 +2289,7 @@ export class CodexView extends ItemView {
 
     private openManageCategoriesModal(): void {
         const modal = new Modal(this.app);
-        modal.titleEl.setText('Manage codex categories');
+        modal.titleEl.setText('Manage Codex categories');
         this.renderCategoryManager(modal.contentEl, modal);
         modal.open();
     }
@@ -2299,7 +2299,7 @@ export class CodexView extends ItemView {
         el.addClass('codex-category-manager');
 
         el.createEl('h4', { text: 'Enabled categories' });
-        el.createEl('p', { cls: 'setting-item-description', text: 'Toggle categories to show in the codex. Use the sidebar toggle to also show them in the scene inspector.' });
+        el.createEl('p', { cls: 'setting-item-description', text: 'Toggle categories to show in the Codex. Use the sidebar toggle to also show them in the scene inspector.' });
 
         const enabled = new Set(this.plugin.settings.codexEnabledCategories);
         const sidebarSet = new Set(this.plugin.settings.codexSidebarCategories || []);
@@ -2497,7 +2497,7 @@ export class CodexView extends ItemView {
 
     private openManageVisualGroupsModal(): void {
         if (!this.activeCategory) {
-            new Notice('Select a codex category before managing visual groups.');
+            new Notice('Select a Codex category before managing visual groups.');
             return;
         }
         const modal = new Modal(this.app);
@@ -2513,7 +2513,7 @@ export class CodexView extends ItemView {
         el.addClass('codex-category-manager');
         el.createEl('p', {
             cls: 'setting-item-description',
-            text: 'Create named display groups for this category. Groups only change the codex view and do not modify entry files.',
+            text: 'Create named display groups for this category. Groups only change the Codex view and do not modify entry files.',
         });
 
         const groups = this.getVisualGroups();

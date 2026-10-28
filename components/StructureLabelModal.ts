@@ -1,4 +1,4 @@
-/* eslint-disable no-undef, @typescript-eslint/no-misused-promises -- Obsidian UI globals and async DOM handlers are intentional. */
+/* eslint-disable @typescript-eslint/no-misused-promises -- Async DOM handlers are intentional. */
 import { App, Modal, Setting } from 'obsidian';
 
 export function openStructureLabelModal(
@@ -30,3 +30,5 @@ export function openStructureLabelModal(
     buttons.createEl('button', { text: 'Cancel' }).addEventListener('click', () => modal.close());
     modal.open();
 }
+
+/* eslint-enable @typescript-eslint/no-misused-promises */

@@ -2104,7 +2104,7 @@ export class StatsView extends ItemView {
         if (withFavourites.length > 0) {
             const favSec = parent.createDiv('stats-subsection');
             favSec.createEl('h5', { cls: 'stats-subsection-title stats-overused-title', text: 'Scene-specific favourite words' });
-            favSec.createEl('p', { cls: 'stats-hint', text: 'Words used much more in a specific scene than in the rest of the manuscript.' });
+            favSec.createEl('p', { cls: 'stats-hint', text: 'Words that appear much more often in one scene than elsewhere in the manuscript.' });
 
             // Show all scenes with favourites in a scrollable container (was limited to 10).
             const favList = favSec.createDiv('stats-echo-list');

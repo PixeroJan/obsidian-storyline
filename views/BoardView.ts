@@ -1694,12 +1694,12 @@ export class BoardView extends ItemView {
         });
 
         menu.addItem(item => item
-            .setTitle('Color: Custom…')
+            .setTitle('Color: custom…')
             .setIcon('pipette')
             .onClick(() => { this.openCorkboardNoteColorModal(scene); }));
 
         menu.addItem(item => item
-            .setTitle('Color: Default')
+            .setTitle('Color: default')
             .setIcon('rotate-ccw')
             .onClick(() => { void this.setCorkboardNoteColor(scene, undefined); }));
 
@@ -1708,16 +1708,16 @@ export class BoardView extends ItemView {
         const hasFontLight = !!this.plugin.settings.stickyNoteFontColorLight;
         const hasFontDark = !!this.plugin.settings.stickyNoteFontColorDark;
         menu.addItem(item => item
-            .setTitle('Font color: Light notes???')
+            .setTitle('Font color: light notes???')
             .setIcon('text')
             .onClick(() => { this.openStickyNoteFontColorModal(scene, 'light'); }));
         menu.addItem(item => item
-            .setTitle('Font color: Dark notes???')
+            .setTitle('Font color: dark notes???')
             .setIcon('text')
             .onClick(() => { this.openStickyNoteFontColorModal(scene, 'dark'); }));
         if (hasFontLight || hasFontDark) {
             menu.addItem(item => item
-                .setTitle('Font color: Reset to auto')
+                .setTitle('Font color: reset to auto')
                 .setIcon('rotate-ccw')
                 .onClick(async () => {
                     this.plugin.settings.stickyNoteFontColorLight = '';
