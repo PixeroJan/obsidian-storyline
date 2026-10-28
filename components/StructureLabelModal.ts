@@ -31,4 +31,4 @@ export function openStructureLabelModal(
     modal.open();
 }
 
-/* eslint-enable @typescript-eslint/no-misused-promises */
+/* eslint-enable @typescript-eslint/no-misused-promises -- Restore promise-handler linting after the modal's intentional async DOM handler. */
