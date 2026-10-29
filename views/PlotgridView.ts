@@ -64,6 +64,7 @@ export class PlotgridView extends ItemView {
     private renderedRowTrackIndices = new Map<number, number>();
     /** Simple undo stack for plot grid cell operations */
     private undoStack: PlotGridData[] = [];
+    private pendingSaves = new Set<Promise<void>>();
     private static readonly MAX_UNDO = 20;
 
     constructor(leaf: WorkspaceLeaf, plugin?: SceneCardsPlugin) {
@@ -294,27 +295,24 @@ export class PlotgridView extends ItemView {
         this.saveProjectKey = projectKey;
         // debounce and call plugin-level save API if available
         const timerId = window.setTimeout(async () => {
-            try {
-                if (this.getProjectKey() !== projectKey) return;
-                const dataToSave: PlotGridData = {
-                    rows: this.data.rows.map(row => ({ ...row })),
-                    columns: this.data.columns.map(column => ({ ...column })),
-                    cells: Object.fromEntries(
-                        Object.entries(this.data.cells).map(([key, cell]) => [key, { ...cell }])
-                    ),
-                    zoom: this.data.zoom,
-                    stickyHeaders: this.data.stickyHeaders,
-                    labelColumnWidth: this.getLabelColumnWidth(),
-                    collapsedSections: { ...(this.data.collapsedSections || {}) },
-                };
-                if (typeof plugin.savePlotGrid === 'function') {
-                    await plugin.savePlotGrid(dataToSave, projectKey);
+            const savePromise = (async () => {
+                try {
+                    if (this.getProjectKey() !== projectKey) return;
+                    const dataToSave = this.clonePlotGridData();
+                    if (typeof plugin.savePlotGrid === 'function') {
+                        await plugin.savePlotGrid(dataToSave, projectKey);
+                    }
+                    if (this.getProjectKey() !== projectKey) return;
+                    plugin.viewSnapshotService.scheduleAutoSave();
+                } catch (e) {
+                    // ignore save errors
                 }
-                if (this.getProjectKey() !== projectKey) return;
-                plugin.viewSnapshotService.scheduleAutoSave();
-            } catch (e) {
-                // ignore save errors
+            })();
+            this.pendingSaves.add(savePromise);
+            try {
+                await savePromise;
             } finally {
+                this.pendingSaves.delete(savePromise);
                 // Only clear if no newer timer was set during the async save.
                 if (this.saveDebounce === timerId) {
                     this.saveDebounce = null;
@@ -323,6 +321,140 @@ export class PlotgridView extends ItemView {
             }
         }, 500);
         this.saveDebounce = timerId;
+    }
+
+    private clonePlotGridData(): PlotGridData {
+        return {
+            rows: this.data.rows.map(row => ({ ...row })),
+            columns: this.data.columns.map(column => ({ ...column })),
+            cells: Object.fromEntries(
+                Object.entries(this.data.cells).map(([key, cell]) => [key, { ...cell }])
+            ),
+            zoom: this.data.zoom,
+            stickyHeaders: this.data.stickyHeaders,
+            labelColumnWidth: this.getLabelColumnWidth(),
+            collapsedSections: { ...(this.data.collapsedSections || {}) },
+        };
+    }
+
+    private async cancelScheduledSavesAndWait(): Promise<void> {
+        if (this.saveDebounce !== null) {
+            window.clearTimeout(this.saveDebounce);
+            this.saveDebounce = null;
+        }
+        this.saveProjectKey = null;
+        await Promise.all([...this.pendingSaves]);
+    }
+
+    private async findLatestResetBackup(projectKey: string): Promise<string | null> {
+        const plugin = this.plugin;
+        if (!plugin || !this.isCurrentProject(projectKey)) return null;
+        try {
+            const folder = plugin.getProjectSystemFolder();
+            const adapter = this.app.vault.adapter;
+            if (!await adapter.exists(folder)) return null;
+            const { files } = await adapter.list(folder);
+            if (!this.isCurrentProject(projectKey)) return null;
+            return files
+                .filter(path => /(?:^|\/)plotgrid-reset-backup-\d+\.json$/.test(path))
+                .sort((a, b) => {
+                    const timestampA = Number(a.match(/plotgrid-reset-backup-(\d+)\.json$/)?.[1] ?? 0);
+                    const timestampB = Number(b.match(/plotgrid-reset-backup-(\d+)\.json$/)?.[1] ?? 0);
+                    return timestampB - timestampA;
+                })[0] ?? null;
+        } catch {
+            return null;
+        }
+    }
+
+    private async resetGridWithBackup(): Promise<void> {
+        const plugin = this.plugin;
+        const projectKey = this.getProjectKey();
+        if (!plugin || !projectKey) {
+            new Notice('Cannot reset the plot grid without an active project.');
+            return;
+        }
+
+        const snapshot = this.clonePlotGridData();
+        let resetSaved = false;
+        try {
+            const folder = plugin.getProjectSystemFolder();
+            const adapter = this.app.vault.adapter;
+            if (!await adapter.exists(folder)) await this.app.vault.createFolder(folder);
+
+            let timestamp = Date.now();
+            let backupPath = `${folder}/plotgrid-reset-backup-${timestamp}.json`;
+            while (await adapter.exists(backupPath)) {
+                backupPath = `${folder}/plotgrid-reset-backup-${++timestamp}.json`;
+            }
+            await adapter.write(backupPath, JSON.stringify(snapshot, null, 2));
+            if (!this.isCurrentProject(projectKey)) return;
+
+            await this.cancelScheduledSavesAndWait();
+            if (!this.isCurrentProject(projectKey)) return;
+
+            const emptyGrid: PlotGridData = { rows: [], columns: [], cells: {}, zoom: 1 };
+            const saved = await plugin.savePlotGrid(emptyGrid, projectKey, true);
+            if (!saved) throw new Error('The empty grid could not be saved.');
+            resetSaved = true;
+            if (!this.isCurrentProject(projectKey)) return;
+
+            this.data = emptyGrid;
+            this.renderToolbar();
+            this.renderGrid();
+            plugin.viewSnapshotService.scheduleAutoSave();
+            new Notice(`Plot grid reset. Backup saved as ${backupPath.split('/').pop()}.`);
+        } catch (error) {
+            if (!resetSaved && this.isCurrentProject(projectKey)) this.scheduleSave();
+            const detail = error instanceof Error ? error.message : String(error);
+            new Notice(resetSaved
+                ? `Plot grid was reset, but the view could not refresh: ${detail}`
+                : `Plot grid reset failed; the current grid was kept. ${detail}`);
+        }
+    }
+
+    private async confirmRestoreResetBackup(backupPath: string): Promise<void> {
+        const plugin = this.plugin;
+        const projectKey = this.getProjectKey();
+        if (!plugin || !projectKey) return;
+
+        const fileName = backupPath.split('/').pop() ?? 'backup';
+        openConfirmModal(this.app, {
+            title: 'Restore plot grid backup',
+            message: `Restore ${fileName}? This replaces the current plot grid.`,
+            confirmLabel: 'Restore backup',
+            onConfirm: async () => {
+                try {
+                    const backup = JSON.parse(await this.app.vault.adapter.read(backupPath)) as PlotGridData;
+                    if (!Array.isArray(backup.rows) || !Array.isArray(backup.columns)
+                        || !backup.cells || typeof backup.cells !== 'object') {
+                        throw new Error('The backup file has an invalid format.');
+                    }
+                    if (!this.isCurrentProject(projectKey)) return;
+
+                    await this.cancelScheduledSavesAndWait();
+                    if (!this.isCurrentProject(projectKey)) return;
+                    const saved = await plugin.savePlotGrid(backup, projectKey, true);
+                    if (!saved) throw new Error('The backup could not be saved as the current grid.');
+                    if (!this.isCurrentProject(projectKey)) return;
+
+                    this.data = {
+                        ...backup,
+                        rows: backup.rows.map(row => ({ ...row })),
+                        columns: backup.columns.map(column => ({ ...column })),
+                        cells: Object.fromEntries(Object.entries(backup.cells).map(([key, cell]) => [key, { ...cell }])) as PlotGridData['cells'],
+                    };
+                    this.renderToolbar();
+                    this.renderGrid();
+                    plugin.viewSnapshotService.scheduleAutoSave();
+                    new Notice('Plot grid backup restored.');
+                } catch (error) {
+                    if (this.isCurrentProject(projectKey)) this.scheduleSave();
+                    const detail = error instanceof Error ? error.message : String(error);
+                    new Notice(`Could not restore plot grid backup. ${detail}`);
+                }
+            },
+        });
     }
 
     /** Push a deep clone of the current grid data onto the undo stack. */
@@ -1066,39 +1198,41 @@ export class PlotgridView extends ItemView {
         });
 
         // corner context menu (Reset grid moved here)
-        corner.addEventListener('contextmenu', (evt) => {
+        corner.addEventListener('contextmenu', async (evt) => {
             evt.preventDefault();
             const menu = new Menu();
             menu.addItem((it) => it.setTitle('Reset grid').onClick(() => {
                 class ConfirmModal extends Modal {
-                    onConfirm: () => void;
-                    constructor(app: App, onConfirm: () => void) { super(app); this.onConfirm = onConfirm; }
+                    onConfirm: () => Promise<void>;
+                    constructor(app: App, onConfirm: () => Promise<void>) { super(app); this.onConfirm = onConfirm; }
                     onOpen() {
                         const { contentEl } = this;
                         contentEl.createEl('h3', { text: 'Reset grid' });
-                        contentEl.createEl('p', { text: 'Are you sure you want to reset the grid? Resetting will delete everything.' });
+                        contentEl.createEl('p', { text: 'This removes all rows and columns, including custom columns, plus cell text, formatting, and scene links. A backup will be saved first and can be restored from this menu.' });
                         const btns = contentEl.createDiv();
                         const ok = btns.createEl('button', { text: 'Reset' });
-                        ok.addEventListener('click', () => { this.onConfirm(); this.close(); });
                         const cancel = btns.createEl('button', { text: 'Cancel' });
+                        ok.addEventListener('click', async () => {
+                            ok.disabled = true;
+                            cancel.disabled = true;
+                            await this.onConfirm();
+                            this.close();
+                        });
                         cancel.addEventListener('click', () => this.close());
                     }
                 }
-                const modal = new ConfirmModal(this.app, () => {
-                    // Cancel any in-flight debounced save BEFORE clearing the
-                    // grid. Otherwise the pending save (holding the pre-reset
-                    // state) fires after the reset and resurrects the grid —
-                    // the "grid disappears then reappears on its own" bug.
-                    if (this.saveDebounce) {
-                        window.clearTimeout(this.saveDebounce);
-                        this.saveDebounce = null;
-                    }
-                    this.data = { rows: [], columns: [], cells: {}, zoom: 1 };
-                    this.scheduleSave();
-                    this.renderGrid();
-                });
+                const modal = new ConfirmModal(this.app, () => this.resetGridWithBackup());
                 modal.open();
             }));
+            const projectKey = this.getProjectKey();
+            const backupPath = projectKey ? await this.findLatestResetBackup(projectKey) : null;
+            if (backupPath) {
+                menu.addSeparator();
+                menu.addItem((it) => it.setTitle('Restore last reset backup').onClick(() => {
+                    void this.confirmRestoreResetBackup(backupPath);
+                }));
+            }
+            if (projectKey && !this.isCurrentProject(projectKey)) return;
             menu.showAtMouseEvent(evt);
         });
 

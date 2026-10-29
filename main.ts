@@ -2002,22 +2002,22 @@ export default class SceneCardsPlugin extends Plugin {
      * Save the plot grid data to the System/ folder under the active project.
      * This centralizes persistence and avoids views overwriting settings.
      */
-    async savePlotGrid(data: PlotGridData, expectedProjectKey?: string): Promise<void> {
+    async savePlotGrid(data: PlotGridData, expectedProjectKey?: string, allowEmptyData = false): Promise<boolean> {
         try {
-            if (expectedProjectKey && this.sceneManager.activeProject?.filePath !== expectedProjectKey) return;
+            if (expectedProjectKey && this.sceneManager.activeProject?.filePath !== expectedProjectKey) return false;
             const folder = this.getProjectSystemFolder();
             const filePath = `${folder}/plotgrid.json`;
             const adapter = this.app.vault.adapter;
 
             // Guard: never overwrite a file that has content with empty data
             const isEmpty = !data.rows || data.rows.length === 0;
-            if (isEmpty && await adapter.exists(filePath)) {
+            if (!allowEmptyData && isEmpty && await adapter.exists(filePath)) {
                 try {
                     const existing = await adapter.read(filePath);
                     const parsed = JSON.parse(existing);
                     if (parsed.rows && parsed.rows.length > 0) {
                         // Blocked: refusing to overwrite non-empty plotgrid with empty data
-                        return;
+                        return false;
                     }
                 } catch { /* file unreadable or invalid JSON — allow overwrite */ }
             }
@@ -2028,11 +2028,13 @@ export default class SceneCardsPlugin extends Plugin {
             if (!await adapter.exists(folder)) {
                 await this.app.vault.createFolder(folder);
             }
-            if (expectedProjectKey && this.sceneManager.activeProject?.filePath !== expectedProjectKey) return;
+            if (expectedProjectKey && this.sceneManager.activeProject?.filePath !== expectedProjectKey) return false;
 
             await adapter.write(filePath, contents);
+            return true;
         } catch (e) {
             new Notice('StoryLine: failed to save PlotGrid to vault: ' + String(e));
+            return false;
         }
     }
 
