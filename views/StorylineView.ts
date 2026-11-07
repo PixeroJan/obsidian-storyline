@@ -12,6 +12,7 @@ import { enableDragToPan } from '../components/DragToPan';
 import { resolveTagColor, getPlotlineHSL, contrastTextColor } from '../settings';
 import { attachTooltip } from '../components/Tooltip';
 import { compareScenesByActChapter, getActDisplayLabel } from '../utils/actChapter';
+import { matchesArcScenePath, normalizePlotlineName } from '../services/ArcManager';
 
 type SortMode = 'alpha' | 'scenes-desc' | 'scenes-asc' | 'reading-order';
 type PlotlineViewMode = 'list' | 'subway';
@@ -828,6 +829,15 @@ export class StorylineView extends ItemView {
             await this.plugin.saveSettings();
         });
         colorInput.addEventListener('change', async () => {
+            try {
+                await this.plugin.arcManager.updateMetadata(
+                    plotline,
+                    { color: colorInput.value },
+                    this.getTaggedScenes(plotline),
+                );
+            } catch {
+                new Notice('Could not save plotline color to arcs.json.');
+            }
             this.refresh();
         });
 
@@ -934,6 +944,46 @@ export class StorylineView extends ItemView {
             });
             descEl.textContent = desc.trim();
         }
+
+        const normalizedPlotline = normalizePlotlineName(plotline);
+        const taggedScenes = this.getTaggedScenes(plotline);
+        const arc = this.plugin.arcManager.getByName(plotline);
+        const endingSetting = new Setting(body)
+            .setName('Ending scene')
+            .setDesc('Choose where this plotline resolves, or leave it active.');
+        const endingSelect = endingSetting.controlEl.createEl('select', {
+            cls: 'dropdown storyline-ending-select',
+            attr: { 'aria-label': `Ending scene for ${plotline}` },
+        });
+        endingSelect.createEl('option', { value: '', text: 'Active' });
+        for (const scene of taggedScenes) {
+            const act = scene.act !== undefined ? `${getActDisplayLabel(scene.act)} · ` : '';
+            const sequence = scene.sequence !== undefined ? `${scene.sequence}. ` : '';
+            endingSelect.createEl('option', {
+                value: scene.filePath,
+                text: `${act}${sequence}${scene.title || 'Untitled'}`,
+            });
+        }
+        const currentEnding = taggedScenes.find(scene =>
+            !!arc?.endedAtSceneId && matchesArcScenePath(scene.filePath, arc.endedAtSceneId));
+        endingSelect.value = currentEnding?.filePath || '';
+        endingSelect.addEventListener('click', event => event.stopPropagation());
+        endingSelect.addEventListener('change', () => {
+            const endpoint = taggedScenes.find(scene => scene.filePath === endingSelect.value);
+            const metadataFor = (values: Record<string, string>) =>
+                Object.entries(values).find(([name]) => normalizePlotlineName(name) === normalizedPlotline)?.[1];
+            void this.plugin.arcManager.setEnding(
+                plotline,
+                endpoint,
+                taggedScenes,
+                {
+                    color: metadataFor(this.plugin.settings.tagColors || {}),
+                    description: metadataFor(this.plugin.settings.plotlineDescriptions || {}),
+                },
+            ).then(() => this.refresh()).catch(() => {
+                new Notice('Could not save the plotline ending.');
+            });
+        });
 
         // Group scenes by act for visual flow
         const actGroups = new Map<string, Scene[]>();
@@ -1098,11 +1148,23 @@ export class StorylineView extends ItemView {
                     }
                     const count = await this.sceneManager.renameTag(plotline, slug);
                     // Carry over the description to the new tag name
-                    const desc = this.plugin.settings.plotlineDescriptions?.[plotline];
-                    if (desc) {
-                        this.plugin.settings.plotlineDescriptions[slug] = desc;
-                        delete this.plugin.settings.plotlineDescriptions[plotline];
+                    const descriptions = this.plugin.settings.plotlineDescriptions || {};
+                    const sourceKey = Object.keys(descriptions)
+                        .find(name => normalizePlotlineName(name) === normalizePlotlineName(plotline));
+                    const destinationKey = Object.keys(descriptions)
+                        .find(name => normalizePlotlineName(name) === normalizePlotlineName(slug) && name !== sourceKey);
+                    const sourceDescription = sourceKey ? descriptions[sourceKey] : undefined;
+                    if (sourceDescription) {
+                        if (!destinationKey || !descriptions[destinationKey]?.trim()) {
+                            descriptions[slug] = sourceDescription;
+                        }
+                        if (sourceKey !== slug) delete descriptions[sourceKey!];
                         await this.plugin.saveSettings();
+                    }
+                    try {
+                        await this.plugin.arcManager.renamePlotline(plotline, slug);
+                    } catch {
+                        new Notice('Plotline tags were renamed, but arcs.json could not be updated.');
                     }
                     new Notice(`Renamed plotline in ${count} scene${count !== 1 ? 's' : ''}`);
                     this.refresh();
@@ -1132,6 +1194,11 @@ export class StorylineView extends ItemView {
                 btn.setButtonText('Clear').onClick(async () => {
                     delete this.plugin.settings.plotlineDescriptions[plotline];
                     await this.plugin.saveSettings();
+                    await this.plugin.arcManager.updateMetadata(
+                        plotline,
+                        { description: '' },
+                        this.getTaggedScenes(plotline),
+                    );
                     this.refresh();
                     modal.close();
                 });
@@ -1145,6 +1212,11 @@ export class StorylineView extends ItemView {
                         this.plugin.settings.plotlineDescriptions[plotline] = trimmed;
                     }
                     await this.plugin.saveSettings();
+                    await this.plugin.arcManager.updateMetadata(
+                        plotline,
+                        { description: trimmed },
+                        this.getTaggedScenes(plotline),
+                    );
                     this.refresh();
                     modal.close();
                 });
@@ -1168,6 +1240,7 @@ export class StorylineView extends ItemView {
             .addButton((btn: ButtonComponent) => {
                 btn.setButtonText('Delete').setClass('mod-warning').onClick(async () => {
                     const count = await this.sceneManager.deleteTag(plotline);
+                    await this.plugin.arcManager.deletePlotline(plotline);
                     // Also remove any stored description for the deleted plotline
                     if (this.plugin.settings.plotlineDescriptions?.[plotline]) {
                         delete this.plugin.settings.plotlineDescriptions[plotline];
@@ -1326,17 +1399,30 @@ export class StorylineView extends ItemView {
         return false;
     }
 
+    private getTaggedScenes(plotline: string): Scene[] {
+        const normalized = normalizePlotlineName(plotline);
+        return this.sceneManager.getAllScenes()
+            .filter(scene => !scene.corkboardNote
+                && scene.tags?.some(tag => normalizePlotlineName(tag) === normalized))
+            .sort((a, b) => compareScenesByActChapter(a, b, (x, y) => (x.sequence ?? 0) - (y.sequence ?? 0)));
+    }
+
     private groupByPlotline(scenes: Scene[]): Map<string, Scene[]> {
         const groups = new Map<string, Scene[]>();
+        const displayNames = new Map<string, string>();
 
         for (const scene of scenes) {
             if (!scene.tags || scene.tags.length === 0) continue;
 
             for (const tag of scene.tags) {
-                if (!groups.has(tag)) {
-                    groups.set(tag, []);
+                const normalized = normalizePlotlineName(tag);
+                if (!normalized) continue;
+                const displayName = displayNames.get(normalized) || tag.trim();
+                displayNames.set(normalized, displayName);
+                if (!groups.has(displayName)) {
+                    groups.set(displayName, []);
                 }
-                groups.get(tag)!.push(scene);
+                groups.get(displayName)!.push(scene);
             }
         }
 

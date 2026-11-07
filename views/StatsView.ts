@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/no-unused-vars, no-useless-escape -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { SceneManager } from '../services/SceneManager';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
+import { attachTooltip } from '../components/Tooltip';
 import * as obsidian from 'obsidian';
 import type SceneCardsPlugin from '../main';
 import { buildDeadlinePlan, type WritingTracker } from '../services/WritingTracker';
@@ -767,72 +768,230 @@ export class StatsView extends ItemView {
         const entries = Object.entries(history)
             .map(([date, words]) => ({ date, words }))
             .sort((a, b) => a.date.localeCompare(b.date));
-
-        if (entries.length < 2) {
-            parent.createEl('p', { cls: 'stats-empty', text: 'Not enough history yet. Keep writing!' });
-            return;
-        }
-
-        // Range selector
         const redesigned = this.isRedesigned;
-        const rangeBar = parent.createDiv(
-            redesigned
-                ? 'stats-history-range-bar sl-stats-redesigned__range'
-                : 'stats-history-range-bar',
-        );
-        const ranges = [7, 30, 90, 0];
-        const labels = ['7d', '30d', '90d', 'All'];
-        const defaultRange = entries.length <= 30 ? 0 : 30;
+        const modeBar = parent.createDiv('stats-history-mode-bar');
+        const content = parent.createDiv('stats-history-content');
+        let mode: 'calendar' | 'trend' = 'calendar';
+        let selectedDate = new Date();
+        const yearValues = entries
+            .map(entry => Number(entry.date.slice(0, 4)))
+            .filter(year => Number.isInteger(year));
+        const currentYear = new Date().getFullYear();
+        const firstYear = Math.min(currentYear, ...yearValues);
+        const lastYear = Math.max(currentYear, ...yearValues);
+        let selectedYear = currentYear;
 
-        const renderChart = (days: number) => {
-            parent.querySelector('.stats-history-chart-wrap')?.remove();
-            const sliced = days > 0 ? entries.slice(-days) : entries;
-            const wrap = parent.createDiv('stats-history-chart-wrap');
+        const renderCalendar = () => {
+            content.empty();
+            const yearEntries = entries.filter(entry => entry.date.startsWith(`${selectedYear}-`));
+            const yearTotal = yearEntries.reduce((total, entry) => total + entry.words, 0);
+            const activeDays = yearEntries.filter(entry => entry.words > 0).length;
+            const dailyGoal = Math.max(1, this.plugin.settings.dailyWordGoal || 1000);
 
-            // Daily bar chart
-            this.renderHistoryBarChart(wrap, sliced);
-            if (redesigned && sliced.length > 0) {
-                const axis = wrap.createDiv('sl-stats-redesigned__axis');
-                axis.createSpan({ text: sliced[0].date });
-                axis.createSpan({ text: sliced[sliced.length - 1].date });
+            const controls = content.createDiv('stats-history-calendar-controls');
+            const previous = controls.createEl('button', {
+                cls: 'clickable-icon',
+                attr: { 'aria-label': 'Previous year', title: 'Previous year' },
+            });
+            obsidian.setIcon(previous, 'chevron-left');
+            previous.disabled = selectedYear <= firstYear;
+            previous.addEventListener('click', () => {
+                selectedYear--;
+                selectedDate = new Date(selectedYear, 0, 1, 12);
+                renderCalendar();
+            });
+
+            const yearSelect = controls.createEl('select', { cls: 'dropdown', attr: { 'aria-label': 'Calendar year' } });
+            for (let year = firstYear; year <= lastYear; year++) {
+                yearSelect.createEl('option', { value: String(year), text: String(year) });
             }
-            const selectedDates = new Set(sliced.map(entry => entry.date));
-            const summary = Object.entries(changes)
-                .filter(([date]) => selectedDates.has(date))
-                .reduce((totals, [, entry]) => ({
-                    added: totals.added + entry.added,
-                    deleted: totals.deleted + entry.deleted,
-                }), { added: 0, deleted: 0 });
-            const changeSummary = wrap.createDiv(
-                redesigned
-                    ? 'stats-change-summary sl-stats-redesigned__change-summary'
-                    : 'stats-change-summary',
-            );
-            changeSummary.createSpan({ cls: 'is-added', text: `+ ${summary.added.toLocaleString()} added` });
-            changeSummary.createSpan({ cls: 'is-deleted', text: `− ${summary.deleted.toLocaleString()} deleted` });
-            changeSummary.createSpan({ text: `${(summary.added - summary.deleted).toLocaleString()} net` });
+            yearSelect.value = String(selectedYear);
+            yearSelect.addEventListener('change', () => {
+                selectedYear = Number(yearSelect.value);
+                selectedDate = new Date(selectedYear, 0, 1, 12);
+                renderCalendar();
+            });
+
+            const next = controls.createEl('button', {
+                cls: 'clickable-icon',
+                attr: { 'aria-label': 'Next year', title: 'Next year' },
+            });
+            obsidian.setIcon(next, 'chevron-right');
+            next.disabled = selectedYear >= lastYear;
+            next.addEventListener('click', () => {
+                selectedYear++;
+                selectedDate = new Date(selectedYear, 0, 1, 12);
+                renderCalendar();
+            });
+            controls.createSpan({
+                cls: 'stats-history-year-summary',
+                text: `${yearTotal.toLocaleString()} words | ${activeDays} active days`,
+            });
+
+            const januaryFirst = new Date(selectedYear, 0, 1, 12);
+            const firstWeekday = (januaryFirst.getDay() + 6) % 7;
+            const yearLength = selectedYear % 4 === 0 && (selectedYear % 100 !== 0 || selectedYear % 400 === 0) ? 366 : 365;
+            const weekCount = Math.ceil((firstWeekday + yearLength) / 7);
+            const calendar = content.createDiv('stats-history-calendar-scroll');
+            const layout = calendar.createDiv('stats-history-calendar-layout');
+            const weekdays = layout.createDiv('stats-history-weekdays');
+            const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+            const monday = new Date(2024, 0, 1, 12);
+            for (let day = 0; day < 7; day++) {
+                const weekdayDate = new Date(monday);
+                weekdayDate.setDate(monday.getDate() + day);
+                const label = weekdays.createSpan({ text: weekdayFormatter.format(weekdayDate) });
+                if (day !== 0 && day !== 2 && day !== 4) label.addClass('is-spacer');
+            }
+
+            const gridWrap = layout.createDiv('stats-history-calendar-grid-wrap');
+            const monthTrack = gridWrap.createDiv('stats-history-month-track');
+            monthTrack.setCssStyles({ gridTemplateColumns: `repeat(${weekCount}, var(--stats-history-cell-step))` });
+            const monthFormatter = new Intl.DateTimeFormat(undefined, { month: 'short' });
+            for (let month = 0; month < 12; month++) {
+                const firstOfMonth = new Date(selectedYear, month, 1, 12);
+                const dayOfYear = Math.floor((firstOfMonth.getTime() - januaryFirst.getTime()) / 86400000);
+                const week = Math.floor((firstWeekday + dayOfYear) / 7);
+                const label = monthTrack.createSpan({ text: monthFormatter.format(firstOfMonth) });
+                label.setCssStyles({ gridColumn: `${week + 1} / span 4` });
+            }
+
+            const grid = gridWrap.createDiv('stats-history-calendar-grid');
+            grid.setCssStyles({ gridTemplateColumns: `repeat(${weekCount}, var(--stats-history-cell-step))` });
+            const fullDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' });
+            const dateKey = (date: Date) => [
+                date.getFullYear(),
+                String(date.getMonth() + 1).padStart(2, '0'),
+                String(date.getDate()).padStart(2, '0'),
+            ].join('-');
+            const selectedKey = dateKey(selectedDate);
+            const startOffset = -firstWeekday;
+
+            for (let week = 0; week < weekCount; week++) {
+                for (let weekday = 0; weekday < 7; weekday++) {
+                    const date = new Date(selectedYear, 0, 1 + startOffset + week * 7 + weekday, 12);
+                    const key = dateKey(date);
+                    const words = history[key] || 0;
+                    const level = words <= 0 ? 0 : words >= dailyGoal ? 4 : Math.min(3, Math.ceil((words / dailyGoal) * 4));
+                    const tooltipText = `${fullDateFormatter.format(date)}: ${words.toLocaleString()} words`;
+                    const day = grid.createEl('button', {
+                        cls: `stats-history-day level-${level}${date.getFullYear() === selectedYear ? '' : ' is-outside-year'}`,
+                        attr: {
+                            type: 'button',
+                            'aria-label': tooltipText,
+                            'aria-pressed': String(key === selectedKey),
+                        },
+                    });
+                    attachTooltip(day, tooltipText);
+                    day.addEventListener('click', () => {
+                        selectedDate = date;
+                        renderCalendar();
+                    });
+                }
+            }
+
+            const selectedWords = history[dateKey(selectedDate)] || 0;
+            content.createDiv({
+                cls: 'stats-history-selected-date',
+                text: `${fullDateFormatter.format(selectedDate)}: ${selectedWords.toLocaleString()} words`,
+            });
+            const legend = content.createDiv('stats-history-calendar-legend');
+            legend.createSpan({ text: 'Less' });
+            for (let level = 0; level <= 4; level++) {
+                legend.createSpan({ cls: `stats-history-day-swatch level-${level}`, attr: { 'aria-hidden': 'true' } });
+            }
+            legend.createSpan({ text: 'Daily goal' });
         };
 
-        ranges.forEach((days, i) => {
-            const active = days === defaultRange;
-            const btn = rangeBar.createSpan({
-                cls: redesigned
-                    ? `stats-range-btn${active ? ' active is-active' : ''}`
-                    : `stats-range-btn${active ? ' active' : ''}`,
-                text: labels[i],
-            });
-            btn.addEventListener('click', () => {
-                rangeBar.querySelectorAll('.stats-range-btn').forEach(b => {
-                    b.removeClass('active');
-                    b.removeClass('is-active');
-                });
-                btn.addClass('active');
-                if (redesigned) btn.addClass('is-active');
-                renderChart(days);
-            });
-        });
+        const renderTrend = () => {
+            content.empty();
+            if (entries.length < 2) {
+                content.createEl('p', { cls: 'stats-empty', text: 'Not enough history yet. Keep writing!' });
+                return;
+            }
 
-        renderChart(defaultRange);
+            const rangeBar = content.createDiv(
+                redesigned
+                    ? 'stats-history-range-bar sl-stats-redesigned__range'
+                    : 'stats-history-range-bar',
+            );
+            const ranges = [7, 30, 90, 0];
+            const labels = ['7d', '30d', '90d', 'All'];
+            const defaultRange = entries.length <= 30 ? 0 : 30;
+            const renderChart = (days: number) => {
+                content.querySelector('.stats-history-chart-wrap')?.remove();
+                const sliced = days > 0 ? entries.slice(-days) : entries;
+                const wrap = content.createDiv('stats-history-chart-wrap');
+                this.renderHistoryBarChart(wrap, sliced);
+                if (redesigned && sliced.length > 0) {
+                    const axis = wrap.createDiv('sl-stats-redesigned__axis');
+                    axis.createSpan({ text: this.formatHistoryDate(sliced[0].date, { month: 'short', day: 'numeric' }) });
+                    axis.createSpan({ text: this.formatHistoryDate(sliced[sliced.length - 1].date, { month: 'short', day: 'numeric' }) });
+                }
+                const selectedDates = new Set(sliced.map(entry => entry.date));
+                const summary = Object.entries(changes)
+                    .filter(([date]) => selectedDates.has(date))
+                    .reduce((totals, [, entry]) => ({
+                        added: totals.added + entry.added,
+                        deleted: totals.deleted + entry.deleted,
+                    }), { added: 0, deleted: 0 });
+                const changeSummary = wrap.createDiv(
+                    redesigned
+                        ? 'stats-change-summary sl-stats-redesigned__change-summary'
+                        : 'stats-change-summary',
+                );
+                changeSummary.createSpan({ cls: 'is-added', text: `+ ${summary.added.toLocaleString()} added` });
+                changeSummary.createSpan({ cls: 'is-deleted', text: `- ${summary.deleted.toLocaleString()} deleted` });
+                changeSummary.createSpan({ text: `${(summary.added - summary.deleted).toLocaleString()} net` });
+            };
+
+            ranges.forEach((days, i) => {
+                const active = days === defaultRange;
+                const btn = rangeBar.createSpan({
+                    cls: redesigned
+                        ? `stats-range-btn${active ? ' active is-active' : ''}`
+                        : `stats-range-btn${active ? ' active' : ''}`,
+                    text: labels[i],
+                });
+                btn.addEventListener('click', () => {
+                    rangeBar.querySelectorAll('.stats-range-btn').forEach(b => {
+                        b.removeClass('active');
+                        b.removeClass('is-active');
+                    });
+                    btn.addClass('active');
+                    if (redesigned) btn.addClass('is-active');
+                    renderChart(days);
+                });
+            });
+            renderChart(defaultRange);
+        };
+
+        for (const [value, label, icon] of [
+            ['calendar', 'Calendar', 'calendar-days'],
+            ['trend', 'Trend', 'chart-no-axes-column-increasing'],
+        ] as const) {
+            const button = modeBar.createEl('button', {
+                cls: `stats-history-mode-btn${mode === value ? ' is-active' : ''}`,
+                attr: { type: 'button', 'aria-pressed': String(mode === value) },
+            });
+            obsidian.setIcon(button.createSpan(), icon);
+            button.createSpan({ text: label });
+            button.addEventListener('click', () => {
+                mode = value;
+                modeBar.querySelectorAll('.stats-history-mode-btn').forEach(tab => {
+                    tab.toggleClass('is-active', tab === button);
+                    tab.setAttribute('aria-pressed', String(tab === button));
+                });
+                if (mode === 'calendar') renderCalendar();
+                else renderTrend();
+            });
+        }
+        renderCalendar();
+    }
+
+    private formatHistoryDate(dateKey: string, options: Intl.DateTimeFormatOptions): string {
+        const [year, month, day] = dateKey.split('-').map(Number);
+        return new Intl.DateTimeFormat(undefined, options).format(new Date(year, month - 1, day, 12));
     }
 
     private renderHistoryBarChart(parent: HTMLElement, data: { date: string; words: number }[]): void {
@@ -843,7 +1002,7 @@ export class StatsView extends ItemView {
             for (const entry of data) {
                 const bar = chart.createEl('i');
                 bar.setCssStyles({ height: `${Math.max(3, (entry.words / maxVal) * 100)}%` });
-                bar.setAttribute('title', `${entry.date}: ${entry.words.toLocaleString()} words`);
+                bar.setAttribute('title', `${this.formatHistoryDate(entry.date, { dateStyle: 'full' })}: ${entry.words.toLocaleString()} words`);
             }
             return;
         }
@@ -853,9 +1012,12 @@ export class StatsView extends ItemView {
             const hPct = (entry.words / maxVal) * 100;
             const bar = col.createDiv('stats-history-bar');
             bar.setCssStyles({ height: `${Math.max(2, hPct)}%` });
-            bar.setAttribute('title', `${entry.date}: ${entry.words.toLocaleString()} words`);
+            bar.setAttribute('title', `${this.formatHistoryDate(entry.date, { dateStyle: 'full' })}: ${entry.words.toLocaleString()} words`);
             if (data.length <= 31) {
-                col.createDiv({ cls: 'stats-history-label', text: entry.date.slice(5) });
+                col.createDiv({
+                    cls: 'stats-history-label',
+                    text: this.formatHistoryDate(entry.date, { month: 'numeric', day: 'numeric' }),
+                });
             }
         }
     }
@@ -2217,7 +2379,11 @@ export class StatsView extends ItemView {
 
     private renderWarnings(parent: HTMLElement, allScenes: Scene[]): void {
         if (this.plugin.settings.enablePlotHoleDetection && allScenes.length > 0) {
-            const warnings = Validator.validate(allScenes);
+            const warnings = Validator.validate(
+                allScenes,
+                this.plugin.arcManager.getAll(),
+                this.sceneManager.getDefinedActs(),
+            );
             if (warnings.length === 0) {
                 const ok = parent.createDiv('stats-ok');
                 const ic = ok.createSpan();

@@ -134,8 +134,12 @@ export class MetadataParser {
         const frontmatter = fmRaw as Partial<Scene> & Record<string, unknown>;
 
         const body = this.extractBody(content);
+        const arcPoint = this.parseBooleanFlag(
+            frontmatter.arcPoint ?? frontmatter.arcAnchor ?? (frontmatter.arc_anchor as boolean | undefined),
+        );
 
         return {
+            id: this.normalizeFrontmatterString(frontmatter.id ?? frontmatter.binderId ?? frontmatter.sceneId),
             filePath,
             type: 'scene',
             title: frontmatter.title || this.titleFromPath(filePath),
@@ -184,7 +188,8 @@ export class MetadataParser {
                     : undefined,
                     ) as Record<string, string | string[] | boolean | number> | undefined,
             beatsheet: frontmatter.beatsheet,
-            arcAnchor: this.parseBooleanFlag(frontmatter.arcAnchor ?? (frontmatter.arc_anchor as boolean | undefined)),
+            arcPoint,
+            arcAnchor: arcPoint,
         };
     }
 
@@ -257,7 +262,13 @@ export class MetadataParser {
             if (key === 'subtitle' && !value) { delete frontmatter[key]; continue; }
             if (key === 'color' && !value) { delete frontmatter[key]; continue; }
             if (key === 'beatsheet' && !value) { delete frontmatter[key]; continue; }
-            if (key === 'arcAnchor' && !value) { delete frontmatter[key]; continue; }
+            if (key === 'arcPoint' || key === 'arcAnchor') {
+                if (value) frontmatter.arcPoint = true;
+                else delete frontmatter.arcPoint;
+                delete frontmatter.arcAnchor;
+                delete frontmatter.arc_anchor;
+                continue;
+            }
             if (key === 'inactive' && !value) { delete frontmatter[key]; continue; }
             if (key === 'ignored_detections') {
                 if (Array.isArray(value) && value.length > 0) frontmatter[key] = value;
@@ -413,6 +424,7 @@ export class MetadataParser {
             type: 'scene',
             title: scene.title || 'Untitled Scene',
         };
+        if (scene.id) fm.id = scene.id;
 
         if (scene.act !== undefined) fm.act = scene.act;
         if (scene.chapter !== undefined) fm.chapter = scene.chapter;
@@ -443,7 +455,7 @@ export class MetadataParser {
         if (scene.subtitle) fm.subtitle = scene.subtitle;
         if (scene.color) fm.color = scene.color;
         if (scene.beatsheet) fm.beatsheet = scene.beatsheet;
-        if (scene.arcAnchor) fm.arcAnchor = true;
+        if (scene.arcPoint ?? scene.arcAnchor) fm.arcPoint = true;
         if (scene.inactive) fm.inactive = true;
         if (scene.codexLinks && Object.keys(scene.codexLinks).some(k => scene.codexLinks![k]?.length)) {
             fm.codexLinks = scene.codexLinks;

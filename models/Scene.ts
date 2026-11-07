@@ -87,6 +87,8 @@ export const TIMELINE_MODES: TimelineMode[] = [
  * Scene data model - represents a single scene card
  */
 export interface Scene {
+    /** Stable scene identity shared with Arc records. */
+    id?: string;
     /** File path relative to vault root */
     filePath: string;
     /** type: scene identifier */
@@ -174,7 +176,9 @@ export interface Scene {
     beatsheet?: string;
     /** Issue #89 — names of detected codex links the user explicitly ignored in this scene */
     ignored_detections?: string[];
-    /** Issue #128 — marks this scene as an Arc Point (key turning point in the story) */
+    /** Canonical Arc Point metadata key. */
+    arcPoint?: boolean;
+    /** Legacy Arc Point alias read from older scene files. */
     arcAnchor?: boolean;
     /** Marks this scene as parked/out of manuscript flow without archiving it */
     inactive?: boolean;
@@ -740,9 +744,9 @@ export const BUILTIN_STATUS_CONFIG: Record<string, { label: string; color: strin
     idea: { label: 'Idea', color: 'var(--sl-status-idea, #9E9E9E)', icon: 'lightbulb' },
     outlined: { label: 'Outlined', color: 'var(--sl-status-outlined, #2196F3)', icon: 'list' },
     draft: { label: 'Draft', color: 'var(--sl-status-draft, #FF9800)', icon: 'pencil' },
-    written: { label: 'Written', color: 'var(--sl-status-written, #4CAF50)', icon: 'file-text' },
+    written: { label: 'Written', color: 'var(--sl-status-written, #26A69A)', icon: 'file-text' },
     revised: { label: 'Revised', color: 'var(--sl-status-revised, #9C27B0)', icon: 'refresh-cw' },
-    final: { label: 'Final', color: 'var(--sl-status-final, #F44336)', icon: 'check-circle' },
+    final: { label: 'Final', color: 'var(--sl-status-final, #4CAF50)', icon: 'check-circle' },
 };
 
 /** @deprecated Use getStatusConfig() for dynamic access. Kept for backward compatibility. */
@@ -752,6 +756,15 @@ export const STATUS_CONFIG: Record<string, { label: string; color: string; icon:
  * Built-in status order for sorting
  */
 export const BUILTIN_STATUS_ORDER: SceneStatus[] = ['idea', 'outlined', 'draft', 'written', 'revised', 'final'];
+
+export const BUILTIN_STATUS_DEFAULT_COLORS: Record<BuiltinSceneStatus, string> = {
+    idea: '#9E9E9E',
+    outlined: '#2196F3',
+    draft: '#FF9800',
+    written: '#26A69A',
+    revised: '#9C27B0',
+    final: '#4CAF50',
+};
 
 /** @deprecated Use getStatusOrder() for dynamic access. Kept for backward compatibility. */
 export const STATUS_ORDER: SceneStatus[] = BUILTIN_STATUS_ORDER;
@@ -764,15 +777,29 @@ const DEFAULT_STATUS_CFG = { label: '?', color: '#888', icon: 'circle' };
 // ── Runtime custom-status registry ──
 // Populated by the plugin on startup / when settings change.
 let _customStatuses: CustomStatusDef[] = [];
+let _builtinStatusColorOverrides: Partial<Record<BuiltinSceneStatus, string>> = {};
 
 /** Register custom statuses (called from plugin settings load). */
 export function registerCustomStatuses(defs: CustomStatusDef[]): void {
     _customStatuses = defs;
 }
 
+export function registerBuiltinStatusColors(colors: Partial<Record<BuiltinSceneStatus, string>>): void {
+    _builtinStatusColorOverrides = {};
+    for (const status of BUILTIN_STATUS_ORDER) {
+        const color = colors?.[status as BuiltinSceneStatus];
+        if (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)) {
+            _builtinStatusColorOverrides[status as BuiltinSceneStatus] = color;
+        }
+    }
+}
+
 /** Get the full status config (built-in + custom). */
 export function getStatusConfig(): Record<string, { label: string; color: string; icon: string }> {
     const merged: Record<string, { label: string; color: string; icon: string }> = { ...BUILTIN_STATUS_CONFIG };
+    for (const [status, color] of Object.entries(_builtinStatusColorOverrides)) {
+        if (merged[status]) merged[status] = { ...merged[status], color };
+    }
     for (const cs of _customStatuses) {
         merged[cs.id] = { label: cs.label, color: cs.color, icon: cs.icon };
     }

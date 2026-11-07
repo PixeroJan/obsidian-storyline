@@ -9,9 +9,9 @@ body {
     --sl-status-idea:       #9E9E9E;
     --sl-status-outlined:   #2196F3;
     --sl-status-draft:      #FF9800;
-    --sl-status-written:    #4CAF50;
+    --sl-status-written:    #26A69A;
     --sl-status-revised:    #9C27B0;
-    --sl-status-final:      #F44336;
+    --sl-status-final:      #4CAF50;
 
     /* Emotion colors */
     --sl-emotion-tense:       #E53935;
@@ -101,9 +101,9 @@ body.theme-dark {
     --sl-status-idea:       #BDBDBD;
     --sl-status-outlined:   #64B5F6;
     --sl-status-draft:      #FFB74D;
-    --sl-status-written:    #81C784;
+    --sl-status-written:    #26A69A;
     --sl-status-revised:    #CE93D8;
-    --sl-status-final:      #EF5350;
+    --sl-status-final:      #4CAF50;
 
     --sl-emotion-tense:       #EF5350;
     --sl-emotion-suspenseful: #E57373;
@@ -204,7 +204,7 @@ body.theme-dark {
     padding-right: 320px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 500px) and (hover: none) {
     /* Obsidian's mobile custom-view header can expand into a large empty
        region above StoryLine. StoryLine already renders its own toolbar. */
     body.is-mobile .workspace-leaf-content[data-type^="story-line-"] > .view-header {
@@ -214,6 +214,10 @@ body.theme-dark {
     body.is-mobile .workspace-leaf-content[data-type^="story-line-"] > .view-content {
         padding: 0 !important;
         margin: 0 !important;
+    }
+
+    body.is-phone .mod-root .workspace-leaf-content[data-type^="story-line-"] > .view-content {
+        padding-top: var(--safe-area-inset-top, 0px) !important;
     }
 
     .story-line-board-container,
@@ -231,10 +235,14 @@ body.theme-dark {
 
     .sl-mobile .story-line-toolbar {
         position: sticky;
-        top: env(safe-area-inset-top, 0px);
+        top: 0;
         z-index: 30;
         padding-top: max(8px, calc(env(safe-area-inset-top, 0px) + 8px));
         border-top: 1px solid var(--sc-card-border);
+    }
+
+    body.is-phone .mod-root .sl-mobile .story-line-toolbar {
+        box-shadow: 0 calc(var(--safe-area-inset-top, 0px) / -2) 0 calc(var(--safe-area-inset-top, 0px) / 2) var(--background-primary);
     }
 
     .sl-mobile .story-line-toolbar::before {
@@ -6088,6 +6096,145 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     color: var(--sc-text-faint);
     margin-top: 2px;
     white-space: nowrap;
+}
+
+.stats-history-mode-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.stats-history-mode-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.stats-history-mode-btn svg { width: 14px; height: 14px; }
+.stats-history-mode-btn.is-active {
+    border-color: var(--interactive-accent);
+    color: var(--text-normal);
+    background: var(--background-secondary);
+}
+
+.stats-history-calendar-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    margin-bottom: 12px;
+}
+
+.stats-history-year-summary {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    white-space: nowrap;
+}
+
+.stats-history-calendar-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 3px;
+}
+
+.stats-history-calendar-layout {
+    --stats-history-cell-size: 12px;
+    --stats-history-cell-gap: 3px;
+    --stats-history-cell-step: calc(var(--stats-history-cell-size) + var(--stats-history-cell-gap));
+    display: grid;
+    grid-template-columns: 30px max-content;
+    column-gap: 7px;
+    width: max-content;
+    min-width: 100%;
+}
+
+.stats-history-weekdays {
+    display: grid;
+    grid-template-rows: repeat(7, var(--stats-history-cell-size));
+    row-gap: var(--stats-history-cell-gap);
+    padding-top: 21px;
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: var(--stats-history-cell-size);
+}
+
+.stats-history-weekdays .is-spacer { visibility: hidden; }
+
+.stats-history-calendar-grid-wrap { width: max-content; }
+
+.stats-history-month-track {
+    display: grid;
+    height: 18px;
+    column-gap: var(--stats-history-cell-gap);
+    color: var(--text-muted);
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.stats-history-calendar-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(7, var(--stats-history-cell-size));
+    grid-auto-columns: var(--stats-history-cell-size);
+    gap: var(--stats-history-cell-gap);
+}
+
+.stats-history-day,
+.stats-history-day-swatch {
+    display: block;
+    width: var(--stats-history-cell-size);
+    height: var(--stats-history-cell-size);
+    min-width: var(--stats-history-cell-size);
+    min-height: var(--stats-history-cell-size);
+    padding: 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 2px;
+    background: var(--background-primary);
+}
+
+.stats-history-day { cursor: pointer; }
+.stats-history-day:hover { outline: 1px solid var(--text-muted); outline-offset: 1px; }
+.stats-history-day[aria-pressed="true"] { outline: 2px solid var(--interactive-accent); outline-offset: 1px; }
+.stats-history-day.is-outside-year { opacity: 0.2; }
+.stats-history-day.level-1, .stats-history-day-swatch.level-1 { background: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary)); }
+.stats-history-day.level-2, .stats-history-day-swatch.level-2 { background: color-mix(in srgb, var(--interactive-accent) 36%, var(--background-primary)); }
+.stats-history-day.level-3, .stats-history-day-swatch.level-3 { background: color-mix(in srgb, var(--interactive-accent) 58%, var(--background-primary)); }
+.stats-history-day.level-4, .stats-history-day-swatch.level-4 { background: var(--interactive-accent); }
+
+.stats-history-selected-date {
+    margin-top: 12px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+}
+
+.stats-history-calendar-legend {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 10px;
+    color: var(--text-muted);
+    font-size: 10px;
+}
+
+.stats-history-calendar-legend > span:first-child { margin-right: 2px; }
+.stats-history-calendar-legend > span:last-child { margin-left: 3px; }
+
+@media (max-width: 520px) {
+    .stats-history-calendar-layout { --stats-history-cell-size: 10px; --stats-history-cell-gap: 2px; }
+    .stats-history-year-summary { font-size: 0.75em; }
+}
+
+.story-line-manuscript-container > .story-line-toolbar,
+.story-line-manuscript-container > .story-line-filters-container,
+.story-line-manuscript-container > .sl-fmt-toolbar {
+    flex-shrink: 0;
 }
 
 /* ── Cumulative / line chart ── */

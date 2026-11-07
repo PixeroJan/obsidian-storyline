@@ -4,7 +4,8 @@ import { SceneCardsSettings, SceneCardsSettingTab, DEFAULT_SETTINGS, migrateSect
 import { asRecord, isRecord } from './utils/narrow';
 import type { FilterPreset } from './models/Scene';
 import { SceneManager } from './services/SceneManager';
-import { registerCustomStatuses } from './models/Scene';
+import { ArcManager } from './services/ArcManager';
+import { BUILTIN_STATUS_DEFAULT_COLORS, registerBuiltinStatusColors, registerCustomStatuses } from './models/Scene';
 import { MetadataParser, setWriteSceneFieldsAsWikilinks, setWordcountExclusions, setWordcountLocale } from './services/MetadataParser';
 import { normalizeStoryLineLocale, tokenizeWords } from './utils/locale';
 import { setActiveTemplatesProvider, setTopLevelMirrorEnabled, mirrorUniversalFieldsToTopLevel, hydrateUniversalFieldsFromTopLevel, isReservedTopLevelKey, type FieldTemplateChange } from './services/FieldTemplateService';
@@ -75,6 +76,7 @@ export default class SceneCardsPlugin extends Plugin {
     settings: SceneCardsSettings = DEFAULT_SETTINGS;
     private automaticQuoteReplacement = true;
     sceneManager!: SceneManager;
+    arcManager!: ArcManager;
     /** Set to true once System/ migration is confirmed — guards saveSettings stripping */
     private _systemMigrationDone = false;
     /** Snapshot of colour settings from data.json (global defaults) */
@@ -123,7 +125,9 @@ export default class SceneCardsPlugin extends Plugin {
         await this.loadSettings();
         this.automaticQuoteReplacement = this.settings.automaticQuoteReplacement !== false;
         registerCustomStatuses(this.settings.customStatuses || []);
+        registerBuiltinStatusColors(this.settings.statusColors || {});
         this.applyImageSizingVariables();
+        this.applyStatusColorVariables();
 
         // Convert only newly typed ASCII double quotes in Obsidian's editor.
         // Paste and existing text use their original characters.
@@ -175,6 +179,7 @@ export default class SceneCardsPlugin extends Plugin {
         this.register(setupMobileKeyboardHandling());
 
         this.sceneManager = new SceneManager(this.app, this);
+        this.arcManager = new ArcManager(this.app, () => this.getProjectSystemFolder());
         this.locationManager = new LocationManager(this.app);
         this.characterManager = new CharacterManager(this.app);
         this.codexManager = new CodexManager(this.app);
@@ -308,6 +313,7 @@ export default class SceneCardsPlugin extends Plugin {
                 await this.migrateProjectDataFromSettings();
                 // Load per-project data from System/ files (tagColors, aliases, etc.)
                 await this.loadProjectSystemData();
+                await this.arcManager.migrateLegacyEndings(this.sceneManager.getAllScenes());
                 // Load universal field templates from System/field-templates.json
                 await this.fieldTemplates.load();
                 // Load corkboard layout from System/board.json
@@ -1318,7 +1324,9 @@ export default class SceneCardsPlugin extends Plugin {
 
     async saveSettings(): Promise<void> {
         this.applyImageSizingVariables();
+        this.applyStatusColorVariables();
         registerCustomStatuses(this.settings.customStatuses || []);
+        registerBuiltinStatusColors(this.settings.statusColors || {});
         setWriteSceneFieldsAsWikilinks(this.settings.writeFieldsAsWikilinks !== false);
         setTopLevelMirrorEnabled(this.settings.universalFieldsMirrorTopLevel !== false);
         setWordcountExclusions({
@@ -1380,6 +1388,17 @@ export default class SceneCardsPlugin extends Plugin {
         root.style.setProperty('--sl-location-tree-thumb-size', `${this.settings.locationTreeThumbSize}px`);
         root.style.setProperty('--sl-location-detail-portrait-width', `${this.settings.locationDetailPortraitWidth}px`);
         root.style.setProperty('--sl-location-detail-portrait-height', `${this.settings.locationDetailPortraitHeight}px`);
+    }
+
+    private applyStatusColorVariables(): void {
+        const root = activeDocument.body;
+        for (const [status, defaultColor] of Object.entries(BUILTIN_STATUS_DEFAULT_COLORS)) {
+            const override = this.settings.statusColors?.[status as keyof typeof BUILTIN_STATUS_DEFAULT_COLORS];
+            const color = typeof override === 'string' && /^#[0-9a-fA-F]{6}$/.test(override)
+                ? override
+                : defaultColor;
+            root.style.setProperty(`--sl-status-${status}`, color);
+        }
     }
 
     /**
@@ -1728,6 +1747,8 @@ export default class SceneCardsPlugin extends Plugin {
         this.settings.plotlineDescriptions = isRecord(plotlines.plotlineDescriptions)
             ? (plotlines.plotlineDescriptions as Record<string, string>)
             : {};
+        await this.arcManager.load();
+        this.arcManager.reconcileSettings(this.settings.tagColors, this.settings.plotlineDescriptions);
 
         // Per-project colour overrides (if the project has them stored)
         if (isRecord(plotlines.projectColors)) {
@@ -1966,6 +1987,7 @@ export default class SceneCardsPlugin extends Plugin {
         }
 
         await this.writeSystemJson('plotlines.json', plotlinesPayload);
+        await this.arcManager?.save();
 
         await this.writeSystemJson('characters.json', {
             characterAliases: this.settings.characterAliases || {},

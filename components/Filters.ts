@@ -74,9 +74,21 @@ export class FiltersComponent {
             }
         });
         searchInput.value = this.currentFilter.searchText ?? '';
-        searchInput.addEventListener('input', () => {
-            this.currentFilter.searchText = searchInput.value || undefined;
+        let isComposing = false;
+        const applySearch = () => {
+            const searchText = searchInput.value || undefined;
+            if (searchText === this.currentFilter.searchText) return;
+            this.currentFilter.searchText = searchText;
             this.emitChange();
+        };
+        searchInput.addEventListener('compositionstart', () => { isComposing = true; });
+        searchInput.addEventListener('compositionend', () => {
+            isComposing = false;
+            applySearch();
+        });
+        searchInput.addEventListener('input', (event) => {
+            if (isComposing || (event as InputEvent).isComposing) return;
+            applySearch();
         });
 
         // Sort dropdown

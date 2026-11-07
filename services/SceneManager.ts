@@ -566,6 +566,7 @@ export class SceneManager implements ISceneStore {
         await this.loadCorkboardPositions();
         await this.plugin.saveSettings();
         await this.initialize(true);
+        await this.plugin.arcManager.migrateLegacyEndings(this.getAllScenes());
         // Issue #271 follow-up: explicitly invalidate and re-scan LinkScanner cache
         // when the active project changes, so entities don't appear "unlinked" on reload.
         // This ensures the dashboard views (Codex, Characters, Locations) show the correct
@@ -1020,6 +1021,7 @@ export class SceneManager implements ISceneStore {
      * Create a new scene
      */
     async createScene(sceneData: Partial<Scene>, afterScene?: Scene): Promise<TFile> {
+        sceneData.id ||= crypto.randomUUID();
         // Route corkboard notes to the Notes/ folder
         const isNote = sceneData.corkboardNote === true;
         const baseFolder = isNote ? this.getNotesFolder() : this.getSceneFolder();
@@ -1164,14 +1166,8 @@ export class SceneManager implements ISceneStore {
             currentPath = await this.relocateSceneForAct(filePath, updates.act);
         }
 
-        if (updates.title !== undefined) {
-            currentPath = await this.syncSceneFileName(currentPath);
-        }
-
-        // A title/sequence/act change can rename the scene file. Corkboard
-        // positions are keyed by file path, so migrate the layout before
-        // callers refresh the board and see the new path as an unpositioned
-        // scene.
+        // Corkboard positions are keyed by file path, so migrate the layout
+        // when an explicitly requested act move changes the physical path.
         if (currentPath !== filePath) {
             await this.plugin.flushCorkboardPositions();
             await this.migrateCorkboardPosition(filePath, currentPath);
@@ -1274,49 +1270,6 @@ export class SceneManager implements ISceneStore {
         return `${safeTitle}.md`;
     }
 
-    private getUniquePathInFolder(folder: string, fileName: string, currentPath: string): string {
-        const dot = fileName.lastIndexOf('.');
-        const base = dot >= 0 ? fileName.slice(0, dot) : fileName;
-        const ext = dot >= 0 ? fileName.slice(dot) : '';
-        const current = normalizePath(currentPath);
-        let candidate = normalizePath(`${folder}/${fileName}`);
-        let dedupe = 1;
-        while (this.app.vault.getAbstractFileByPath(candidate) && normalizePath(candidate) !== current) {
-            candidate = normalizePath(`${folder}/${base} (${dedupe})${ext}`);
-            dedupe++;
-        }
-        return candidate;
-    }
-
-    private async syncSceneFileName(filePath: string): Promise<string> {
-        const file = this.app.vault.getAbstractFileByPath(filePath);
-        if (!file || !(file instanceof TFile)) return filePath;
-        const scene = this.scenes.get(filePath) ?? await MetadataParser.parseFile(this.app, file);
-        if (!scene || scene.corkboardNote) return filePath;
-        const sceneFolder = normalizePath(this.getSceneFolder());
-        if (!normalizePath(file.path).startsWith(`${sceneFolder}/`)) return filePath;
-
-        const folder = file.parent?.path ? normalizePath(file.parent.path) : sceneFolder;
-        const newName = this.getSceneFileNameForMetadata(scene, file);
-        const newPath = this.getUniquePathInFolder(folder, newName, file.path);
-        if (normalizePath(file.path) === normalizePath(newPath)) return file.path;
-
-        this.scenes.delete(file.path);
-        await this.app.fileManager.renameFile(file, newPath);
-        const movedFile = this.app.vault.getAbstractFileByPath(newPath);
-        if (movedFile instanceof TFile) {
-            const updated = await MetadataParser.parseFile(this.app, movedFile);
-            if (updated) this.scenes.set(newPath, updated);
-        }
-        this.bumpVersion(newPath);
-
-        // Issue #175 — keep the linked scene notes file name in sync with the
-        // scene title so renaming a scene also renames its "Title - Notes.md".
-        await this.renameSceneNotesFile(newPath);
-
-        return newPath;
-    }
-
     /** Preview an explicit filename synchronization without changing files. */
     getSceneFilenameSyncPreview(): SceneFilenameSyncChange[] {
         const sceneFolder = normalizePath(this.getSceneFolder());
@@ -1361,7 +1314,8 @@ export class SceneManager implements ISceneStore {
             let dedupe = 1;
             while (
                 occupied.has(candidate)
-                || (this.app.vault.getAbstractFileByPath(candidate)
+                || (candidate !== currentPath
+                    && this.app.vault.getAbstractFileByPath(candidate)
                     && (!currentPaths.has(candidate) || !movingPaths.has(candidate)))
             ) {
                 candidate = normalizePath(`${folder}/${base} (${dedupe})${ext}`);
@@ -1410,28 +1364,6 @@ export class SceneManager implements ISceneStore {
         }
         this.bumpVersion();
         return staged.length;
-    }
-
-    /**
-     * Rename a scene's external notes file to match the scene's current title.
-     * No-op when there is no notes file, the notes file lives outside the
-     * project's notes folder, or the name already matches. Issue #175.
-     */
-    private async renameSceneNotesFile(scenePath: string): Promise<void> {
-        const scene = this.scenes.get(scenePath);
-        if (!scene || !scene.notesFile) return;
-        const notesFile = this.resolveSceneNotesFile(scene);
-        if (!notesFile) return;
-
-        const notesFolder = normalizePath(this.getSceneNotesFolder());
-        if (!normalizePath(notesFile.path).startsWith(`${notesFolder}/`)) return;
-
-        const targetPath = this.getUniqueSceneNotesPath(scene, notesFile.path);
-        if (normalizePath(targetPath) === normalizePath(notesFile.path)) return;
-
-        await this.app.fileManager.renameFile(notesFile, targetPath);
-        await this.updateScene(scenePath, { notesFile: targetPath });
-        scene.notesFile = targetPath;
     }
 
     /**
@@ -1791,6 +1723,9 @@ export class SceneManager implements ISceneStore {
         const wasInSceneFolder = this.isWithinFolder(oldPath, this.getSceneFolder());
         const wasInNotesFolder = this.isWithinFolder(oldPath, this.getNotesFolder());
         const isProjectContent = inSceneFolder || inNotesFolder || wasInSceneFolder || wasInNotesFolder;
+        if (file.extension === 'md' && inSceneFolder && wasInSceneFolder && oldPath !== file.path) {
+            await this.plugin.arcManager.renameScenePath(oldPath, file.path);
+        }
         if (isProjectContent) {
             await this.plugin.flushCorkboardPositions();
             await this.migrateCorkboardPosition(oldPath, file.path);

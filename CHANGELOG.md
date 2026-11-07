@@ -7,6 +7,26 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
 
+## Version 1.11.9
+
+### Bug Fixes
+
+- **Scene filename synchronization** — Already synchronized scenes no longer get a false `(1)` filename suffix. Real filename conflicts are still resolved safely.
+- **Search with IME keyboards** — Filtering now waits until text composition is committed, so typing with Japanese, Chinese, Korean, and other IME keyboards is not interrupted.
+- **Android landscape toolbar** — StoryLine toolbars now account for the Android system-bar safe area on short landscape screens.
+- **Plotline ending checks** — Plot-hole warnings no longer flag appearances after a plotline's selected ending scene; missing middle-Act appearances before that ending are still reported.
+- **Character name matching** — Common first names are no longer inferred as aliases. Add a nickname or explicit alias when that alternative should match.
+- **Focus Text** — Paragraph focus styling is limited to the active editor instead of affecting unrelated panes.
+
+### Improvements
+
+- **Writing history calendar** — Added a calendar heatmap alongside the daily trend chart. Month, weekday, and date labels use your operating system's language, and leap years include February 29.
+- **Plotline ending scenes** — Choose where each plotline resolves and keep its scene associations compatible with Scribe's native Markdown project paths.
+- **Arc Point compatibility** — New and updated scene metadata uses Scribe's `arcPoint` key while older `arcAnchor` scenes remain readable.
+- **Status colors** — The six built-in statuses now use Scribe's default palette, with color controls and a reset option in Writing settings.
+- **Scene titles and filenames** — Changing a scene title no longer renames its file automatically. Use **Synchronize scene filenames from metadata** when you want to rename files from their act and sequence values.
+
+
 ## Version 1.11.8
 
 ### Bug Fixes

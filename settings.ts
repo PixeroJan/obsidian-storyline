@@ -4,7 +4,7 @@ import { SLDocxSettings, SL_DEFAULT_DOCX_SETTINGS } from './services/DocxConvert
 import { SLPdfSettings, SL_DEFAULT_PDF_SETTINGS } from './services/PdfConverter';
 import { AddFieldModal } from './components/AddFieldModal';
 import type { UniversalFieldTemplate } from './services/FieldTemplateService';
-import { BeatSheetTemplate, ColorCodingMode, CustomStatusDef, SceneStatus, SceneTemplate, ViewType, getStatusConfig, getStatusOrder, registerCustomStatuses } from './models/Scene';
+import { BeatSheetTemplate, BuiltinSceneStatus, BUILTIN_STATUS_DEFAULT_COLORS, BUILTIN_STATUS_ORDER, ColorCodingMode, CustomStatusDef, SceneStatus, SceneTemplate, ViewType, getStatusConfig, getStatusOrder, registerBuiltinStatusColors, registerCustomStatuses } from './models/Scene';
 import type { CharacterRelationCategory } from './models/Character';
 import { App, Modal, Notice, PluginSettingTab, Setting, SettingGroup, TFolder, TextAreaComponent, AbstractInputSuggest } from 'obsidian';
 import * as obsidian from 'obsidian';
@@ -605,6 +605,8 @@ export interface SceneCardsSettings {
     defaultTargetWordCount: number;
     /** User-defined custom statuses appended after the built-in six */
     customStatuses: CustomStatusDef[];
+    /** Partial six-digit hex overrides for the built-in status palette */
+    statusColors: Partial<Record<BuiltinSceneStatus, string>>;
 
     // Display
     defaultView: ViewType;
@@ -1006,6 +1008,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     autoGenerateSequence: true,
     defaultTargetWordCount: 800,
     customStatuses: [],
+    statusColors: {},
 
     defaultView: 'board',
     defaultBoardMode: 'corkboard',
@@ -1323,6 +1326,39 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     this.plugin.settings.defaultTargetWordCount = Number(value) || 800;
                     await this.plugin.saveSettings();
                 }));
+
+        // ── Built-in Status Colors ──
+        new Setting(sceneBody).setName('Built-in status colors').setHeading();
+        const statusColorInputs = new Map<BuiltinSceneStatus, HTMLInputElement>();
+        for (const status of BUILTIN_STATUS_ORDER as BuiltinSceneStatus[]) {
+            const config = getStatusConfig()[status];
+            const row = new Setting(sceneBody).setName(config.label);
+            const picker = row.controlEl.createEl('input', { type: 'color' });
+            picker.value = this.plugin.settings.statusColors?.[status] || BUILTIN_STATUS_DEFAULT_COLORS[status];
+            statusColorInputs.set(status, picker);
+            picker.addEventListener('change', async () => {
+                if (!this.plugin.settings.statusColors) this.plugin.settings.statusColors = {};
+                if (picker.value.toUpperCase() === BUILTIN_STATUS_DEFAULT_COLORS[status]) {
+                    delete this.plugin.settings.statusColors[status];
+                } else {
+                    this.plugin.settings.statusColors[status] = picker.value;
+                }
+                registerBuiltinStatusColors(this.plugin.settings.statusColors);
+                await this.plugin.saveSettings();
+                this.plugin.refreshOpenViews();
+            });
+        }
+        new Setting(sceneBody)
+            .setName('Reset built-in status colors')
+            .addButton(button => button.setButtonText('Reset').onClick(async () => {
+                this.plugin.settings.statusColors = {};
+                registerBuiltinStatusColors({});
+                for (const [status, picker] of statusColorInputs) {
+                    picker.value = BUILTIN_STATUS_DEFAULT_COLORS[status];
+                }
+                await this.plugin.saveSettings();
+                this.plugin.refreshOpenViews();
+            }));
 
         // ── Custom Statuses ──
         new Setting(sceneBody).setName('Custom statuses').setHeading();

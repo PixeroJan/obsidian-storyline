@@ -167,7 +167,7 @@ The main workspace — a Kanban-style board that displays your scenes as cards.
 
 Run the Command Palette command **Synchronize scene filenames from metadata** when a project is active. StoryLine shows a preview of every proposed filename before applying the changes. The command uses each scene's current act and sequence metadata, handles filename swaps safely, and does not change scene frontmatter or body content.
 
-Ordinary resequencing and act/chapter metadata edits do not rename scene files. This command is an explicit repair or normalization action for projects whose filenames have drifted from their metadata. If no changes are needed, StoryLine reports that scene filenames are already synchronized.
+Editing a scene title, resequencing, and act/chapter metadata edits do not rename scene files. Use this command when you want filenames synchronized with act and sequence metadata. It avoids treating a scene's own current filename as a collision, while still resolving genuine duplicate filenames safely. If no changes are needed, StoryLine reports that scene filenames are already synchronized.
 
 ### Corkboard Mode
 
@@ -244,6 +244,7 @@ Track your story's plotlines (tags) across the narrative. Two view modes are ava
 #### Common Features
 - **Rename** or **delete** plotlines across all scenes at once.
 - **Descriptions / notes** *(new in 1.10.51)* — click the **file-text** icon on a plotline header to add a short note reminding you what the plotline is supposed to do. The description is shown under the plotline header in list view, and is carried over when you rename the plotline. Useful for tracking open threads ("the mage in the tower") without resorting to a full plotline for every small detail.
+- **Thread ends at** — choose the scene where a plotline resolves. Plot-hole checks ignore later appearances of that plotline while still checking for gaps between Acts up to its ending scene.
 - Visualize plotline density and coverage.
 - Scenes default to **reading order** (chapter). Toggle to chronological order from the toolbar.
 
@@ -375,7 +376,7 @@ Every Codex category (Items, Creatures, Lore, Organizations, Culture, Systems, a
 
 These rules are applied by the Link Scanner when it scans scene bodies for plain-text mentions, so you have fine-grained control over which words get linked — useful for complex name-play in speculative fiction.
 
-> **Tip:** The scanner automatically treats the first word of a character's name as an alias (e.g. "Anna" for "Anna Svensson"), but skips this for titles (Lady, Lord, Sir, …) and descriptive phrases ("Lady of Dreams", "Keeper of the Keys") to avoid false positives.
+> **Tip:** First names are not inferred as aliases, which avoids matching unrelated characters who share a common first name. Add a nickname or explicit alias to a character when you want that form to match.
 
 ### Stats View
 
@@ -397,7 +398,8 @@ Section defaults can be set to expanded, collapsed, or remembered so the dashboa
 
 #### 3. Writing History (collapsible)
 - **Daily bar chart** — words written per day, with a range selector: 7d, 30d, 90d, or All.
-- Hover any bar to see the exact date and word count.
+- **Calendar heatmap** — switch from the trend chart to a year-at-a-glance calendar of daily writing activity. Month and weekday labels follow your operating system's language, and leap days are included.
+- Hover a bar or calendar day to see the date and word count.
 
 #### 4. Progress Breakdown (collapsible)
 - **By status** — word counts for each status stage (idea → final).
@@ -843,7 +845,7 @@ Each scene can have an external **notes file** for editorial comments, reminders
 
 Arc Points *(introduced in 1.10.18, [issue #128](https://github.com/PixeroJan/obsidian-storyline/issues/128))* mark **arc milestones** — planned narrative beats on a character's arc journey, such as "Mira discovers she is dying" or "Jonas burns the archive". They let you plan at *arc granularity* alongside scene granularity, without conflating the two.
 
-An Arc Point is a regular scene file with one extra frontmatter boolean: `arcAnchor: true`. This is independent of `status` — it describes what the node *means narratively* (an arc milestone), not where it is in the production pipeline. A common workflow is to create Arc Points as lightweight **stub scenes** (`status: stub`) for beats you intend to write later — possibly in a future book — then let them grow into fully-written scenes over time. The Arc Point flag stays on when a stub becomes a real scene, because the scene *is* the arc beat; removing it would be semantically wrong. `status` continues to evolve from `stub` → `draft` → `done` on its own track.
+An Arc Point is a regular scene file with one extra frontmatter boolean: `arcPoint: true`. This is independent of `status` — it describes what the node *means narratively* (an arc milestone), not where it is in the production pipeline. Older scenes with `arcAnchor: true` are still recognized; StoryLine writes the canonical `arcPoint` key when the value is updated. A common workflow is to create Arc Points as lightweight **stub scenes** (`status: stub`) for beats you intend to write later — possibly in a future book — then let them grow into fully-written scenes over time. The Arc Point flag stays on when a stub becomes a real scene, because the scene *is* the arc beat; removing it would be semantically wrong. `status` continues to evolve from `stub` → `draft` → `done` on its own track.
 
 > **Why use stub scenes instead of just notes?** Because Arc Points render on the Subway map and Board alongside real scenes, giving you a visual arc landscape across your story (and, with the `_Plotline` naming convention, across a series). Without the flag, stub scenes are indistinguishable from real scenes and create noise in word counts, the Validator, and the Timeline. The Arc Point flag + the **All / Scenes / Arc Points** filter let you switch between the two lenses in one click.
 
@@ -851,7 +853,7 @@ An Arc Point is a regular scene file with one extra frontmatter boolean: `arcAnc
 
 ### How to mark a scene as an Arc Point
 
-Open the Scene Details sidebar and check the **Arc Point** checkbox on the Details tab. The scene's frontmatter gets `arcAnchor: true`.
+Open the Scene Details sidebar and check the **Arc Point** checkbox on the Details tab. The scene's frontmatter gets `arcPoint: true`.
 
 ### Where Arc Points appear
 
@@ -1829,6 +1831,7 @@ Open **Settings → StoryLine** to configure:
 |---------|-------------|---------|
 | StoryLine Root | Root folder for all projects | `StoryLine` |
 | Default Status | Status for new scenes | `idea` |
+| Built-in status colors | Set colors for Idea, Outlined, Draft, Written, Revised, and Final; reset to the Scribe-compatible defaults | Scribe-compatible palette |
 | Auto-generate Sequence | Auto-number new scenes | On |
 | Default Target Word Count | Word count goal per scene | `800` |
 | Daily Word Goal | Daily writing target (rings + sparkline) | `1000` |

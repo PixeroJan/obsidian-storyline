@@ -482,10 +482,7 @@ export class CharacterView extends ItemView {
                 return true;
             });
 
-            // Deduplicate unlinked names: if "Micke" and "Micke Barr" both
-            // appear, merge the short (first-name-only) form into the longer
-            // full name so only "Micke Barr" is shown.
-            let deduped = this.deduplicateUnlinked(unlinked);
+            let deduped = unlinked;
             if (q) {
                 deduped = deduped.filter(n => n.toLowerCase().includes(q));
             }
@@ -909,49 +906,6 @@ export class CharacterView extends ItemView {
         }
         new Notice(`"${name}" ignored`);
         if (this.rootContainer) this.renderView(this.rootContainer);
-    }
-
-    /**
-     * Deduplicate unlinked names: when a first-name-only entry (e.g. "Micke")
-     * and a full-name entry (e.g. "Micke Barr") both appear, keep only the
-     * full name. The alias map is updated so "micke" → "Micke Barr", which
-     * lets the scene-count logic aggregate both.
-     */
-    private deduplicateUnlinked(names: string[]): string[] {
-        // Build a map: first-word (lowered) → list of full names that start with that word
-        const byFirst = new Map<string, string[]>();
-        for (const n of names) {
-            const first = n.split(/\s+/)[0]?.toLowerCase();
-            if (first) {
-                if (!byFirst.has(first)) byFirst.set(first, []);
-                byFirst.get(first)!.push(n);
-            }
-        }
-
-        const toRemove = new Set<string>(); // lowered names to drop
-
-        for (const [_firstLower, group] of byFirst) {
-            if (group.length < 2) continue;
-            // Separate single-word names from multi-word names
-            const singles = group.filter(n => !n.includes(' '));
-            const fulls = group.filter(n => n.includes(' '));
-            if (singles.length > 0 && fulls.length === 1) {
-                // Exactly one full name — merge all singles into it
-                const canonical = fulls[0];
-                for (const s of singles) {
-                    toRemove.add(s.toLowerCase());
-                    // Also register in the plugin settings alias map so
-                    // LinkScanner and future renders benefit
-                    this.plugin.settings.characterAliases[s.toLowerCase()] = canonical;
-                }
-                // Persist (fire-and-forget; next reload will have it)
-                this.plugin.saveSettings();
-            }
-            // If there are multiple full names (rare), leave them alone —
-            // the user can manually link/ignore.
-        }
-
-        return names.filter(n => !toRemove.has(n.toLowerCase()));
     }
 
     // ── Relationship Map ────────────────────────────────

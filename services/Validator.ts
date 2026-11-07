@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { Scene, TimelineMode } from '../models/Scene';
+import { ArcRecord, matchesArcScenePath, normalizePlotlineName } from './ArcManager';
 
 /**
  * Severity levels for plot hole warnings
@@ -48,14 +49,14 @@ export class Validator {
     /**
      * Run all plot hole checks and return a list of warnings.
      */
-    static validate(scenes: Scene[]): PlotWarning[] {
+    static validate(scenes: Scene[], arcs: readonly ArcRecord[] = [], definedActs: number[] = []): PlotWarning[] {
         if (scenes.length === 0) return [];
 
         const warnings: PlotWarning[] = [];
 
         this.checkTimeline(scenes, warnings);
         this.checkCharacters(scenes, warnings);
-        this.checkPlotlines(scenes, warnings);
+        this.checkPlotlines(scenes, warnings, arcs, definedActs);
         this.checkSetupPayoff(scenes, warnings);
         this.checkStructure(scenes, warnings);
         this.checkContinuity(scenes, warnings);
@@ -238,28 +239,47 @@ export class Validator {
 
     // ─── Plotline Checks ───────────────────────────────────────
 
-    private static checkPlotlines(scenes: Scene[], warnings: PlotWarning[]): void {
+    private static checkPlotlines(
+        scenes: Scene[],
+        warnings: PlotWarning[],
+        arcs: readonly ArcRecord[],
+        definedActs: number[],
+    ): void {
         const sorted = [...scenes].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
 
         // Build per-tag scene lists
-        const tagScenes = new Map<string, Scene[]>();
+        const tagScenes = new Map<string, { displayName: string; scenes: Scene[] }>();
         for (const s of sorted) {
             s.tags?.forEach(t => {
-                const list = tagScenes.get(t) || [];
-                list.push(s);
-                tagScenes.set(t, list);
+                const normalized = normalizePlotlineName(t);
+                if (!normalized) return;
+                const entry = tagScenes.get(normalized) || { displayName: t.trim(), scenes: [] };
+                if (!entry.scenes.includes(s)) entry.scenes.push(s);
+                tagScenes.set(normalized, entry);
             });
         }
 
         // Find the total act range
-        const actsUsed = new Set<number>();
+        const actsUsed = new Set<number>(definedActs);
         scenes.forEach(s => {
-            if (s.act !== undefined) actsUsed.add(Number(s.act));
+            if (s.act !== undefined && Number.isFinite(Number(s.act))) actsUsed.add(Number(s.act));
         });
-        const sortedActs = Array.from(actsUsed).sort((a, b) => a - b);
+        const sortedActs = Array.from(actsUsed).filter(Number.isFinite).sort((a, b) => a - b);
 
         if (sortedActs.length >= 2) {
-            for (const [tag, taggedScenes] of tagScenes) {
+            for (const [normalizedTag, entry] of tagScenes) {
+                const arc = arcs.find(record => normalizePlotlineName(record.name) === normalizedTag);
+                const allTaggedScenes = entry.scenes;
+                let endpointIndex = -1;
+                if (arc?.endedAtSceneId) {
+                    endpointIndex = sorted.findIndex(scene => matchesArcScenePath(scene.filePath, arc.endedAtSceneId!));
+                } else if (arc?.ended === true && allTaggedScenes.length > 0) {
+                    endpointIndex = sorted.indexOf(allTaggedScenes[allTaggedScenes.length - 1]);
+                }
+                const isEnded = endpointIndex >= 0;
+                const taggedScenes = isEnded
+                    ? allTaggedScenes.filter(scene => sorted.indexOf(scene) <= endpointIndex)
+                    : allTaggedScenes;
                 if (taggedScenes.length < 2) continue;
 
                 const tagActs = new Set(taggedScenes.map(s => Number(s.act)));
@@ -274,17 +294,17 @@ export class Validator {
                         warnings.push({
                             severity: 'warning',
                             category: 'Plotlines',
-                            message: `Plotline "${tag}" has no scenes in Act ${act} (present in Acts ${firstAct}–${lastAct})`,
+                            message: `Plotline "${entry.displayName}" has no scenes in Act ${act} (present in Acts ${firstAct}–${lastAct})`,
                         });
                     }
                 }
 
                 // Plotline appears early but doesn't reach the final act
-                if (lastAct < sortedActs[sortedActs.length - 1] && taggedScenes.length >= 3) {
+                if (!isEnded && lastAct < sortedActs[sortedActs.length - 1] && taggedScenes.length >= 3) {
                     warnings.push({
                         severity: 'info',
                         category: 'Plotlines',
-                        message: `Plotline "${tag}" was last seen in Act ${lastAct} but story continues to Act ${sortedActs[sortedActs.length - 1]}`,
+                        message: `Plotline "${entry.displayName}" was last seen in Act ${lastAct} but story continues to Act ${sortedActs[sortedActs.length - 1]}`,
                     });
                 }
             }

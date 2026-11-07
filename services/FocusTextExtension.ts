@@ -18,9 +18,11 @@ function paragraphBounds(view: EditorView, from: number, to: number): { from: nu
 }
 
 function buildDecorations(view: EditorView): DecorationSet {
+    const builder = new RangeSetBuilder<Decoration>();
+    if (!view.hasFocus) return builder.finish();
+
     const activeRanges = view.state.selection.ranges.map(range =>
         paragraphBounds(view, range.from, range.to));
-    const builder = new RangeSetBuilder<Decoration>();
     for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber++) {
         const line = view.state.doc.line(lineNumber);
         if (!line.text.trim()) continue;
