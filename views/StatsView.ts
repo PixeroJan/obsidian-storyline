@@ -11,7 +11,7 @@ import { applyMobileClass } from '../components/MobileAdapter';
 import { isSectionCollapsed, rememberSectionState } from '../settings';
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import { Scene, getStatusOrder, resolveStatusCfg } from '../models/Scene';
-import { getActDisplayLabel } from '../utils/actChapter';
+import { getActDisplayLabel, getChapterDisplayLabel } from '../utils/actChapter';
 import { PlotWarning, Validator } from '../services/Validator';
 import {
     tokenizeWords,
@@ -1108,6 +1108,7 @@ export class StatsView extends ItemView {
                 chapCol.createEl('p', { cls: 'stats-empty', text: 'No chapters yet.' });
             }
 
+            this.renderChapterWordGoals(parent, allScenes);
             this.renderActBalance(parent, stats);
             return;
         }
@@ -1160,7 +1161,125 @@ export class StatsView extends ItemView {
             }
         }
 
+        this.renderChapterWordGoals(parent, allScenes);
         this.renderActBalance(parent, stats);
+    }
+
+    private renderChapterWordGoals(parent: HTMLElement, allScenes: Scene[]): void {
+        const section = parent.createDiv('stats-subsection sl-stats-chapter-goals-section');
+
+        const wordCounts = new Map<number, number>();
+        for (const scene of allScenes) {
+            if (this.plugin.settings.excludeArcAnchorFromWordcount && scene.arcAnchor) continue;
+            if (scene.chapter === undefined) continue;
+            const chapter = Number(scene.chapter);
+            if (!Number.isSafeInteger(chapter) || chapter < 1) continue;
+            wordCounts.set(chapter, (wordCounts.get(chapter) ?? 0) + (scene.wordcount ?? 0));
+        }
+
+        const goals = this.sceneManager.getChapterWordGoals();
+        const chapters = Array.from(new Set([
+            ...this.sceneManager.getDefinedChapters(),
+            ...wordCounts.keys(),
+            ...Object.keys(goals).map(Number),
+        ]))
+            .filter(chapter => Number.isSafeInteger(chapter) && chapter >= 1)
+            .sort((a, b) => a - b);
+
+        const heading = section.createDiv('sl-stats-chapter-goals__heading');
+        heading.createEl('h5', { cls: 'stats-subsection-title', text: 'Chapter word goals' });
+
+        if (chapters.length === 0) {
+            section.createEl('p', { cls: 'stats-empty', text: 'No numbered chapters yet.' });
+            return;
+        }
+
+        const goalCount = chapters.filter(chapter => goals[chapter] !== undefined).length;
+        heading.createSpan({
+            cls: 'sl-stats-chapter-goals__summary',
+            text: `${goalCount} of ${chapters.length} goals set`,
+        });
+
+        const strip = section.createDiv('sl-stats-chapter-goal-strip');
+        strip.setAttribute('role', 'list');
+        for (const chapter of chapters) {
+            const actual = wordCounts.get(chapter) ?? 0;
+            const goal = goals[chapter];
+            const percent = goal ? Math.round((actual / goal) * 100) : 0;
+            const label = getChapterDisplayLabel(chapter, this.sceneManager.getChapterLabel(chapter));
+            const countText = goal
+                ? `${actual.toLocaleString()} / ${goal.toLocaleString()} words`
+                : `${actual.toLocaleString()} words · Set goal`;
+            const card = strip.createEl('button', {
+                cls: 'sl-stats-chapter-goal-card',
+                attr: {
+                    type: 'button',
+                    role: 'listitem',
+                    'aria-label': `${label}. ${goal ? `${actual} of ${goal} words, ${percent}% complete` : `${actual} words, no goal set`}. ${goal ? 'Edit' : 'Set'} word goal.`,
+                    title: `${label}: ${goal ? `${actual.toLocaleString()} of ${goal.toLocaleString()} words (${percent}%)` : `${actual.toLocaleString()} words, no goal set`}`,
+                },
+            });
+            card.createSpan({ cls: 'sl-stats-chapter-goal-card__label', text: label });
+
+            const ring = card.createDiv('sl-stats-chapter-goal-card__ring');
+            if (goal) {
+                const cappedPercent = Math.min(percent, 100);
+                const ringColor = percent >= 100 ? 'var(--sl-success)' : 'var(--sl-accent)';
+                ring.setCssStyles({
+                    background: `conic-gradient(${ringColor} ${cappedPercent}%, var(--background-modifier-border) ${cappedPercent}% 100%)`,
+                });
+                ring.setAttribute('role', 'progressbar');
+                ring.setAttribute('aria-label', `${label} word goal progress`);
+                ring.setAttribute('aria-valuemin', '0');
+                ring.setAttribute('aria-valuemax', '100');
+                ring.setAttribute('aria-valuenow', String(cappedPercent));
+                ring.createSpan({ text: `${percent}%` });
+            } else {
+                const addIcon = ring.createSpan();
+                obsidian.setIcon(addIcon, 'plus');
+            }
+
+            card.createSpan({ cls: 'sl-stats-chapter-goal-card__value', text: countText });
+            card.addEventListener('click', () => this.openChapterWordGoalModal(chapter));
+        }
+    }
+
+    private openChapterWordGoalModal(chapterNumber: number): void {
+        const currentGoal = this.sceneManager.getChapterWordGoals()[chapterNumber];
+        const chapterLabel = getChapterDisplayLabel(chapterNumber, this.sceneManager.getChapterLabel(chapterNumber));
+        const modal = new obsidian.Modal(this.app);
+        modal.titleEl.setText(`${chapterLabel} word goal`);
+
+        let value = currentGoal === undefined ? '' : String(currentGoal);
+        new obsidian.Setting(modal.contentEl)
+            .setName('Target words')
+            .setDesc('Enter a positive whole number. Leave blank and save to remove the goal.')
+            .addText(text => {
+                text.inputEl.type = 'number';
+                text.inputEl.min = '1';
+                text.inputEl.step = '1';
+                text.setPlaceholder('3000')
+                    .setValue(value)
+                    .onChange(next => { value = next; });
+                window.setTimeout(() => text.inputEl.focus(), 50);
+            });
+
+        const buttons = modal.contentEl.createDiv('structure-close-row');
+        buttons.createEl('button', { text: 'Save', cls: 'mod-cta' }).addEventListener('click', () => {
+            const trimmed = value.trim();
+            const wordGoal = trimmed ? Number(trimmed) : undefined;
+            if (wordGoal !== undefined && (!Number.isSafeInteger(wordGoal) || wordGoal < 1)) {
+                new obsidian.Notice('Enter a positive whole number of words.');
+                return;
+            }
+
+            this.sceneManager.setChapterWordGoal(chapterNumber, wordGoal).then(() => {
+                modal.close();
+                if (this.rootContainer) this.renderView(this.rootContainer);
+            });
+        });
+        buttons.createEl('button', { text: 'Cancel' }).addEventListener('click', () => modal.close());
+        modal.open();
     }
 
     private renderActBalance(

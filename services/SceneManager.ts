@@ -528,6 +528,7 @@ export class SceneManager implements ISceneStore {
                 definedChapters: [],
                 actLabels: {},
                 chapterLabels: {},
+                chapterWordGoals: {},
                 actDescriptions: {},
                 chapterDescriptions: {},
                 filterPresets: [],
@@ -819,6 +820,11 @@ export class SceneManager implements ISceneStore {
                 definedChapters: normalizeActChapterList(fm.chapters),
                 actLabels: (fm.actLabels && typeof fm.actLabels === 'object') ? Object.fromEntries(Object.entries(fm.actLabels).map(([k, v]) => [Number(k), String(v)])) : {},
                 chapterLabels: (fm.chapterLabels && typeof fm.chapterLabels === 'object') ? Object.fromEntries(Object.entries(fm.chapterLabels).map(([k, v]) => [Number(k), String(v)])) : {},
+                chapterWordGoals: fm.chapterWordGoals && typeof fm.chapterWordGoals === 'object'
+                    ? Object.fromEntries(Object.entries(fm.chapterWordGoals)
+                        .map(([key, value]) => [Number(key), typeof value === 'number' || typeof value === 'string' ? Number(value) : NaN] as const)
+                        .filter(([chapter, goal]) => Number.isSafeInteger(chapter) && chapter > 0 && Number.isSafeInteger(goal) && goal > 0))
+                    : {},
                 actDescriptions: (fm.actDescriptions && typeof fm.actDescriptions === 'object') ? Object.fromEntries(Object.entries(fm.actDescriptions).map(([k, v]) => [Number(k), String(v)])) : {},
                 chapterDescriptions: (fm.chapterDescriptions && typeof fm.chapterDescriptions === 'object') ? Object.fromEntries(Object.entries(fm.chapterDescriptions).map(([k, v]) => [Number(k), String(v)])) : {},
                 filterPresets: Array.isArray(fm.filterPresets) ? fm.filterPresets : [],
@@ -1983,6 +1989,12 @@ export class SceneManager implements ISceneStore {
                 delete this._activeProject.chapterDescriptions[ch];
             }
 
+            const wordGoal = this._activeProject.chapterWordGoals?.[ch];
+            if (wordGoal !== undefined) {
+                this._activeProject.chapterWordGoals[newCh] = wordGoal;
+                delete this._activeProject.chapterWordGoals[ch];
+            }
+
             // Move scenes
             for (const scene of this.scenes.values()) {
                 if (Number(scene.chapter) === ch) {
@@ -2001,6 +2013,9 @@ export class SceneManager implements ISceneStore {
         }
         if (this._activeProject.chapterDescriptions?.[chapterNumber] !== undefined) {
             delete this._activeProject.chapterDescriptions[chapterNumber];
+        }
+        if (this._activeProject.chapterWordGoals?.[chapterNumber] !== undefined) {
+            delete this._activeProject.chapterWordGoals[chapterNumber];
         }
         await this.saveProjectFrontmatter(this._activeProject);
     }
@@ -2028,7 +2043,7 @@ export class SceneManager implements ISceneStore {
         }
 
         // Shift every chapter >= beforeChapter up by one: both the defined
-        // list, the labels, the descriptions, and every scene's `chapter`
+        // list, the labels, descriptions, goals, and every scene's `chapter`
         // field. Process in descending order so we never overwrite a value
         // we still need to read.
         const sorted = [...existing].sort((a, b) => b - a);
@@ -2048,6 +2063,12 @@ export class SceneManager implements ISceneStore {
             if (desc) {
                 this._activeProject.chapterDescriptions[newCh] = desc;
                 delete this._activeProject.chapterDescriptions[ch];
+            }
+
+            const wordGoal = this._activeProject.chapterWordGoals?.[ch];
+            if (wordGoal !== undefined) {
+                this._activeProject.chapterWordGoals[newCh] = wordGoal;
+                delete this._activeProject.chapterWordGoals[ch];
             }
 
             // Move scenes
@@ -2114,6 +2135,23 @@ export class SceneManager implements ISceneStore {
             this._activeProject.chapterLabels[chapterNumber] = label.trim();
         } else {
             delete this._activeProject.chapterLabels[chapterNumber];
+        }
+        await this.saveProjectFrontmatter(this._activeProject);
+    }
+
+    /** Get all chapter word goals */
+    getChapterWordGoals(): Record<number, number> {
+        return this._activeProject?.chapterWordGoals ?? {};
+    }
+
+    /** Set or clear a chapter's word goal */
+    async setChapterWordGoal(chapterNumber: number, wordGoal?: number): Promise<void> {
+        if (!this._activeProject || !Number.isSafeInteger(chapterNumber) || chapterNumber < 1) return;
+        if (wordGoal !== undefined && (!Number.isSafeInteger(wordGoal) || wordGoal < 1)) return;
+        if (wordGoal === undefined) {
+            delete this._activeProject.chapterWordGoals[chapterNumber];
+        } else {
+            this._activeProject.chapterWordGoals[chapterNumber] = wordGoal;
         }
         await this.saveProjectFrontmatter(this._activeProject);
     }
@@ -2668,6 +2706,12 @@ export class SceneManager implements ISceneStore {
             existingFm.chapterLabels = project.chapterLabels;
         } else {
             delete existingFm.chapterLabels;
+        }
+
+        if (Object.keys(project.chapterWordGoals).length > 0) {
+            existingFm.chapterWordGoals = project.chapterWordGoals;
+        } else {
+            delete existingFm.chapterWordGoals;
         }
 
         // Act descriptions

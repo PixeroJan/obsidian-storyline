@@ -18,6 +18,7 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 ### Improvements
 
 - **Type safety and legacy data compatibility** â€” Correct Obsidian API usage, normalize custom-field definitions, and preserve legacy boolean and custom-field values.
+- **Chapter word goals** *([#337](https://github.com/PixeroJan/obsidian-storyline/issues/337))* - Track actual words against per-chapter goals in Stats; goals persist with the project and follow chapters when they are renumbered.
 
 
 ## Version 1.11.9

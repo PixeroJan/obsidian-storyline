@@ -56,6 +56,8 @@ export interface StoryLineProject {
     actLabels: Record<number, string>;
     /** Human-readable labels for chapters (chapter number → label, e.g. 1 → "Opening Image") */
     chapterLabels: Record<number, string>;
+    /** Word goals for chapters (chapter number → target word count) */
+    chapterWordGoals: Record<number, number>;
     /** Optional descriptions for acts (act number → description text) */
     actDescriptions: Record<number, string>;
     /** Optional descriptions for chapters (chapter number → description text) */

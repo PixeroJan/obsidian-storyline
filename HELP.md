@@ -404,6 +404,7 @@ Section defaults can be set to expanded, collapsed, or remembered so the dashboa
 #### 4. Progress Breakdown (collapsible)
 - **By status** — word counts for each status stage (idea → final).
 - **By chapter** — word count per chapter, with outlier highlighting for unusually short or long chapters.
+- **Chapter word goals** — set a word target for each numbered chapter and track actual words against it. Goals stay with their chapters when chapters are renumbered.
 - **Act balance** — stacked bars showing how evenly your acts are distributed.
 
 #### 5. Characters & World (collapsed by default)
