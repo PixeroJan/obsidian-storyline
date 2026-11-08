@@ -1914,7 +1914,7 @@ export class LocationView extends ItemView {
                     type: 'text',
                     attr: { placeholder: 'Value' },
                 });
-                valIn.value = val;
+                valIn.value = String(val);
 
                 const removeBtn = row.createEl('button', { cls: 'location-custom-remove', attr: { title: 'Remove' } });
                 obsidian.setIcon(removeBtn, 'x');

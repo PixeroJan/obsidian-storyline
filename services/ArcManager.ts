@@ -68,13 +68,14 @@ export class ArcManager {
             this.rawRoot = [];
         }
 
-        if (Array.isArray(this.rawRoot)) {
-            this.records = this.rawRoot.filter((value): value is ArcRecord =>
+        const rawRoot = this.rawRoot;
+        if (Array.isArray(rawRoot)) {
+            this.records = rawRoot.filter((value): value is ArcRecord =>
                 isRecord(value) && typeof value.name === 'string');
-        } else if (isRecord(this.rawRoot)) {
-            const key = ['arcs', 'records', 'plotlines'].find(candidate => Array.isArray(this.rawRoot[candidate]));
+        } else if (isRecord(rawRoot)) {
+            const key = ['arcs', 'records', 'plotlines'].find(candidate => Array.isArray(rawRoot[candidate]));
             this.envelopeKey = key ?? 'arcs';
-            const rows = key ? this.rawRoot[key] as unknown[] : [];
+            const rows = key ? rawRoot[key] as unknown[] : [];
             this.records = rows.filter((value): value is ArcRecord =>
                 isRecord(value) && typeof value.name === 'string');
         } else {

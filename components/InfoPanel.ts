@@ -24,12 +24,26 @@ export class InfoPanelComponent {
     private notesLeaf: obsidian.WorkspaceLeaf | null = null;
     private notesPath: string | null = null;
     private notesSaveTimer: number | null = null;
+    private markdownRenderComponent: obsidian.Component | null = null;
 
     constructor(container: HTMLElement, plugin: SceneCardsPlugin, sceneManager: SceneManager, mode: InfoPanelMode = 'full') {
         this.container = container;
         this.plugin = plugin;
         this.sceneManager = sceneManager;
         this.mode = mode;
+    }
+
+    private clearMarkdownRenderComponent(): void {
+        this.markdownRenderComponent?.unload();
+        this.markdownRenderComponent = null;
+    }
+
+    private createMarkdownRenderComponent(): obsidian.Component {
+        this.clearMarkdownRenderComponent();
+        const component = new obsidian.Component();
+        component.load();
+        this.markdownRenderComponent = component;
+        return component;
     }
 
     show(scene: Scene): void {
@@ -50,6 +64,7 @@ export class InfoPanelComponent {
     hide(): void {
         this.currentScene = null;
         this.detachNotesEditor();
+        this.clearMarkdownRenderComponent();
         this.container.empty();
     }
 
@@ -89,6 +104,7 @@ export class InfoPanelComponent {
     }
 
     private render(): void {
+        this.clearMarkdownRenderComponent();
         this.detachNotesEditor();
         this.container.empty();
         const scene = this.currentScene;
@@ -369,6 +385,7 @@ export class InfoPanelComponent {
      * Checkboxes are interactive in preview mode.
      */
     private renderNotesLive(container: HTMLElement, scene: Scene): void {
+        this.clearMarkdownRenderComponent();
         container.empty();
 
         if (!scene.notes) {
@@ -388,7 +405,7 @@ export class InfoPanelComponent {
             scene.notes,
             previewEl,
             scene.filePath,
-            this,
+            this.createMarkdownRenderComponent(),
         );
 
         // Click on preview → switch to editor (but not on links/checkboxes)
@@ -432,6 +449,7 @@ export class InfoPanelComponent {
     }
 
     private renderNotesEditor(container: HTMLElement, scene: Scene): void {
+        this.clearMarkdownRenderComponent();
         container.empty();
         const editorEl = container.createDiv('sl-info-notes-live is-editing');
 

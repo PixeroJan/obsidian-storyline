@@ -22,6 +22,8 @@ export class InspectorComponent {
     private sceneManager: SceneManager;
     private container: HTMLElement;
     private currentScene: Scene | null = null;
+    private markdownRenderComponent: obsidian.Component | null = null;
+    private notesRenderGeneration = 0;
     private onEdit: (scene: Scene) => void;
     private onDelete: (scene: Scene) => void;
     private onRefresh: () => void;
@@ -54,6 +56,19 @@ export class InspectorComponent {
         this.onDelete = callbacks.onDelete;
         this.onRefresh = callbacks.onRefresh;
         this.onStatusChange = callbacks.onStatusChange;
+    }
+
+    private clearMarkdownRenderComponent(): void {
+        this.markdownRenderComponent?.unload();
+        this.markdownRenderComponent = null;
+    }
+
+    private createMarkdownRenderComponent(): obsidian.Component {
+        this.clearMarkdownRenderComponent();
+        const component = new obsidian.Component();
+        component.load();
+        this.markdownRenderComponent = component;
+        return component;
     }
 
     /**
@@ -92,6 +107,8 @@ export class InspectorComponent {
      */
     hide(): void {
         this.currentScene = null;
+        this.notesRenderGeneration++;
+        this.clearMarkdownRenderComponent();
         this.container.setCssStyles({ display: 'none' });
     }
 
@@ -102,6 +119,8 @@ export class InspectorComponent {
         const scene = this.currentScene;
         if (!scene) return;
 
+        this.notesRenderGeneration++;
+        this.clearMarkdownRenderComponent();
         this.container.empty();
         this.container.addClass('story-line-inspector');
 
@@ -1279,8 +1298,11 @@ export class InspectorComponent {
      * Checkboxes are interactive in preview mode.
      */
     private async renderInspectorNotesLive(container: HTMLElement, scene: Scene): Promise<void> {
+        const generation = ++this.notesRenderGeneration;
+        this.clearMarkdownRenderComponent();
         container.empty();
         const notesText = await this.getCurrentSceneNotesText(scene);
+        if (generation !== this.notesRenderGeneration) return;
         scene.notes = notesText || undefined;
 
         if (!notesText) {
@@ -1300,7 +1322,7 @@ export class InspectorComponent {
             notesText,
             previewEl,
             scene.filePath,
-            this,
+            this.createMarkdownRenderComponent(),
         );
 
         // Click on preview → switch to editor (but not on links/checkboxes)
@@ -1346,6 +1368,8 @@ export class InspectorComponent {
     }
 
     private renderInspectorNotesEditor(container: HTMLElement, scene: Scene, currentNotes: string): void {
+        this.notesRenderGeneration++;
+        this.clearMarkdownRenderComponent();
         container.empty();
         const editorEl = container.createDiv('inspector-notes-live is-editing');
 

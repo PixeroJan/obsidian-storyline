@@ -54,6 +54,7 @@ export class ManuscriptView extends ItemView {
     private editorResizeObservers: Map<string, ResizeObserver> = new Map();
     /** Mount attempt IDs by path (prevents duplicate async mounts) */
     private mountingPaths: Map<string, symbol> = new Map();
+    private editorMountPromises: Map<string, Promise<void>> = new Map();
     private _hasActiveFocus = false;
     /** Prevents refresh() from running during initial mount sequence */
     private _isMounting = false;
@@ -99,6 +100,7 @@ export class ManuscriptView extends ItemView {
     private searchMatchTotal = 0;
     /** Flat list of matches: {path, from, to} */
     private searchMatches: { path: string; from: number; to: number }[] = [];
+    private searchNavigationToken = 0;
 
     constructor(leaf: WorkspaceLeaf, plugin: SceneCardsPlugin, sceneManager: SceneManager) {
         super(leaf);
@@ -175,6 +177,7 @@ export class ManuscriptView extends ItemView {
     }
 
     private detachAllEmbedded(): void {
+        this.searchNavigationToken++;
         // Bump the mount token so any in-flight mountEditor() call knows
         // its container/leaf is being torn down and bails out instead of
         // writing into a detached DOM tree.
@@ -188,6 +191,7 @@ export class ManuscriptView extends ItemView {
         }
         this.editorResizeObservers.clear();
         this.mountingPaths.clear();
+        this.editorMountPromises.clear();
         this._lazyMounting = false;
     }
 
@@ -581,6 +585,24 @@ export class ManuscriptView extends ItemView {
 
     /** Mount a real Obsidian MarkdownView (Live Preview) inside the given container */
     private async mountEditor(container: HTMLElement, filePath: string): Promise<void> {
+        if (this.embeddedLeaves.has(filePath)) return;
+        const existingMount = this.editorMountPromises.get(filePath);
+        if (existingMount) {
+            await existingMount;
+            return;
+        }
+        const mountPromise = this.mountEditorInternal(container, filePath);
+        this.editorMountPromises.set(filePath, mountPromise);
+        try {
+            await mountPromise;
+        } finally {
+            if (this.editorMountPromises.get(filePath) === mountPromise) {
+                this.editorMountPromises.delete(filePath);
+            }
+        }
+    }
+
+    private async mountEditorInternal(container: HTMLElement, filePath: string): Promise<void> {
         if (this.embeddedLeaves.has(filePath) || this.mountingPaths.has(filePath)) return;
         const mountId = Symbol('mount');
         this.mountingPaths.set(filePath, mountId);
@@ -1000,6 +1022,7 @@ export class ManuscriptView extends ItemView {
             this.searchInput?.select();
             if (this.searchInput && this.searchInput.value) this.runSearch();
         } else {
+            this.searchNavigationToken++;
             this.clearSearchHighlights();
         }
     }
@@ -1011,6 +1034,7 @@ export class ManuscriptView extends ItemView {
 
     /** Close the search panel. */
     private closeSearch(): void {
+        this.searchNavigationToken++;
         this.searchPanel?.setCssStyles({ display: 'none' });
         this.clearSearchHighlights();
         this.searchMatches = [];
@@ -1058,6 +1082,7 @@ export class ManuscriptView extends ItemView {
      * without scrolling every scene into view first.
      */
     private runSearch(): void {
+        this.searchNavigationToken++;
         this.clearSearchHighlights();
         this.searchMatches = [];
         const re = this.buildSearchRegex();
@@ -1129,21 +1154,24 @@ export class ManuscriptView extends ItemView {
     }
 
     /** Apply CM6 selection-based highlight to the current match. */
-    private applySearchHighlights(): void {
-        if (this.searchMatchIndex < 0 || this.searchMatchIndex >= this.searchMatches.length) return;
-        const match = this.searchMatches[this.searchMatchIndex];
+    private applySearchHighlights(
+        match = this.searchMatches[this.searchMatchIndex],
+        scrollIntoView = true,
+    ): EditorView | null {
+        if (!match) return null;
         const leaf = this.embeddedLeaves.get(match.path);
-        if (!leaf) return;
+        if (!leaf) return null;
         const cm = this.getCmView(leaf);
-        if (!cm) return;
+        if (!cm) return null;
         cm.dispatch({
             selection: EditorSelection.single(match.from, match.to),
-            scrollIntoView: true,
+            scrollIntoView,
         });
         // Do NOT call cm.focus() here — doing so while the user is typing
         // in the search input steals focus after the first keystroke
         // (Issue #195). Focus is only moved to the editor when the user
         // explicitly navigates to a match via scrollToMatch().
+        return cm;
     }
 
     /** Clear search highlights by collapsing selections in all editors. */
@@ -1161,6 +1189,7 @@ export class ManuscriptView extends ItemView {
     /** Scroll the manuscript so the given match is visible. */
     private async scrollToMatch(idx: number): Promise<void> {
         if (idx < 0 || idx >= this.searchMatches.length) return;
+        const navigationToken = ++this.searchNavigationToken;
         const match = this.searchMatches[idx];
         // Ensure the scene editor is mounted so we can highlight the match.
         if (!this.embeddedLeaves.has(match.path)) {
@@ -1170,21 +1199,26 @@ export class ManuscriptView extends ItemView {
             const editorWrap = block?.querySelector('.sl-manuscript-editor-wrap') as HTMLElement | null;
             if (editorWrap) await this.mountEditor(editorWrap, match.path);
         }
-        const block = this.scrollArea?.querySelector(
-            `[data-scene-path="${CSS.escape(match.path)}"]`
-        ) as HTMLElement | null;
-        if (block) block.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Give the editor a frame to lay out before selecting. Focus the
-        // editor here because this is an explicit navigation action (next/
-        // previous match), unlike runSearch() which must keep focus in the
-        // search input while the user types.
-        window.requestAnimationFrame(() => {
-            this.applySearchHighlights();
-            const leaf = this.embeddedLeaves.get(match.path);
-            if (leaf) {
-                const cm = this.getCmView(leaf);
-                cm?.focus();
-            }
+        if (navigationToken !== this.searchNavigationToken || this.searchMatches[idx] !== match) return;
+        const cm = this.applySearchHighlights(match, false);
+        if (!cm) return;
+        cm.focus();
+
+        // Let the newly mounted editor finish its first layout before measuring the match.
+        await new Promise<void>(resolve => {
+            window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+        });
+        if (navigationToken !== this.searchNavigationToken || this.searchMatches[idx] !== match) return;
+
+        const scrollArea = this.scrollArea;
+        const coords = cm.coordsAtPos(match.from);
+        if (!scrollArea || !coords) return;
+        const viewport = scrollArea.getBoundingClientRect();
+        const matchCenter = (coords.top + coords.bottom) / 2;
+        const viewportCenter = viewport.top + scrollArea.clientHeight / 2;
+        scrollArea.scrollTo({
+            top: scrollArea.scrollTop + matchCenter - viewportCenter,
+            behavior: 'smooth',
         });
     }
 

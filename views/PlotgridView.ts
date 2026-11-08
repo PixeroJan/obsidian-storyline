@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unused-vars -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
+/* eslint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unused-vars -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { App, ItemView, WorkspaceLeaf, Menu, Modal, TFile, Notice, MarkdownRenderer, Component } from 'obsidian';
 import * as obsidian from 'obsidian';
 import { CellData, ColumnMeta, RowMeta, PlotGridData } from '../models/PlotGridData';
@@ -683,7 +683,8 @@ export class PlotgridView extends ItemView {
             boxSizing: 'border-box',
         });
         alignSelect.title = 'Alignment for selection';
-        alignSelect.createEl('option', { text: 'Align', value: '', disabled: true });
+        const alignPlaceholder = alignSelect.createEl('option', { text: 'Align', value: '' });
+        alignPlaceholder.disabled = true;
         for (const [value, label] of [['left', 'Left'], ['center', 'Center'], ['right', 'Right']] as const) {
             const option = alignSelect.createEl('option', { text: label });
             option.value = value;
@@ -921,7 +922,7 @@ export class PlotgridView extends ItemView {
 
             const requiredRowHeights = new Map<number, number>();
 
-            const cellElements = Array.from(this.canvasEl.querySelectorAll<HTMLElement>('.plot-grid-cell[data-row][data-col]'));
+            const cellElements: HTMLElement[] = Array.from(this.canvasEl.querySelectorAll<HTMLElement>('.plot-grid-cell[data-row][data-col]'));
             for (const cellEl of cellElements) {
                 const rowIndex = Number(cellEl.dataset.row);
                 if (!Number.isInteger(rowIndex)) continue;
@@ -3075,8 +3076,10 @@ export class PlotgridView extends ItemView {
     // ── Sync from Scenes ────────────────────────────────────────────────
 
     private openSyncModal() {
-        const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
-        if (!scMgr) { new Notice('Scene manager not available'); return; }
+        const plugin = this.plugin;
+        const scMgr = plugin?.sceneManager as SceneManager | undefined;
+        if (!plugin || !scMgr) { new Notice('Scene manager not available'); return; }
+        const activePlugin = plugin;
         const scenes = scMgr.getAllScenes();
         if (scenes.length === 0) { new Notice('No scenes found in the active project'); return; }
 
@@ -3111,8 +3114,8 @@ export class PlotgridView extends ItemView {
                 colSourceSelect.createEl('option', { text: 'Plotlines (tags)', value: 'tags' });
                 colSourceSelect.createEl('option', { text: 'Locations', value: 'locations' });
                 // Add codex categories that appear in sidebar
-                const codexMgr = view.plugin?.codexManager;
-                const sidebarCats = (view.plugin as unknown as { settings?: { codexSidebarCategories?: string[] } })?.settings?.codexSidebarCategories;
+                const codexMgr = activePlugin.codexManager;
+                const sidebarCats = activePlugin.settings.codexSidebarCategories;
                 if (codexMgr && sidebarCats) {
                     for (const catId of sidebarCats) {
                         const catDef = codexMgr.getCategoryDef(catId);
@@ -3145,7 +3148,7 @@ export class PlotgridView extends ItemView {
                 modeSelect.createEl('option', { text: 'Merge — keep manual rows/columns, add missing', value: 'merge' });
                 modeSelect.createEl('option', { text: 'Replace — rebuild from scenes (manual data cleared)', value: 'replace' });
 
-                let showLinkedSceneCards = view.plugin?.settings.plotgridShowLinkedSceneCards ?? true;
+                let showLinkedSceneCards = activePlugin.settings.plotgridShowLinkedSceneCards ?? true;
                 new obsidian.Setting(contentEl)
                     .setName('Show linked scene cards in synced cells')
                     .setDesc('When enabled, synced cells display a preview card for their linked scene.')
@@ -3153,8 +3156,8 @@ export class PlotgridView extends ItemView {
                         .setValue(showLinkedSceneCards)
                         .onChange(async value => {
                             showLinkedSceneCards = value;
-                            view.plugin.settings.plotgridShowLinkedSceneCards = value;
-                            await view.plugin.saveSettings();
+                            activePlugin.settings.plotgridShowLinkedSceneCards = value;
+                            await activePlugin.saveSettings();
                             view.renderGrid();
                         }));
 
@@ -3172,8 +3175,8 @@ export class PlotgridView extends ItemView {
                 syncBtn.addEventListener('click', async () => {
                     const colSource = colSourceSelect.value;
                     const mode = modeSelect.value as 'merge' | 'replace';
-                    view.plugin.settings.plotgridShowLinkedSceneCards = showLinkedSceneCards;
-                    await view.plugin.saveSettings();
+                    activePlugin.settings.plotgridShowLinkedSceneCards = showLinkedSceneCards;
+                    await activePlugin.saveSettings();
                     view.performSync(colSource, mode);
                     this.close();
                 });
@@ -3871,4 +3874,4 @@ export class PlotgridView extends ItemView {
 }
 
 export default PlotgridView;
-/* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unused-vars -- end of file-wide suppression block opened at line 1 */
+/* eslint-enable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unused-vars -- end of file-wide suppression block opened at line 1 */

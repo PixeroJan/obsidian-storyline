@@ -1254,7 +1254,7 @@ ${body}
             try {
                 // `<webview>` is an Electron-only tag. Use createEl on body
                 // (supports arbitrary tag names) rather than createElement.
-                const webview = activeDocument.body.createEl('webview') as unknown as {
+                const webview = activeDocument.createElement('webview') as unknown as {
                     setCssStyles: (s: Record<string, string>) => void;
                     setAttribute: (k: string, v: string) => void;
                     addEventListener: (ev: string, cb: (...args: unknown[]) => void) => void;

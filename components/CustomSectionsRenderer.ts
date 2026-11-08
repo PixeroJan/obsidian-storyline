@@ -56,6 +56,14 @@ export interface CustomFieldDef {
  * always work with a `CustomFieldDef`.
  */
 export type CustomFieldEntry = string | CustomFieldDef;
+type CustomFieldEntryInput = string | {
+    name: string;
+    type?: string;
+    placeholder?: string;
+    options?: string[];
+    folderSource?: string;
+    linkTarget?: 'folder';
+};
 
 export interface CustomSection {
     title: string;
@@ -72,11 +80,15 @@ export interface CustomSection {
 }
 
 /** Normalise any legacy bare-string entry to a {@link CustomFieldDef}. */
-export function normalizeField(entry: CustomFieldEntry): CustomFieldDef {
+export function normalizeField(entry: CustomFieldEntryInput): CustomFieldDef {
     if (typeof entry === 'string') return { name: entry, type: 'text' };
+    const type = entry.type;
     return {
         name: entry.name,
-        type: entry.type ?? 'text',
+        type: type === 'text' || type === 'textarea' || type === 'dropdown'
+            || type === 'multi-select' || type === 'checkbox' || type === 'number'
+            ? type
+            : 'text',
         placeholder: entry.placeholder,
         options: entry.options,
         folderSource: entry.folderSource,
@@ -600,7 +612,8 @@ function renderOneSection<T extends { custom?: Record<string, CustomFieldValue> 
                         suggestList.empty();
                         suggestList.removeClass('is-hidden');
                         for (const m of matches) {
-                            const item = suggestList.createDiv('codex-custom-multi-suggest-item', { text: m });
+                            const item = suggestList.createDiv('codex-custom-multi-suggest-item');
+                            item.setText(m);
                             item.addEventListener('click', (ev) => {
                                 ev.stopPropagation();
                                 if (!values.includes(m)) {

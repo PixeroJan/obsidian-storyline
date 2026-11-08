@@ -237,7 +237,7 @@ export class ExportModal extends Modal {
                     this.sceneSeparatorType,
                     this.sceneSeparatorCustom
                 );
-                this.exportService.setExportRange(exportRange);
+                this.exportService.setExportRange(exportRange ?? undefined);
                 await this.exportService.export(this.format, this.exportScope);
                 this.close();
             } catch (err) {

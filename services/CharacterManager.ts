@@ -409,7 +409,7 @@ export class CharacterManager {
             // These were written by saveCharacter (via CHARACTER_FIELD_KEYS)
             // but never read back, so the UI reverted to defaults on reload.
             entryType: safeFm.entryType,
-            caseSensitive: safeFm.caseSensitive === true || safeFm.caseSensitive === 'true',
+            caseSensitive: safeFm.caseSensitive === true || String(safeFm.caseSensitive).trim().toLowerCase() === 'true',
             excludeTerms: typeof safeFm.excludeTerms === 'string' ? safeFm.excludeTerms : undefined,
             custom: safeFm.custom && typeof safeFm.custom === 'object'
                 ? (safeFm.custom as Record<string, string>)

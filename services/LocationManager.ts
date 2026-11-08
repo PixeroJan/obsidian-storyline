@@ -130,7 +130,7 @@ export class LocationManager {
                 sortOrder: Number.isFinite(Number(fmEff.sortOrder)) ? Number(fmEff.sortOrder) : undefined,
                 // ── Linking & Matching (Issue #228 round-trip fix) ──
                 entryType: fmEff.entryType,
-                caseSensitive: fmEff.caseSensitive === true || fmEff.caseSensitive === 'true',
+                caseSensitive: fmEff.caseSensitive === true || String(fmEff.caseSensitive).trim().toLowerCase() === 'true',
                 excludeTerms: typeof fmEff.excludeTerms === 'string' ? fmEff.excludeTerms : undefined,
                 custom: fmEff.custom && typeof fmEff.custom === 'object'
                     ? (fmEff.custom as Record<string, string>)
@@ -168,7 +168,7 @@ export class LocationManager {
                 sortOrder: Number.isFinite(Number(fmEff.sortOrder)) ? Number(fmEff.sortOrder) : undefined,
                 // ── Linking & Matching (Issue #228 round-trip fix) ──
                 entryType: fmEff.entryType,
-                caseSensitive: fmEff.caseSensitive === true || fmEff.caseSensitive === 'true',
+                caseSensitive: fmEff.caseSensitive === true || String(fmEff.caseSensitive).trim().toLowerCase() === 'true',
                 excludeTerms: typeof fmEff.excludeTerms === 'string' ? fmEff.excludeTerms : undefined,
                 custom: fmEff.custom && typeof fmEff.custom === 'object'
                     ? (fmEff.custom as Record<string, string>)

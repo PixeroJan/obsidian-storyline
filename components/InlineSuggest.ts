@@ -378,6 +378,8 @@ export interface TagPillInputOptions {
     highlightLabel?: string;
     /** Keep the suggestion list open after each selection. */
     keepOpenOnSelect?: boolean;
+    /** Optional mapping from a stored value to its visible suggestion label. */
+    getDisplayLabel?: (value: string) => string;
 }
 
 export function renderTagPillInput(opts: TagPillInputOptions): { refresh: (values: string[], highlightValue?: string) => void } {
@@ -447,6 +449,7 @@ export function renderTagPillInput(opts: TagPillInputOptions): { refresh: (value
             placeholder: placeholder ?? 'Type to add…',
             allowNew: true,
             keepOpenOnSelect: opts.keepOpenOnSelect ?? true,
+            getDisplayLabel: opts.getDisplayLabel,
         });
     };
 

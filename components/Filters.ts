@@ -87,7 +87,16 @@ export class FiltersComponent {
             applySearch();
         });
         searchInput.addEventListener('input', (event) => {
-            if (isComposing || (event instanceof InputEvent && event.isComposing)) return;
+            if (event instanceof InputEvent && event.isComposing) {
+                isComposing = true;
+                return;
+            }
+            isComposing = false;
+            applySearch();
+        });
+        searchInput.addEventListener('blur', () => {
+            if (!isComposing) return;
+            isComposing = false;
             applySearch();
         });
 
@@ -512,7 +521,7 @@ export class FiltersComponent {
 
     private emitChange(): void {
         const toggleBtn = this.container.querySelector('.story-line-filter-toggle');
-        if (toggleBtn) this.updateFilterToggle(toggleBtn);
+        if (toggleBtn instanceof HTMLElement) this.updateFilterToggle(toggleBtn);
         this.onChange(this.currentFilter, this.currentSort);
     }
 

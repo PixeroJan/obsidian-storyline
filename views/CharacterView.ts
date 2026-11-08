@@ -2659,7 +2659,7 @@ export class CharacterView extends ItemView {
                     type: 'text',
                     attr: { placeholder: 'Value' },
                 });
-                valInput.value = val;
+                valInput.value = String(val);
 
                 const removeBtn = row.createEl('button', { cls: 'character-custom-remove', attr: { title: 'Remove field' } });
                 obsidian.setIcon(removeBtn, 'x');

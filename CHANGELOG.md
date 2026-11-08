@@ -7,6 +7,18 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
 
+## Version 1.11.10
+
+### Bug Fixes
+
+- **Scene-filter IME input** *([#335](https://github.com/PixeroJan/obsidian-storyline/issues/335))* — Apply searches when composition commits even if the input method omits `compositionend`.
+- **Find in manuscript** *([#336](https://github.com/PixeroJan/obsidian-storyline/issues/336))* — Wait for lazy-mounted editors and scroll the selected match into view; discard stale navigation requests.
+
+### Improvements
+
+- **Type safety and legacy data compatibility** — Correct Obsidian API usage, normalize custom-field definitions, and preserve legacy boolean and custom-field values.
+
+
 ## Version 1.11.9
 
 ### Bug Fixes
