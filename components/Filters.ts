@@ -12,7 +12,7 @@ type FocusModeCallback = (active: boolean) => void;
 export function cloneSceneFilter(filter?: SceneFilter): SceneFilter {
     if (!filter) return {};
     try {
-        const cloned: unknown = JSON.parse(JSON.stringify(filter));
+        const cloned = JSON.parse(JSON.stringify(filter)) as SceneFilter;
         return cloned && typeof cloned === 'object' && !Array.isArray(cloned)
             ? cloned
             : {};
@@ -87,7 +87,7 @@ export class FiltersComponent {
             applySearch();
         });
         searchInput.addEventListener('input', (event) => {
-            if (isComposing || (event as InputEvent).isComposing) return;
+            if (isComposing || (event instanceof InputEvent && event.isComposing)) return;
             applySearch();
         });
 

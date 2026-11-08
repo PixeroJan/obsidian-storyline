@@ -6150,7 +6150,7 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     --stats-history-cell-step: calc(var(--stats-history-cell-size) + var(--stats-history-cell-gap));
     display: grid;
     grid-template-columns: 30px max-content;
-    column-gap: 7px;
+    gap: 0 7px;
     width: max-content;
     min-width: 100%;
 }
@@ -6172,7 +6172,7 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 .stats-history-month-track {
     display: grid;
     height: 18px;
-    column-gap: var(--stats-history-cell-gap);
+    gap: 0 var(--stats-history-cell-gap);
     color: var(--text-muted);
     font-size: 10px;
     white-space: nowrap;
