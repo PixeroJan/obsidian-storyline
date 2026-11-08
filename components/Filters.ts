@@ -86,8 +86,8 @@ export class FiltersComponent {
             isComposing = false;
             applySearch();
         });
-        searchInput.addEventListener('input', (event) => {
-            if (event instanceof InputEvent && event.isComposing) {
+        searchInput.addEventListener('input', (event: UIEvent) => {
+            if (event.instanceOf(InputEvent) && event.isComposing) {
                 isComposing = true;
                 return;
             }
