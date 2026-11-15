@@ -2,9 +2,12 @@
 import * as obsidian from 'obsidian';
 import { SceneManager } from '../services/SceneManager';
 import { CharacterManager } from '../services/CharacterManager';
+import { EntityRelationshipService } from '../services/EntityRelationshipService';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { RelationshipMap } from '../components/RelationshipMap';
 import { StoryGraph } from '../components/StoryGraph';
+import { renderEntityReferencesPanel } from '../components/EntityReferencesPanel';
+import { InlineSuggest } from '../components/InlineSuggest';
 import { pickImage as pickImageModal, resolveImagePath } from '../components/ImagePicker';
 import { isMobile, DESKTOP_ONLY_CHARACTER_MODES, applyMobileClass } from '../components/MobileAdapter';
 import { RenameConfirmModal } from '../components/RenameConfirmModal';
@@ -32,6 +35,7 @@ import { ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf } from 'obsidian
 import { CHARACTER_CATEGORIES, CHARACTER_ROLES, Character, CharacterFieldDef, CharacterRelation, CharacterRelationCategory, RELATION_CATEGORIES, RELATION_TYPES_BY_CATEGORY, RelationHistoryEntry, RoleEntry, TagType, computeReciprocalUpdates, extractCharacterLocationTags, extractCharacterProps, getPrimaryRole, getRoleDisplay, getRoleList, normalizeCharacterRelations, normalizeRelationHistory } from '../models/Character';
 import { CHARACTER_VIEW_TYPE } from '../constants';
 import { Scene, isWrittenLikeStatus, resolveStatusCfg } from '../models/Scene';
+import { mergeEntityRelations } from '../models/EntityRelation';
 
 /**
  * Character View - rich character cards with full profile editing.
@@ -43,6 +47,7 @@ export class CharacterView extends ItemView {
     private plugin: SceneCardsPlugin;
     private sceneManager: SceneManager;
     private characterManager: CharacterManager;
+    private relationshipService: EntityRelationshipService;
     private selectedCharacter: string | null = null;   // file path of selected character
     private rootContainer: HTMLElement | null = null;
     private collapsedSections: Set<string> = new Set();
@@ -115,6 +120,7 @@ export class CharacterView extends ItemView {
         // own instance and re-loaded only from the project Characters
         // folder on every refresh, wiping out externally-scanned entries.
         this.characterManager = plugin.characterManager;
+        this.relationshipService = new EntityRelationshipService(this.characterManager, plugin.codexManager);
     }
 
     getViewType(): string {
@@ -1101,9 +1107,15 @@ export class CharacterView extends ItemView {
                 // Still render custom sections at this slot so positioned
                 // custom sections don't disappear when a category is hidden.
                 renderCustomSectionsAtSlot(formPanel, customHost, i + 1);
+                if (CHARACTER_CATEGORIES[i].title === 'Relationships') {
+                    this.renderEntityRelationshipsSection(formPanel, draft);
+                }
                 continue;
             }
             this.renderCategory(formPanel, CHARACTER_CATEGORIES[i], draft);
+            if (CHARACTER_CATEGORIES[i].title === 'Relationships') {
+                this.renderEntityRelationshipsSection(formPanel, draft);
+            }
             // Slot i+1: any custom sections after the i-th built-in.
             renderCustomSectionsAtSlot(formPanel, customHost, i + 1);
         }
@@ -1123,7 +1135,7 @@ export class CharacterView extends ItemView {
         this.renderGallery(sidePanel, draft);
         this.renderScenePanel(sidePanel, character.name);
         this.renderLinkedAliasesPanel(sidePanel, character.name);
-        this.renderReferencesPanel(sidePanel, character.name);
+        this.renderReferencesPanel(sidePanel, character.name, character.filePath);
     }
 
     private renderCategory(
@@ -1377,6 +1389,40 @@ export class CharacterView extends ItemView {
                 if (t) this.renderUniversalField(sectionBody, t, draft, builtInKeys);
             }
         }
+    }
+
+    private renderEntityRelationshipsSection(parent: HTMLElement, draft: Character): void {
+        const title = 'Entity Relationships';
+        const section = parent.createDiv('character-section character-entity-relationships');
+        const isCollapsed = this.isSectionCollapsed(title);
+        const sectionHeader = section.createDiv('character-section-header');
+        const chevron = sectionHeader.createSpan('character-section-chevron');
+        obsidian.setIcon(chevron, isCollapsed ? 'chevron-right' : 'chevron-down');
+        const icon = sectionHeader.createSpan('character-section-icon');
+        obsidian.setIcon(icon, 'link');
+        sectionHeader.createSpan({ text: title });
+
+        const sectionBody = section.createDiv('character-section-body');
+        if (isCollapsed) sectionBody.setCssStyles({ display: 'none' });
+        sectionHeader.addEventListener('click', () => {
+            if (!this.toggleSection(title)) {
+                sectionBody.setCssStyles({ display: '' });
+                obsidian.setIcon(chevron, 'chevron-down');
+            } else {
+                sectionBody.setCssStyles({ display: 'none' });
+                obsidian.setIcon(chevron, 'chevron-right');
+            }
+        });
+
+        this.renderRelationsField(sectionBody, draft, true);
+    }
+
+    private isEntityRelationship(relation: CharacterRelation): boolean {
+        const target = relation.targetId
+            ? this.relationshipService.getEntityById(relation.targetId)
+            : undefined;
+        const targetType = relation.targetType || target?.type;
+        return relation.targetId ? targetType !== 'character' : !!targetType && targetType !== 'character';
     }
 
     private renderField(parent: HTMLElement, field: CharacterFieldDef, draft: Character, sectionTitle?: string, builtInKeys?: string[]): void {
@@ -2046,7 +2092,7 @@ export class CharacterView extends ItemView {
         renderRows();
     }
 
-    private renderRelationsField(row: HTMLElement, draft: Character): void {
+    private renderRelationsField(row: HTMLElement, draft: Character, entityRelationships = false): void {
         const container = row.createDiv('character-tag-field relation-builder-field');
         const list = container.createDiv('character-tag-list relation-builder-list');
         const addRow = container.createDiv('character-tag-add-row relation-builder-add-row');
@@ -2059,10 +2105,25 @@ export class CharacterView extends ItemView {
         const mergedNames = Array.from(new Set([...fileCharacters, ...sceneCharacters].map(resolveAlias)))
             .filter(n => n !== draft.name)
             .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-        const visualGroups = this.getCharacterVisualGroups();
-        const charactersByPath = new Map(this.characterManager.getAllCharacters().map(character => [character.filePath, character.name]));
+        const relationEntities = this.relationshipService.getEntities()
+            .filter(entity => entity.filePath !== draft.filePath
+                && (entityRelationships ? entity.type !== 'character' : entity.type === 'character'));
+        const targetLabels = this.relationshipService.getDisplayLabels(relationEntities);
 
-        const relations: CharacterRelation[] = normalizeCharacterRelations(draft.relations);
+        const relations: CharacterRelation[] = normalizeCharacterRelations(draft.relations)
+            .filter(relation => this.isEntityRelationship(relation) === entityRelationships);
+        const commitRelations = (changedRelation?: CharacterRelation) => {
+            const latest = normalizeCharacterRelations(draft.relations);
+            const preserved = latest.filter(relation => this.isEntityRelationship(relation) !== entityRelationships);
+            draft.relations = normalizeCharacterRelations([...preserved, ...relations]);
+            const isComplete = !changedRelation || (
+                !!changedRelation.type.trim()
+                && changedRelation.type !== NEW_CUSTOM_TYPE_VALUE
+                && !!(changedRelation.targetId || changedRelation.target.trim())
+            );
+            if (isComplete) this.scheduleSave(draft);
+        };
+        const targetSuggests: InlineSuggest[] = [];
         const NEW_CUSTOM_TYPE_VALUE = '__custom_new__';
 
         const getCustomRelationOptions = (): Array<{ type: string; label: string; category: CharacterRelationCategory }> => {
@@ -2141,6 +2202,8 @@ export class CharacterView extends ItemView {
         let dragIndex: number | null = null;
 
         const renderRows = () => {
+            for (const suggest of targetSuggests) suggest.destroy();
+            targetSuggests.length = 0;
             list.empty();
 
             for (let index = 0; index < relations.length; index++) {
@@ -2157,6 +2220,13 @@ export class CharacterView extends ItemView {
                     attr: { placeholder: 'Custom relation type (e.g. Bodyguard)' },
                 });
                 customTypeInput.setCssStyles({ display: 'none' });
+                const inverseTypeInput = typeControls.createEl('input', {
+                    cls: 'character-field-input relation-builder-inverse-input',
+                    type: 'text',
+                    attr: { placeholder: 'Inverse type (optional)' },
+                });
+                inverseTypeInput.value = relation.inverseType || '';
+                inverseTypeInput.setCssStyles({ display: 'none' });
                 // Issue #233 discussion — when defining a custom relation type,
                 // let the user assign it to an existing category (e.g. "mate"
                 // under "romantic") so the Character Map view groups it
@@ -2178,29 +2248,52 @@ export class CharacterView extends ItemView {
                 dragHandle.title = 'Drag to reorder';
                 obsidian.setIcon(dragHandle, 'ellipsis-vertical');
 
-                const targetSelect = inlineRow.createEl('select', { cls: 'character-field-input dropdown relation-builder-target' });
-                targetSelect.createEl('option', { value: '', text: 'Select character' });
-                const groupedNames = new Set<string>();
-                for (const group of visualGroups) {
-                    const names = group.entryPaths
-                        .map(path => charactersByPath.get(path))
-                        .filter((name): name is string => !!name && mergedNames.includes(name));
-                    if (names.length === 0) continue;
-                    const optionGroup = targetSelect.createEl('optgroup', { attr: { label: group.name } });
-                    for (const name of names) {
-                        groupedNames.add(name);
-                        const opt = optionGroup.createEl('option', { value: name, text: name });
-                        if (name === relation.target) opt.selected = true;
-                    }
-                }
-                for (const name of mergedNames.filter(candidate => !groupedNames.has(candidate))) {
-                    const opt = targetSelect.createEl('option', { value: name, text: name });
-                    if (name === relation.target) opt.selected = true;
-                }
-                if (relation.target && !mergedNames.includes(relation.target)) {
-                    const opt = targetSelect.createEl('option', { value: relation.target, text: relation.target });
-                    opt.selected = true;
-                }
+                const targetInput = inlineRow.createEl('input', {
+                    cls: 'character-field-input relation-builder-target',
+                    type: 'text',
+                    attr: { placeholder: entityRelationships ? 'Search Codex entities' : 'Search characters' },
+                });
+                const selectedEntity = relation.targetId
+                    ? this.relationshipService.getTarget(relation)
+                    : relationEntities.filter(entity => entity.type === 'character' && entity.name.toLowerCase() === relation.target.toLowerCase()).length === 1
+                        ? relationEntities.find(entity => entity.type === 'character' && entity.name.toLowerCase() === relation.target.toLowerCase())
+                        : undefined;
+                let selectedTargetLabel = selectedEntity
+                    ? targetLabels.get(selectedEntity.filePath) || selectedEntity.name
+                    : relation.target ? `${relation.target} (unresolved)` : '';
+                targetInput.value = selectedTargetLabel;
+                targetSuggests.push(new InlineSuggest({
+                    inputEl: targetInput,
+                    getSuggestions: () => relationEntities.map(entity => entity.filePath),
+                    getDisplayLabel: filePath => targetLabels.get(filePath) || filePath,
+                    placeholder: entityRelationships ? 'Search Codex entities' : 'Search characters',
+                    allowNew: false,
+                    minChars: 1,
+                    maxVisible: 40,
+                    onSelect: value => {
+                        const selected = relationEntities.find(entity => entity.filePath === value || targetLabels.get(entity.filePath) === value);
+                        if (!selected) {
+                            targetInput.value = selectedTargetLabel;
+                            return;
+                        }
+                        const label = targetLabels.get(selected.filePath) || selected.name;
+                        if (relation.targetId === selected.entityId && relation.targetType === selected.type) {
+                            selectedTargetLabel = label;
+                            targetInput.value = label;
+                            return;
+                        }
+                        targetInput.value = label;
+                        this._lastSaveTime = Date.now();
+                        void this.relationshipService.setTarget(draft, relation, selected).then(() => {
+                            selectedTargetLabel = label;
+                            commitRelations(relation);
+                        }).catch(error => {
+                            targetInput.value = selectedTargetLabel;
+                            console.error('StoryLine: failed to select relationship target', error);
+                        });
+                    },
+                    onDismiss: () => { targetInput.value = selectedTargetLabel; },
+                }));
 
                 const removeBtn = inlineRow.createEl('button', { cls: 'character-custom-remove relation-builder-remove', text: '×', attr: { title: 'Remove relation' } });
 
@@ -2216,7 +2309,8 @@ export class CharacterView extends ItemView {
                 const setCustomMode = (enabled: boolean, focus = false) => {
                     typeSelect.setCssStyles({ display: enabled ? 'none' : '' });
                     customTypeInput.setCssStyles({ display: enabled ? '' : 'none' });
-                    customCategorySelect.setCssStyles({ display: enabled ? '' : 'none' });
+                    inverseTypeInput.setCssStyles({ display: enabled ? '' : 'none' });
+                    customCategorySelect.setCssStyles({ display: enabled && !entityRelationships ? '' : 'none' });
                     if (enabled) {
                         const savedCustomType = getCustomRelationOptions().find(option => option.type === relation.type);
                         customTypeInput.value = relation.type && relation.type !== NEW_CUSTOM_TYPE_VALUE
@@ -2229,7 +2323,7 @@ export class CharacterView extends ItemView {
                 };
 
                 const isBuiltInRelationType = RELATION_CATEGORIES.some(c => RELATION_TYPES_BY_CATEGORY[c.value].includes(relation.type));
-                const shouldStartCustomMode = !isBuiltInRelationType || relation.category === 'custom' || relation.type === NEW_CUSTOM_TYPE_VALUE || !RELATION_CATEGORIES.some(c => c.value === relation.category);
+                const shouldStartCustomMode = entityRelationships || !isBuiltInRelationType || relation.category === 'custom' || relation.type === NEW_CUSTOM_TYPE_VALUE || !RELATION_CATEGORIES.some(c => c.value === relation.category);
                 setCustomMode(shouldStartCustomMode);
 
                 typeSelect.addEventListener('change', () => {
@@ -2238,22 +2332,19 @@ export class CharacterView extends ItemView {
                         relation.category = 'custom';
                         relation.type = NEW_CUSTOM_TYPE_VALUE;
                         setCustomMode(true, true);
-                        draft.relations = normalizeCharacterRelations(relations);
-                        this.scheduleSave(draft);
                         return;
                     }
                     relation.type = selected;
+                    delete relation.inverseType;
                     const savedCustomType = getCustomRelationOptions().find(option => option.type === selected);
                     relation.category = savedCustomType?.category || inferCategoryFromType(relation.type);
-                    draft.relations = normalizeCharacterRelations(relations);
-                    this.scheduleSave(draft);
+                    commitRelations(relation);
                     setCustomMode(false);
                 });
 
                 customCategorySelect.addEventListener('change', () => {
                     relation.category = customCategorySelect.value as CharacterRelationCategory;
-                    draft.relations = normalizeCharacterRelations(relations);
-                    this.scheduleSave(draft);
+                    commitRelations(relation);
                 });
 
                 customTypeInput.addEventListener('input', () => {
@@ -2261,16 +2352,16 @@ export class CharacterView extends ItemView {
                     if (!cleaned) {
                         relation.type = NEW_CUSTOM_TYPE_VALUE;
                         relation.category = 'custom';
-                        draft.relations = normalizeCharacterRelations(relations);
-                        this.scheduleSave(draft);
+                        commitRelations(relation);
                         return;
                     }
                     relation.type = cleaned;
                     // Issue #233 discussion — keep the user-chosen category
                     // (from customCategorySelect) instead of forcing 'custom'.
-                    relation.category = (customCategorySelect.value as CharacterRelationCategory) || 'custom';
-                    draft.relations = normalizeCharacterRelations(relations);
-                    this.scheduleSave(draft);
+                    relation.category = entityRelationships
+                        ? relation.category || 'custom'
+                        : (customCategorySelect.value as CharacterRelationCategory) || 'custom';
+                    commitRelations(relation);
                 });
 
                 customTypeInput.addEventListener('blur', () => {
@@ -2279,26 +2370,29 @@ export class CharacterView extends ItemView {
                     }
                 });
 
+                inverseTypeInput.addEventListener('input', () => {
+                    const cleaned = inverseTypeInput.value.trim().toLowerCase().replace(/\s+/g, '-');
+                    if (cleaned) relation.inverseType = cleaned;
+                    else delete relation.inverseType;
+                    commitRelations(relation);
+                });
+
+                inverseTypeInput.addEventListener('blur', () => {
+                    inverseTypeInput.value = relation.inverseType || '';
+                });
+
                 twoWayCheckbox.addEventListener('change', () => {
                     if (twoWayCheckbox.checked) {
                         delete relation.twoWay;
                     } else {
                         relation.twoWay = false;
                     }
-                    draft.relations = normalizeCharacterRelations(relations);
-                    this.scheduleSave(draft);
-                });
-
-                targetSelect.addEventListener('change', () => {
-                    relation.target = resolveAlias(targetSelect.value);
-                    draft.relations = normalizeCharacterRelations(relations);
-                    this.scheduleSave(draft);
+                    commitRelations(relation);
                 });
 
                 removeBtn.addEventListener('click', () => {
                     relations.splice(index, 1);
-                    draft.relations = normalizeCharacterRelations(relations);
-                    this.scheduleSave(draft);
+                    commitRelations();
                     renderRows();
                 });
 
@@ -2328,8 +2422,7 @@ export class CharacterView extends ItemView {
                     const [moved] = relations.splice(dragIndex, 1);
                     const insertIndex = dragIndex < index ? index - 1 : index;
                     relations.splice(insertIndex, 0, moved);
-                    draft.relations = normalizeCharacterRelations(relations);
-                    this.scheduleSave(draft);
+                    commitRelations();
                     renderRows();
                 });
 
@@ -2341,8 +2434,18 @@ export class CharacterView extends ItemView {
             }
         };
 
-        const addBtn = addRow.createEl('button', { cls: 'character-custom-add-btn', text: '+ add relation' });
+        const addBtn = addRow.createEl('button', {
+            cls: 'character-custom-add-btn',
+            text: entityRelationships ? 'Add entity relationship' : '+ add relation',
+        });
         addBtn.addEventListener('click', () => {
+            if (entityRelationships) {
+                relations.push({ category: 'custom', type: '', target: '' });
+                renderRows();
+                const typeInputs = list.querySelectorAll<HTMLInputElement>('.relation-builder-custom-input');
+                typeInputs[typeInputs.length - 1]?.focus();
+                return;
+            }
             const existing = addRow.querySelector('.relation-builder-add-picker') as HTMLSelectElement | null;
             if (existing) {
                 const existingPicker = existing as HTMLSelectElement & { showPicker?: () => void };
@@ -2372,11 +2475,21 @@ export class CharacterView extends ItemView {
                     cleanup();
                     return;
                 }
-                relations.push({ category: inferCategoryFromType(selectedType), type: selectedType, target: '' });
-                draft.relations = normalizeCharacterRelations(relations);
-                this.scheduleSave(draft);
+                const isNewCustomType = selectedType === NEW_CUSTOM_TYPE_VALUE;
+                relations.push({
+                    category: isNewCustomType ? 'custom' : inferCategoryFromType(selectedType),
+                    type: selectedType,
+                    target: '',
+                });
+                if (!isNewCustomType) {
+                    commitRelations(relations[relations.length - 1]);
+                }
                 cleanup();
                 renderRows();
+                if (isNewCustomType) {
+                    const typeInputs = list.querySelectorAll<HTMLInputElement>('.relation-builder-custom-input');
+                    typeInputs[typeInputs.length - 1]?.focus();
+                }
             });
 
             tempSelect.addEventListener('blur', () => {
@@ -2394,7 +2507,7 @@ export class CharacterView extends ItemView {
         });
 
         renderRows();
-        this.renderRelationHistoryEditor(container, draft, mergedNames, resolveAlias);
+        if (!entityRelationships) this.renderRelationHistoryEditor(container, draft, mergedNames, resolveAlias);
     }
 
     private renderRelationHistoryEditor(
@@ -3116,36 +3229,21 @@ export class CharacterView extends ItemView {
         }
     }
 
-    private renderReferencesPanel(container: HTMLElement, entityName: string): void {
-        const index = this.plugin.linkScanner.buildEntityIndex();
-        const refs = index.get(entityName.toLowerCase());
-        if (!refs || refs.length === 0) return;
-
-        const section = container.createDiv('character-references-panel');
-        section.createEl('h3', { text: 'Referenced by' });
-
-        const groups: Record<string, typeof refs> = {};
-        for (const ref of refs) {
-            const label = ref.type === 'codex' && ref.codexCategory
-                ? ref.codexCategory
-                : ref.type;
-            if (!groups[label]) groups[label] = [];
-            groups[label].push(ref);
-        }
-
-        for (const [groupLabel, groupRefs] of Object.entries(groups)) {
-            const groupEl = section.createDiv('reference-group');
-            groupEl.createEl('h4', { text: groupLabel.charAt(0).toUpperCase() + groupLabel.slice(1) });
-            const list = groupEl.createEl('ul', { cls: 'reference-list' });
-            for (const ref of groupRefs) {
-                const li = list.createEl('li');
-                const link = li.createEl('a', { text: ref.name, cls: 'reference-link' });
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.app.workspace.openLinkText(ref.filePath, '', false);
-                });
-            }
-        }
+    private renderReferencesPanel(container: HTMLElement, entityName: string, entityPath: string): void {
+        renderEntityReferencesPanel({
+            container,
+            plugin: this.plugin,
+            entityName,
+            entityPath,
+            panelClass: 'character-references-panel',
+            onOpenReference: reference => {
+                if (reference.type === 'scene') this.app.workspace.openLinkText(reference.filePath, '', false);
+                else void this.plugin.showEntityDetails(reference.filePath);
+            },
+            onRefresh: () => {
+                if (this.rootContainer) this.renderView(this.rootContainer);
+            },
+        });
     }
 
     private renderStat(parent: HTMLElement, value: string, label: string): void {
@@ -3175,12 +3273,22 @@ export class CharacterView extends ItemView {
                     this.undoSnapshot = { ...draft, custom: { ...(draft.custom || {}) } };
                 }
                 this._lastSaveTime = Date.now();
+                const latestRelations = normalizeCharacterRelations(
+                    this.characterManager.getCharacter(draft.filePath)?.relations,
+                );
+                draft.relations = mergeEntityRelations(
+                    this._lastSavedRelations,
+                    draft.relations,
+                    latestRelations,
+                );
+                const preparedRelations = await this.relationshipService.prepareRelations(draft);
+                draft.relations = preparedRelations.length ? preparedRelations : undefined;
                 await this.characterManager.saveCharacter(draft);
                 this.pendingSaveDraft = null;
 
                 // ── Reciprocal relation sync ──
                 if (!this._skipReciprocalSync) {
-                    await this.syncReciprocalRelations(draft);
+                    await this.syncReciprocalRelations(draft, latestRelations);
                 }
             } catch (e) {
                 console.error('StoryLine: failed to save character', e);
@@ -3191,12 +3299,17 @@ export class CharacterView extends ItemView {
     /**
      * Compute relation diffs and apply reciprocal updates to target characters.
      */
-    private async syncReciprocalRelations(draft: Character): Promise<void> {
+    private async syncReciprocalRelations(draft: Character, oldRelations: CharacterRelation[]): Promise<void> {
         const currentRelations = normalizeCharacterRelations(draft.relations);
+        await this.relationshipService.syncChanges(
+            draft,
+            oldRelations.filter(relation => !!relation.targetId),
+            currentRelations.filter(relation => !!relation.targetId),
+        );
         const updates = computeReciprocalUpdates(
             draft.name,
-            this._lastSavedRelations,
-            currentRelations,
+            oldRelations.filter(relation => !relation.targetId),
+            currentRelations.filter(relation => !relation.targetId),
         );
 
         // Update snapshot for next diff

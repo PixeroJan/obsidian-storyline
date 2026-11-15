@@ -1,3 +1,5 @@
+import { EntityRelation, EntityRelationCategory, normalizeEntityRelations } from './EntityRelation';
+
 /**
  * Character data model - represents a character profile stored as a markdown file
  * in the project's Characters/ folder.
@@ -5,6 +7,8 @@
 export interface Character {
     /** Vault-relative path of the character .md file */
     filePath: string;
+    /** Stable identity assigned when this entity participates in a typed relationship */
+    entityId?: string;
     /** type identifier */
     type: 'character';
 
@@ -380,23 +384,8 @@ export function getRolesAt(
     });
 }
 
-export type CharacterRelationCategory =
-    | 'family'
-    | 'romantic'
-    | 'social'
-    | 'conflict'
-    | 'guidance'
-    | 'professional'
-    | 'story'
-    | 'custom';
-
-export interface CharacterRelation {
-    category: CharacterRelationCategory;
-    type: string;
-    target: string;
-    /** Whether saving this relation should maintain its inverse relation. Defaults to true. */
-    twoWay?: boolean;
-}
+export type CharacterRelationCategory = EntityRelationCategory;
+export type CharacterRelation = EntityRelation;
 
 export type RelationHistoryAnchorMode = 'scene' | 'date';
 
@@ -527,8 +516,8 @@ const INVERSE_RELATIONS: Record<string, string> = {
  * Return the inverse of a relation type.  Unknown / custom types
  * are treated as symmetric (the same type is returned).
  */
-export function getInverseRelationType(type: string): string {
-    return INVERSE_RELATIONS[type] ?? type;
+export function getInverseRelationType(type: string, inverseType?: string): string {
+    return inverseType ? normalizedType(inverseType) : INVERSE_RELATIONS[type] ?? type;
 }
 
 /**
@@ -562,50 +551,45 @@ export function computeReciprocalUpdates(
     const newSet = new Map(newRelations.map(r => [key(r), r]));
     const updates: ReciprocalUpdate[] = [];
 
-    // Added relations (in new but not in old), or relations switched to two-way.
+    const reciprocal = (rel: CharacterRelation): CharacterRelation => {
+        const type = getInverseRelationType(rel.type, rel.inverseType);
+        const category = inferCategoryForType(type);
+        return {
+            category: category === 'custom' ? rel.category : category,
+            type,
+            target: sourceName,
+            inverseType: rel.type,
+        };
+    };
+
+    const addUpdate = (action: ReciprocalUpdate['action'], rel: CharacterRelation): void => {
+        updates.push({ action, targetName: rel.target, relation: reciprocal(rel) });
+    };
+
+    // Added relations, two-way setting changes, or a changed reciprocal label.
     for (const [k, rel] of newSet) {
         const oldRel = oldSet.get(k);
-        const becameTwoWay = oldRel?.twoWay === false && rel.twoWay !== false;
-        if ((!oldRel || becameTwoWay) && rel.twoWay !== false && rel.target.trim()) {
-            const invType = getInverseRelationType(rel.type);
-            updates.push({
-                action: 'add',
-                targetName: rel.target,
-                relation: {
-                    category: inferCategoryForType(invType),
-                    type: invType,
-                    target: sourceName,
-                },
-            });
+        if (!rel.target.trim()) continue;
+        if (!oldRel) {
+            if (rel.twoWay !== false) addUpdate('add', rel);
+            continue;
         }
 
-        if (oldRel && oldRel.twoWay !== false && rel.twoWay === false && rel.target.trim()) {
-            const invType = getInverseRelationType(rel.type);
-            updates.push({
-                action: 'remove',
-                targetName: rel.target,
-                relation: {
-                    category: inferCategoryForType(invType),
-                    type: invType,
-                    target: sourceName,
-                },
-            });
-        }
+        const wasTwoWay = oldRel.twoWay !== false;
+        const isTwoWay = rel.twoWay !== false;
+        const oldReciprocal = reciprocal(oldRel);
+        const newReciprocal = reciprocal(rel);
+        const reciprocalChanged = oldReciprocal.type !== newReciprocal.type
+            || oldReciprocal.category !== newReciprocal.category;
+
+        if (wasTwoWay && (!isTwoWay || reciprocalChanged)) addUpdate('remove', oldRel);
+        if (isTwoWay && (!wasTwoWay || reciprocalChanged)) addUpdate('add', rel);
     }
 
     // Removed relations (in old but not in new), unless they were one-way.
     for (const [k, rel] of oldSet) {
         if (!newSet.has(k) && rel.twoWay !== false && rel.target.trim()) {
-            const invType = getInverseRelationType(rel.type);
-            updates.push({
-                action: 'remove',
-                targetName: rel.target,
-                relation: {
-                    category: inferCategoryForType(invType),
-                    type: invType,
-                    target: sourceName,
-                },
-            });
+            addUpdate('remove', rel);
         }
     }
 
@@ -885,24 +869,7 @@ function normalizedType(value: string): string {
 }
 
 export function normalizeCharacterRelations(relations: CharacterRelation[] | undefined): CharacterRelation[] {
-    if (!Array.isArray(relations)) return [];
-    const out: CharacterRelation[] = [];
-    const seen = new Set<string>();
-    for (const rel of relations) {
-        if (!rel || typeof rel.target !== 'string' || typeof rel.type !== 'string') continue;
-        const target = rel.target.trim();
-        if (!target) continue;
-        const category = normalizeRelationCategory(String(rel.category || 'custom'));
-        const type = normalizedType(rel.type);
-        if (!type) continue;
-        const key = `${category}|${type}|${target.toLowerCase()}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(rel.twoWay === false
-            ? { category, type, target, twoWay: false }
-            : { category, type, target });
-    }
-    return out;
+    return normalizeEntityRelations(relations);
 }
 
 export function normalizeRelationHistory(raw: unknown): RelationHistoryEntry[] {

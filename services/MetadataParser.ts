@@ -163,6 +163,7 @@ export class MetadataParser {
             tags: frontmatter.tags || [],
             setup_scenes: this.parseStringArray(frontmatter.setup_scenes),
             payoff_scenes: this.parseStringArray(frontmatter.payoff_scenes),
+            setup_payoff_labels: this.parseSetupPayoffLabels(frontmatter.setup_payoff_labels),
             ignored_detections: this.parseStringArray(frontmatter.ignored_detections),
             inactive: this.parseBooleanFlag(frontmatter.inactive),
             created: frontmatter.created,
@@ -213,6 +214,17 @@ export class MetadataParser {
         }
         // objects, arrays, symbols, etc. → undefined (never leak to Obsidian APIs)
         return undefined;
+    }
+
+    private static parseSetupPayoffLabels(value: unknown): Record<string, string> | undefined {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+        const labels: Record<string, string> = {};
+        for (const [rawPayoffId, rawLabel] of Object.entries(value)) {
+            const payoffId = rawPayoffId.trim();
+            const label = typeof rawLabel === 'string' ? rawLabel.trim() : '';
+            if (payoffId && label) labels[payoffId] = label;
+        }
+        return Object.keys(labels).length > 0 ? labels : undefined;
     }
 
     /**
@@ -284,6 +296,12 @@ export class MetadataParser {
                 } else {
                     delete frontmatter[key];
                 }
+                continue;
+            }
+            if (key === 'setup_payoff_labels') {
+                const labels = this.parseSetupPayoffLabels(value);
+                if (labels) frontmatter[key] = labels;
+                else delete frontmatter[key];
                 continue;
             }
             if (key === 'universalFields') {
@@ -442,6 +460,8 @@ export class MetadataParser {
         if (scene.tags?.length) fm.tags = scene.tags;
         if (scene.setup_scenes?.length) fm.setup_scenes = wrapArray(scene.setup_scenes);
         if (scene.payoff_scenes?.length) fm.payoff_scenes = wrapArray(scene.payoff_scenes);
+        const setupPayoffLabels = this.parseSetupPayoffLabels(scene.setup_payoff_labels);
+        if (setupPayoffLabels) fm.setup_payoff_labels = setupPayoffLabels;
         if (scene.notes) fm.notes = scene.notes;
         if (scene.notesFile) fm.notesFile = scene.notesFile;
         if (scene.synopsis) fm.synopsis = scene.synopsis;

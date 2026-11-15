@@ -687,8 +687,11 @@ Link scenes that set up (foreshadow) and pay off (resolve) each other:
 2. Scroll to the **Setup / Payoff** section.
 3. Type a scene title in the **Sets up** or **Set up by** input to search and select. Existing links appear as removable pills.
 4. Links are bidirectional — if Scene A "sets up" Scene B, Scene B shows Scene A under "Set up by".
+5. Add an optional label beside a linked payoff from either scene's Inspector. The label appears on that relationship in the Stats View.
 
-Links are stored by **scene title** (or as `[[wikilinks]]` to the scene). The reader is tolerant of other forms too — plain file paths (`"MyProject/Scenes/Scene 10.md"`) and filenames with a `.md` extension are normalised to the scene title automatically, so links written that way still resolve. The recommended form is a plain title or a `[[wikilink]]`.
+Labels are stored in the setup scene's top-level `setup_payoff_labels` frontmatter map, keyed by the payoff scene's project-relative Markdown path. Editing from the payoff scene still updates the setup scene, so each label is stored only once. Blank labels are omitted, and the key follows a payoff scene when its file is renamed or moved.
+
+Setup/payoff links continue to use scene titles or `[[wikilinks]]`. The reader is tolerant of other forms too — plain file paths (`"MyProject/Scenes/Scene 10.md"`) and filenames with a `.md` extension are normalised to the scene title automatically, so links written that way still resolve. The recommended form is a plain title or a `[[wikilink]]`.
 
 The Stats View and Plot Hole Detection will warn about:
 - Setups without payoffs.
@@ -1260,7 +1263,11 @@ The **Characters View** includes a visual relationship map:
 
 Relationships are populated from the character profile editor:
 
-The Relationships section in a character profile uses structured relation rows. Choose a relation type, select a target character, and use the **Two-way relationship** checkbox when the reverse relation should also be created. Existing relations without a `twoWay` value remain two-way for compatibility.
+The **Relationships** section in a character profile is for Character-to-Character links and retains the existing relation types and relationship history. Use the separate **Entity Relationships** section below it to link the Character to a Creature, Organization, or another enabled Codex category. Add an entity relationship, enter its custom relationship type, then search for and select the target. Duplicate names are disambiguated in the suggestions. Use **Two-way relationship** when the reverse relation should also be created; optional inverse labels are supported. Existing relations without a `twoWay` value remain two-way for compatibility.
+
+Codex entry profiles have a **Relationships** editor for links to Characters or entries in any enabled Codex category. For example, relate one Organization to another. The Character Relationship Map remains focused on Character-to-Character links.
+
+Typed relationships are stored in the same `relations` frontmatter field on Characters and Codex entries. New links use stable entity IDs, while existing name-only Character relationships continue to load without a migration. Two-way links also store the inverse row on the target entity; one-way links do not.
 
 The **Relationship history** section records past or temporary relationship periods without changing the current relationship list. Use **+ add period** for each separate period, including on-and-off relationships between the same characters. Each period has its own role, target, two-way setting, and start/end range.
 
@@ -1362,7 +1369,7 @@ StoryLine includes a **Link Scanner** that automatically extracts `[[wikilinks]]
 
 ## Cross-Entity References
 
-StoryLine now tracks **cross-entity references** across your entire project. When you mention a character in a location description, or reference a location in a codex entry, StoryLine detects the connection and displays it in a **"Referenced By"** panel on the entity's side panel.
+StoryLine tracks **cross-entity references** across your entire project. In addition to mentions in text, folder-linked fields can create explicit directional references between Characters, Locations, Worlds, and Codex entries. The target entity shows incoming links in its **Referenced by** panel. Typed relationships are managed separately in each entity's **Relationships** section.
 
 ### How It Works
 
@@ -1370,7 +1377,7 @@ StoryLine now tracks **cross-entity references** across your entire project. Whe
 2. Use `#tags` that match entity names (e.g., `#MagicSword` will reference a codex entry named "MagicSword").
 3. Plain-text name mentions (without brackets or #) are also detected automatically.
 4. StoryLine scans all entities and scenes and builds a reverse reference index.
-5. Open any character, location, or codex detail page — the side panel shows a **"Referenced By"** section listing every entity and scene that mentions it.
+5. Open any character, location, or codex detail page — the side panel shows a **"Referenced by"** section listing entities and scenes that refer to it.
 
 ### What Gets Scanned
 
@@ -1390,12 +1397,13 @@ References are grouped by type:
 - **Codex category name** (e.g., "Items", "Creatures") — codex entries that mention it
 - **Scene** — scenes that contain a wikilink or name match
 
-Each reference is a clickable link that opens the source file.
+Each reference is a clickable link that opens the source file. Explicit folder-linked relationships can also be added or removed from this panel; edits update the source field only.
 
 ### Tips
 
 - Use `[[wikilinks]]` or `#tags` for guaranteed detection — plain-text matching depends on exact name matches.
 - `#tags` are matched case-insensitively: `#magicsword` will match a codex entry named "MagicSword".
+- If two entities share a name, use a full-path wikilink to identify the intended note. Plain-text mentions and tags cannot distinguish between same-named entities.
 - The scanner updates every time you open an entity detail page, so new connections appear immediately.
 - Self-references are excluded (a character's own fields won't list itself).
 
@@ -1721,20 +1729,28 @@ The multi-select type is ideal for traits, themes, categories, or any field wher
 
 ### Linked folder-source entries
 
-Folder-sourced dropdowns and multi-select fields can optionally store selected entries as Obsidian wikilinks. This is useful when a Codex entry refers to another Codex entry, such as a martial-art technique selecting its associated martial-art style.
+Folder-sourced dropdowns and multi-select fields can optionally store selected entries as Obsidian wikilinks. Use them to link any entity to a note in another folder, such as a Character selecting its species, or one Codex entry selecting another.
 
 1. Open the existing Add/Edit Field modal for a universal field or custom-section field.
 2. Choose **Dropdown** or **Multi-select (tags)**.
 3. Enter a **Selectable notes folder (optional)** path containing the target Markdown entries.
 4. Enable **Link selected notes**.
 
-The folder can be entered manually or selected with the folder-open browse button. The picker lists the vault's folders and supports search. **Link selected notes** is shown only when the field type is `dropdown` or `multi-select` and a non-empty folder source is present. Selected values are saved as path-backed wikilinks, so Obsidian can open the target and the Codex target's **Referenced By** panel can show the incoming relationship. The setting is opt-in; existing folder-source fields continue storing ordinary values until enabled.
+The folder can be entered manually or selected with the folder-open browse button. The picker lists the vault's folders and supports search. **Link selected notes** is shown only when the field type is `dropdown` or `multi-select` and a non-empty folder source is present. Selected values are saved as path-backed wikilinks, so Obsidian can open the target and its **Referenced by** panel can show the incoming relationship. The setting is opt-in; existing folder-source fields continue storing ordinary values until enabled.
 
 Existing plain-name values remain readable. If linked mode is later disabled, existing links are displayed as normal option names and are written back as plain values on the next save. Multi-select values are stored as separate wikilinks rather than one comma-containing link. If a selected note is not currently found, its configured folder path and name are still preserved as a wikilink target.
 
 Universal field data is stored in the entity's frontmatter under the `universalFields` key. A custom-section field is stored in the entity's `custom` map using the composite key `Section title :: Field name`. For scenes, custom fields appear in the Inspector between the intensity slider and setup/payoff sections.
 
 Custom sections on Characters, Locations, and Codex entries use the same basic field types. Fields inside those user-created sections can be edited in place, reordered with the chevrons, moved to another custom section with the move icon, and configured with a folder source for dropdown or multi-select choices.
+
+### Folder-linked references between entities
+
+1. Add a `Dropdown` or `Multi-select (tags)` field to the source entity. The source can be a Character, Location, World, or an entry in any enabled Codex category, including a custom category such as **Gods**.
+2. Set its folder source to the folder containing the target notes and enable **Link selected notes**.
+3. Open a target note. Its **Referenced by** panel lists the source. Use the link icon to add a link by choosing an eligible source and field, or the unlink icon beside a source to remove that target from its field.
+
+Relationships are directional: the selected source field stores the wikilink, and the target panel derives the incoming relationship. No reverse property is written to the target. For a two-way relationship, configure a corresponding linked field in the other direction. Series-level Codex entries work when their category is enabled and loaded in the active project.
 
 > **Per-project:** Custom sections, codex category definitions, enabled codex categories, and custom location types are stored per project in `System/custom-sections.json` — they do not carry over between unrelated writing projects. Universal field templates (the ones added via the **+** button on a section header) are also per-project, stored in `System/field-templates.json`.
 

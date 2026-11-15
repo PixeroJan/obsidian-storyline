@@ -456,7 +456,7 @@ export const RESERVED_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
     'timeline_mode', 'timeline_strand',
     'image', 'gallery', 'tagline', 'role', 'occupation', 'residency',
     'family', 'appearance', 'personality', 'goal', 'belief', 'misbelief',
-    'fears', 'flaws', 'strengths', 'relations', 'books',
+    'fears', 'flaws', 'strengths', 'relations', 'entityId', 'books',
     'world', 'parent', 'description', 'geography', 'culture', 'politics',
     'magicTechnology', 'beliefs', 'economy', 'history', 'locationType',
     'atmosphere', 'significance', 'inhabitants', 'connectedLocations',

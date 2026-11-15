@@ -1701,13 +1701,18 @@ export class StatsView extends ItemView {
             const toEl = row.createDiv('stats-sp-to');
             for (const target of chain.targets.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))) {
                 const tSeq = target.sequence !== undefined ? `#${target.sequence} ` : '';
-                const toLink = toEl.createEl('a', {
+                const targetWrap = toEl.createDiv('stats-sp-target-wrap');
+                const toLink = targetWrap.createEl('a', {
                     text: `${tSeq}${target.title}`,
                     cls: 'stats-scene-link stats-sp-target',
                 });
                 toLink.addEventListener('click', () => {
                     this.app.workspace.openLinkText(target.filePath, '', true);
                 });
+                const payoffLabel = this.sceneManager.getSetupPayoffLabel(chain.from, target, target.title);
+                if (payoffLabel) {
+                    targetWrap.createSpan({ cls: 'stats-sp-label', text: payoffLabel });
+                }
             }
         }
 

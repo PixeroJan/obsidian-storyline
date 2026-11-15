@@ -7,6 +7,18 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
 
+## Version 1.11.12
+
+### Bug Fixes
+
+- **Navigator scene selection in Manuscript** *([#340](https://github.com/PixeroJan/obsidian-storyline/issues/340))* - Clicking a scene in the Navigator now waits for its Manuscript editor to mount and the layout to settle before aligning the selected scene in the scroll area.
+
+### Improvements
+
+- **Setup and payoff labels** *([#339](https://github.com/PixeroJan/obsidian-storyline/issues/339))* - Add optional labels to setup/payoff links from either scene's Inspector. Labels appear in the Stats map and stay attached when a payoff scene is renamed or moved.
+- **Custom character relationship inverse labels** *([Discussion #338](https://github.com/PixeroJan/obsidian-storyline/discussions/338))* - Set a custom inverse label for a two-way relationship, so each character can show the relationship from their own perspective. Existing built-in inverse labels continue to work.
+- **Relationships across Characters and Codex categories** *([#341](https://github.com/PixeroJan/obsidian-storyline/issues/341))* - Character-to-Character links remain in **Relationships**; links to Creatures, Organizations, and other enabled Codex categories are managed in a separate **Entity Relationships** section. Searchable targets, custom relationship labels, and optional inverse labels are supported; Codex entries can also relate to Characters or each other. Folder-linked fields continue to populate the target's **Referenced by** panel, including for user-created categories and Series-level Codex entries.
+
 ## Version 1.11.11
 
 

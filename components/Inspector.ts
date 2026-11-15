@@ -953,6 +953,25 @@ export class InspectorComponent {
         }
     }
 
+    private renderSetupPayoffLabel(
+        container: HTMLElement,
+        setupScene: Scene,
+        payoffScene: Scene,
+        rawReference: string,
+    ): void {
+        const row = container.createDiv('inspector-sp-label-row');
+        row.createSpan({ cls: 'inspector-sp-label-name', text: `${payoffScene.title}:` });
+        const input = row.createEl('input', {
+            cls: 'inspector-sp-label-input',
+            attr: { type: 'text', placeholder: 'Optional payoff label' },
+        });
+        input.value = this.sceneManager.getSetupPayoffLabel(setupScene, payoffScene, rawReference) ?? '';
+        input.setAttribute('aria-label', `Payoff label for ${payoffScene.title}`);
+        input.addEventListener('change', () => {
+            void this.sceneManager.setSetupPayoffLabel(setupScene, payoffScene, input.value);
+        });
+    }
+
     /**
      * Render the Setup / Payoff tracking section
      */
@@ -960,7 +979,8 @@ export class InspectorComponent {
         const section = this.container.createDiv('inspector-section inspector-setup-payoff');
         section.createSpan({ cls: 'inspector-label', text: 'Setup / Payoff:' });
 
-        const allSceneTitles = this.sceneManager.getAllScenes()
+        const allScenes = this.sceneManager.getAllScenes();
+        const allSceneTitles = allScenes
             .filter(s => s.filePath !== scene.filePath)
             .map(s => s.title)
             .filter(Boolean);
@@ -996,16 +1016,24 @@ export class InspectorComponent {
                 // Remove reverse links for removed entries
                 for (const title of oldValues) {
                     if (!values.includes(title)) {
-                        const targetScene = this.sceneManager.getAllScenes().find(s => s.title === title);
+                        const targetScene = allScenes.find(s => s.title === title);
+                        if (targetScene) await this.sceneManager.setSetupPayoffLabel(scene, targetScene, '');
                         if (targetScene && targetScene.setup_scenes?.includes(scene.title)) {
                             const rev = targetScene.setup_scenes.filter(s => s !== scene.title);
                             await this.sceneManager.updateScene(targetScene.filePath, { setup_scenes: rev });
                         }
                     }
                 }
+                this.onRefresh();
             },
             placeholder: 'Search scenes…',
         });
+
+        const payoffLabels = section.createDiv('inspector-sp-labels');
+        for (const title of scene.payoff_scenes || []) {
+            const payoffScene = allScenes.find(s => s.title === title);
+            if (payoffScene) this.renderSetupPayoffLabel(payoffLabels, scene, payoffScene, title);
+        }
 
         // --- "Set up by" (scenes that set this one up) ---
         const setupLabel = section.createDiv('inspector-sp-row');
@@ -1038,20 +1066,27 @@ export class InspectorComponent {
                 // Remove reverse links for removed entries
                 for (const title of oldValues) {
                     if (!values.includes(title)) {
-                        const sourceScene = this.sceneManager.getAllScenes().find(s => s.title === title);
+                        const sourceScene = allScenes.find(s => s.title === title);
+                        if (sourceScene) await this.sceneManager.setSetupPayoffLabel(sourceScene, scene, '');
                         if (sourceScene && sourceScene.payoff_scenes?.includes(scene.title)) {
                             const rev = sourceScene.payoff_scenes.filter(s => s !== scene.title);
                             await this.sceneManager.updateScene(sourceScene.filePath, { payoff_scenes: rev });
                         }
                     }
                 }
+                this.onRefresh();
             },
             placeholder: 'Search scenes…',
         });
 
+        const setupLabels = section.createDiv('inspector-sp-labels');
+        for (const title of scene.setup_scenes || []) {
+            const setupScene = allScenes.find(s => s.title === title);
+            if (setupScene) this.renderSetupPayoffLabel(setupLabels, setupScene, scene, scene.title);
+        }
+
         // Warning: dangling setup (this scene sets up something but the target doesn't exist)
         if (scene.payoff_scenes?.length) {
-            const allScenes = this.sceneManager.getAllScenes();
             const dangling = scene.payoff_scenes.filter(target => {
                 const targetScene = allScenes.find(s => s.title === target);
                 return !targetScene;

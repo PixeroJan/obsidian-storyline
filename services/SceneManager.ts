@@ -296,6 +296,34 @@ export class SceneManager implements ISceneStore {
         return this._activeProject?.bookId ?? null;
     }
 
+    getProjectRelativeSceneId(filePath: string): string {
+        const projectBase = this._activeProject
+            ? deriveProjectFoldersFromFilePath(this._activeProject.filePath).baseFolder
+            : this.plugin.settings.storyLineRoot;
+        const normalizedBase = normalizePath(projectBase).replace(/\/+$/, '');
+        const normalizedPath = normalizePath(filePath);
+        return normalizedBase && normalizedPath.startsWith(`${normalizedBase}/`)
+            ? normalizedPath.substring(normalizedBase.length + 1)
+            : normalizedPath;
+    }
+
+    getSetupPayoffLabel(setupScene: Scene, payoffScene: Scene, rawReference?: string): string | undefined {
+        const labels = setupScene.setup_payoff_labels;
+        if (!labels) return undefined;
+        const payoffId = this.getProjectRelativeSceneId(payoffScene.filePath);
+        return labels[payoffId] || labels[payoffScene.title] || (rawReference ? labels[rawReference] : undefined);
+    }
+
+    async setSetupPayoffLabel(setupScene: Scene, payoffScene: Scene, rawLabel: string): Promise<void> {
+        const currentSetup = this.scenes.get(setupScene.filePath) ?? setupScene;
+        const labels = { ...(currentSetup.setup_payoff_labels ?? {}) };
+        const payoffId = this.getProjectRelativeSceneId(payoffScene.filePath);
+        const label = rawLabel.trim();
+        if (label) labels[payoffId] = label;
+        else delete labels[payoffId];
+        await this.updateScene(setupScene.filePath, { setup_payoff_labels: labels });
+    }
+
     /**
      * Scan the StoryLine root folder for project .md files
      * (files with `type: storyline` in frontmatter).
@@ -1241,6 +1269,7 @@ export class SceneManager implements ISceneStore {
 
         // Rename/move via fileManager so vault links update
         await this.app.fileManager.renameFile(file, newPath);
+        await this.migrateSetupPayoffLabelKeys(filePath, newPath);
 
         // Re-index at new path
         const movedFile = this.app.vault.getAbstractFileByPath(newPath);
@@ -1730,6 +1759,9 @@ export class SceneManager implements ISceneStore {
         const wasInNotesFolder = this.isWithinFolder(oldPath, this.getNotesFolder());
         const isProjectContent = inSceneFolder || inNotesFolder || wasInSceneFolder || wasInNotesFolder;
         if (file.extension === 'md' && inSceneFolder && wasInSceneFolder && oldPath !== file.path) {
+            await this.migrateSetupPayoffLabelKeys(oldPath, file.path);
+        }
+        if (file.extension === 'md' && inSceneFolder && wasInSceneFolder && oldPath !== file.path) {
             await this.plugin.arcManager.renameScenePath(oldPath, file.path);
         }
         if (isProjectContent) {
@@ -1755,6 +1787,20 @@ export class SceneManager implements ISceneStore {
             }
         }
         this.bumpVersion(file.path);
+    }
+
+    private async migrateSetupPayoffLabelKeys(oldPath: string, newPath: string): Promise<void> {
+        const oldId = this.getProjectRelativeSceneId(oldPath);
+        const newId = this.getProjectRelativeSceneId(newPath);
+        if (oldId === newId) return;
+
+        for (const scene of this.getAllScenes()) {
+            const labels = scene.setup_payoff_labels;
+            if (!labels || !Object.prototype.hasOwnProperty.call(labels, oldId)) continue;
+            const updatedLabels = { ...labels, [newId]: labels[oldId] };
+            delete updatedLabels[oldId];
+            await this.updateScene(scene.filePath, { setup_payoff_labels: updatedLabels });
+        }
     }
 
     private isFilenameSyncTemporaryPath(filePath: string): boolean {

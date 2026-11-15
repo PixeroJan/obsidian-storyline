@@ -511,7 +511,7 @@ export class NavigatorView extends ItemView {
                 ? manuscriptLeaves[0].view as ManuscriptView
                 : null;
             if (manuscriptView) {
-                manuscriptView.scrollToScene(scene.filePath);
+                await manuscriptView.scrollToScene(scene.filePath);
                 return;
             }
             const file = this.app.vault.getAbstractFileByPath(scene.filePath);

@@ -1,4 +1,6 @@
  
+import type { EntityRelation } from './EntityRelation';
+
 /**
  * Codex data model — generic entries for any user-defined category.
  *
@@ -14,6 +16,8 @@
 export interface CodexEntry {
     /** Vault-relative path of the .md file */
     filePath: string;
+    /** Stable identity assigned when this entity participates in a typed relationship */
+    entityId?: string;
     /** Frontmatter type — matches the category id, e.g. 'item', 'creature' */
     type: string;
     /** Display name */
@@ -30,6 +34,8 @@ export interface CodexEntry {
     notes?: string;
     /** User-defined custom fields */
     custom?: Record<string, string | number | boolean | string[]>;
+    /** Typed relationships to Characters or entries in any Codex category */
+    relations?: EntityRelation[];
     /**
      * Universal field template values (keyed by template id).
      * `boolean` is supported for `checkbox`-type templates (1.10.43+).

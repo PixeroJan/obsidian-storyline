@@ -91,6 +91,10 @@ export class CharacterManager {
         );
     }
 
+    getAllCharactersForRelationships(): Character[] {
+        return Array.from(this.characters.values());
+    }
+
     /**
      * Get a character by file path.
      */
@@ -234,6 +238,7 @@ export class CharacterManager {
         const fm: Record<string, unknown> = { ...existingFm };
         fm.type = 'character';
         fm.name = character.name;
+        if (character.entityId) fm.entityId = character.entityId;
         fm.modified = new Date().toISOString().split('T')[0];
         if (character.created) fm.created = character.created;
 
@@ -476,11 +481,19 @@ export class CharacterManager {
             const category = typeof rec.category === 'string' ? rec.category : '';
             const type = typeof rec.type === 'string' ? rec.type : '';
             const target = typeof rec.target === 'string' ? rec.target : '';
+            const targetId = typeof rec.targetId === 'string' ? rec.targetId : '';
+            const targetType = typeof rec.targetType === 'string' ? rec.targetType : '';
+            const relationId = typeof rec.relationId === 'string' ? rec.relationId : '';
+            const inverseType = typeof rec.inverseType === 'string' ? rec.inverseType : '';
             if (!category || !type || !target) continue;
             parsed.push({
                 category: category as CharacterRelationCategory,
                 type,
                 target,
+                ...(targetId.trim() ? { targetId: targetId.trim() } : {}),
+                ...(targetType.trim() ? { targetType: targetType.trim() } : {}),
+                ...(relationId.trim() ? { relationId: relationId.trim() } : {}),
+                ...(inverseType.trim() ? { inverseType } : {}),
                 ...(rec.twoWay === false ? { twoWay: false } : {}),
             });
         }

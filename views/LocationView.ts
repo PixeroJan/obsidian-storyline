@@ -10,6 +10,7 @@ import {
     LocationFieldCategory, LocationFieldDef,
 } from '../models/Location';
 import { SceneManager } from '../services/SceneManager';
+import { renderEntityReferencesPanel } from '../components/EntityReferencesPanel';
 import { LocationManager } from '../services/LocationManager';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { pickImage as pickImageModal, resolveImagePath } from '../components/ImagePicker';
@@ -1119,7 +1120,7 @@ export class LocationView extends ItemView {
         }
 
         // Cross-entity references
-        this.renderReferencesPanel(sidePanel, item.name);
+        this.renderReferencesPanel(sidePanel, item.name, item.filePath);
     }
 
     private renderCategory(
@@ -2137,36 +2138,21 @@ export class LocationView extends ItemView {
         }
     }
 
-    private renderReferencesPanel(container: HTMLElement, entityName: string): void {
-        const index = this.plugin.linkScanner.buildEntityIndex();
-        const refs = index.get(entityName.toLowerCase());
-        if (!refs || refs.length === 0) return;
-
-        const section = container.createDiv('location-references-panel');
-        section.createEl('h3', { text: 'Referenced by' });
-
-        const groups: Record<string, typeof refs> = {};
-        for (const ref of refs) {
-            const label = ref.type === 'codex' && ref.codexCategory
-                ? ref.codexCategory
-                : ref.type;
-            if (!groups[label]) groups[label] = [];
-            groups[label].push(ref);
-        }
-
-        for (const [groupLabel, groupRefs] of Object.entries(groups)) {
-            const groupEl = section.createDiv('reference-group');
-            groupEl.createEl('h4', { text: groupLabel.charAt(0).toUpperCase() + groupLabel.slice(1) });
-            const list = groupEl.createEl('ul', { cls: 'reference-list' });
-            for (const ref of groupRefs) {
-                const li = list.createEl('li');
-                const link = li.createEl('a', { text: ref.name, cls: 'reference-link' });
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.app.workspace.openLinkText(ref.filePath, '', false);
-                });
-            }
-        }
+    private renderReferencesPanel(container: HTMLElement, entityName: string, entityPath: string): void {
+        renderEntityReferencesPanel({
+            container,
+            plugin: this.plugin,
+            entityName,
+            entityPath,
+            panelClass: 'location-references-panel',
+            onOpenReference: reference => {
+                if (reference.type === 'scene') this.app.workspace.openLinkText(reference.filePath, '', false);
+                else void this.plugin.showEntityDetails(reference.filePath);
+            },
+            onRefresh: () => {
+                if (this.rootContainer) this.renderView(this.rootContainer);
+            },
+        });
     }
 
     private renderStat(parent: HTMLElement, value: string, label: string): void {

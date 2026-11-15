@@ -1423,14 +1423,37 @@ export class ManuscriptView extends ItemView {
      * Scroll the manuscript to bring the given scene into view.
      * Called by the Navigator when a scene is clicked while Manuscript is active.
      */
-    scrollToScene(filePath: string): void {
-        if (!this.scrollArea) return;
-        const block = this.scrollArea.querySelector(
+    async scrollToScene(filePath: string): Promise<void> {
+        const scrollArea = this.scrollArea;
+        if (!scrollArea) return;
+        const block = scrollArea.querySelector(
             `[data-scene-path="${CSS.escape(filePath)}"]`
         ) as HTMLElement | null;
-        if (block) {
-            block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (!block) return;
+
+        const editorWrap = block.querySelector('.sl-manuscript-editor-wrap') as HTMLElement | null;
+        const alignBlock = (behavior: ScrollBehavior): void => {
+            if (!this.scrollArea || !block.isConnected) return;
+            const blockTop = block.getBoundingClientRect().top - scrollArea.getBoundingClientRect().top + scrollArea.scrollTop;
+            scrollArea.scrollTo({ top: blockTop, behavior });
+        };
+
+        alignBlock('auto');
+        if (editorWrap && !this.embeddedLeaves.has(filePath)) {
+            await this.mountEditor(editorWrap, filePath);
         }
+
+        const waitForLayout = () => new Promise<void>(resolve => {
+            window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+        });
+        for (let attempt = 0; attempt < 4; attempt++) {
+            await waitForLayout();
+            const mounting = Array.from(this.editorMountPromises.values());
+            if (mounting.length === 0) break;
+            await Promise.all(mounting);
+        }
+
+        alignBlock('smooth');
     }
 
     // ── Discussion #183 — cursor / scroll position resume ────────────

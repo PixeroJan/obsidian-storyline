@@ -2,6 +2,7 @@
 import { hydrateUniversalFieldsFromTopLevel, mirrorUniversalFieldsToTopLevel, normalizeLinkedUniversalFields, serializeLinkedUniversalFields } from './FieldTemplateService';
 import { App, TFile, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { CodexCategoryDef, CodexEntry, getBuiltinCodexCategory, withLinkingSection } from '../models/Codex';
+import { normalizeEntityRelations } from '../models/EntityRelation';
 import { coerceString } from '../utils/narrow';
 import { MetadataParser, toWikilink } from './MetadataParser';
 
@@ -285,12 +286,13 @@ export class CodexManager {
         const fm: Record<string, unknown> = { ...existingFm };
         fm.type = entry.type;
         fm.name = entry.name;
+        if (entry.entityId) fm.entityId = entry.entityId;
         fm.modified = new Date().toISOString().split('T')[0];
         if (entry.created) fm.created = entry.created;
 
         // Standard fields for this category
         for (const key of fieldKeys) {
-            if (key === 'name') continue;
+            if (key === 'name' || key === 'relations' || key === 'entityId') continue;
             const val = entry[key];
             if (val !== undefined && val !== null && val !== '' &&
                 !(Array.isArray(val) && val.length === 0)) {
@@ -313,6 +315,10 @@ export class CodexManager {
         } else {
             delete fm.books;
         }
+
+        const relations = normalizeEntityRelations(entry.relations);
+        if (relations.length > 0) fm.relations = relations;
+        else delete fm.relations;
 
         // Custom fields
         if (entry.custom && Object.keys(entry.custom).length > 0) {
@@ -421,6 +427,7 @@ export class CodexManager {
 
         const entry: CodexEntry = {
             filePath,
+            entityId: typeof safeFm.entityId === 'string' ? safeFm.entityId : undefined,
             type: catDef.id,
             name: String(safeFm.name || basename),
             image: safeFm.image,
@@ -428,6 +435,7 @@ export class CodexManager {
             created: safeFm.created,
             modified: safeFm.modified,
             notes: body || undefined,
+            relations: normalizeEntityRelations(safeFm.relations),
             custom: safeFm.custom && typeof safeFm.custom === 'object' ? safeFm.custom as Record<string, string> : undefined,
             universalFields: normalizeLinkedUniversalFields(hydrateUniversalFieldsFromTopLevel(
                 safeFm,
@@ -439,7 +447,7 @@ export class CodexManager {
 
         // Load all standard field values
         for (const key of catDef.fieldKeys) {
-            if (key === 'name' || key === 'image' || key === 'gallery') continue;
+            if (key === 'name' || key === 'image' || key === 'gallery' || key === 'relations' || key === 'entityId') continue;
             if (safeFm[key] !== undefined && safeFm[key] !== null) {
                 const field = catDef.categories.flatMap(category => category.fields).find(def => def.key === key);
                 entry[key] = key === 'aliases'

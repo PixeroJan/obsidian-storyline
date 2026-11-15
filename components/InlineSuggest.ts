@@ -121,7 +121,7 @@ export class InlineSuggest {
             e.preventDefault();
             if (this.activeIndex >= 0 && this.activeIndex < this.items.length) {
                 this.selectItem(this.activeIndex);
-            } else {
+            } else if (this.allowNew) {
                 // Commit raw value
                 const val = this.inputEl.value.trim();
                 if (val) {
@@ -147,7 +147,7 @@ export class InlineSuggest {
             this.removeDropdown();
             // If the input still has a value, commit it
             const val = this.inputEl.value.trim();
-            if (val) {
+            if (val && this.allowNew) {
                 this.commit(val);
             } else {
                 this.onDismiss?.();

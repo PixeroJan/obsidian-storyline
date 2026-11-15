@@ -47,6 +47,13 @@ export interface EntityReference {
     codexCategory?: string;
 }
 
+interface IndexedEntityTarget {
+    name: string;
+    type: 'character' | 'location' | 'codex';
+    filePath: string;
+    codexCategory?: string;
+}
+
 /**
  * Scans scene body text for [[wikilinks]] and plain-text name mentions,
  * then classifies them.
@@ -753,25 +760,55 @@ export class LinkScanner {
                 addRefs(entry.name, 'codex', entry.filePath, textParts.join('\n'), codexCat);
             }
 
-            const codexByPath = new Map(
-                codexEntries.map(entry => [normalizePath(entry.filePath), entry]),
-            );
-            for (const source of codexEntries) {
-                const outgoing = this.app.metadataCache.resolvedLinks[normalizePath(source.filePath)] ?? {};
-                for (const targetPath of Object.keys(outgoing)) {
-                    const target = codexByPath.get(normalizePath(targetPath));
-                    if (!target || target.filePath === source.filePath) continue;
-                    const key = target.name.toLowerCase();
-                    if (!index.has(key)) index.set(key, []);
-                    const refs = index.get(key)!;
-                    if (!refs.some(ref => ref.filePath === source.filePath)) {
-                        refs.push({
-                            name: source.name,
-                            type: 'codex',
-                            filePath: source.filePath,
-                            codexCategory: source.type,
-                        });
-                    }
+        }
+
+        const codexEntries = this.codexManager?.getAllEntries() ?? [];
+        const indexedEntities: Array<{
+            name: string;
+            type: EntityReference['type'];
+            filePath: string;
+            codexCategory?: string;
+        }> = [
+            ...this.characterManager.getAllCharacters().map(character => ({
+                name: character.name,
+                type: 'character' as const,
+                filePath: character.filePath,
+            })),
+            ...this.locationManager.getAllLocations().map(location => ({
+                name: location.name,
+                type: 'location' as const,
+                filePath: location.filePath,
+            })),
+            ...this.locationManager.getAllWorlds().map(world => ({
+                name: world.name,
+                type: 'location' as const,
+                filePath: world.filePath,
+            })),
+            ...codexEntries.map(entry => ({
+                name: entry.name,
+                type: 'codex' as const,
+                filePath: entry.filePath,
+                codexCategory: entry.type || undefined,
+            })),
+        ];
+        const entitiesByPath = new Map(
+            indexedEntities.map(entity => [normalizePath(entity.filePath), entity]),
+        );
+        for (const source of indexedEntities) {
+            const outgoing = this.app.metadataCache.resolvedLinks[normalizePath(source.filePath)] ?? {};
+            for (const targetPath of Object.keys(outgoing)) {
+                const target = entitiesByPath.get(normalizePath(targetPath));
+                if (!target || normalizePath(target.filePath) === normalizePath(source.filePath)) continue;
+                const key = target.name.toLowerCase();
+                if (!index.has(key)) index.set(key, []);
+                const refs = index.get(key)!;
+                if (!refs.some(ref => normalizePath(ref.filePath) === normalizePath(source.filePath))) {
+                    refs.push({
+                        name: source.name,
+                        type: source.type,
+                        filePath: source.filePath,
+                        codexCategory: source.codexCategory,
+                    });
                 }
             }
         }
@@ -810,6 +847,83 @@ export class LinkScanner {
         }
 
         return index;
+    }
+
+    /** Build the reference index keyed by normalized target file path. */
+    buildEntityPathIndex(): Map<string, EntityReference[]> {
+        const nameIndex = this.buildEntityIndex();
+        const targets: IndexedEntityTarget[] = [
+            ...this.characterManager.getAllCharacters().map(character => ({
+                name: character.name,
+                type: 'character' as const,
+                filePath: character.filePath,
+            })),
+            ...this.locationManager.getAllLocations().map(location => ({
+                name: location.name,
+                type: 'location' as const,
+                filePath: location.filePath,
+            })),
+            ...this.locationManager.getAllWorlds().map(world => ({
+                name: world.name,
+                type: 'location' as const,
+                filePath: world.filePath,
+            })),
+            ...(this.codexManager?.getAllEntries() ?? []).map(entry => ({
+                name: entry.name,
+                type: 'codex' as const,
+                filePath: entry.filePath,
+                codexCategory: entry.type || undefined,
+            })),
+        ];
+        const targetsByName = new Map<string, IndexedEntityTarget[]>();
+        for (const target of targets) {
+            const key = target.name.toLowerCase();
+            const matchingTargets = targetsByName.get(key) ?? [];
+            matchingTargets.push(target);
+            targetsByName.set(key, matchingTargets);
+        }
+
+        const pathIndex = new Map<string, EntityReference[]>();
+        for (const target of targets) {
+            const targetKey = target.name.toLowerCase();
+            const sameNameTargets = targetsByName.get(targetKey) ?? [];
+            const references = nameIndex.get(targetKey) ?? [];
+            if (sameNameTargets.length < 2) {
+                pathIndex.set(normalizePath(target.filePath), references);
+                continue;
+            }
+
+            const filteredReferences = references.filter(reference => {
+                const sourcePath = normalizePath(reference.filePath);
+                const outgoing = this.app.metadataCache.resolvedLinks[sourcePath] ?? {};
+                const explicitlyLinkedTargets = sameNameTargets.filter(candidate =>
+                    Object.prototype.hasOwnProperty.call(outgoing, normalizePath(candidate.filePath)),
+                );
+                if (explicitlyLinkedTargets.length > 0) {
+                    return explicitlyLinkedTargets.some(candidate =>
+                        normalizePath(candidate.filePath) === normalizePath(target.filePath),
+                    );
+                }
+
+                if (reference.type === 'scene') {
+                    const scene = this.sceneCache.get(sourcePath);
+                    const linkedCategories = Object.entries(scene?.codexLinks ?? {})
+                        .filter(([, names]) => Array.isArray(names)
+                            && names.some(name => name.toLowerCase() === targetKey))
+                        .map(([category]) => category);
+                    if (linkedCategories.length > 0) {
+                        return target.type === 'codex'
+                            && !!target.codexCategory
+                            && linkedCategories.includes(target.codexCategory);
+                    }
+                }
+
+                // Plain-text names and tags do not identify a file path.
+                return true;
+            });
+            pathIndex.set(normalizePath(target.filePath), filteredReferences);
+        }
+        return pathIndex;
     }
 
     // ── Codex change detection ─────────────────────────

@@ -135,6 +135,8 @@ export interface Scene {
     setup_scenes?: string[];
     /** Scenes that pay off from this scene (file paths or titles) */
     payoff_scenes?: string[];
+    /** Optional labels keyed by project-relative payoff scene path */
+    setup_payoff_labels?: Record<string, string>;
     /** Created date */
     created?: string;
     /** Modified date */
