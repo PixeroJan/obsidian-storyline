@@ -505,11 +505,18 @@ export class RelationshipMap {
             const b = this.nodes.find(n => n.id === edge.target);
             if (!a || !b) continue;
 
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+            const unitX = dx / distance;
+            const unitY = dy / distance;
+            const sourceRadius = a.hasProfile ? 18 : 12;
+            const targetRadius = b.hasProfile ? 18 : 12;
             const line = activeDocument.createElementNS(svgNS, 'line');
-            line.setAttribute('x1', String(a.x));
-            line.setAttribute('y1', String(a.y));
-            line.setAttribute('x2', String(b.x));
-            line.setAttribute('y2', String(b.y));
+            line.setAttribute('x1', String(a.x + unitX * sourceRadius));
+            line.setAttribute('y1', String(a.y + unitY * sourceRadius));
+            line.setAttribute('x2', String(b.x - unitX * targetRadius));
+            line.setAttribute('y2', String(b.y - unitY * targetRadius));
             line.setAttribute('stroke', edgeColors[edge.type]);
             line.setAttribute('stroke-width', '2');
             if (EDGE_DASHES[edge.type]) {

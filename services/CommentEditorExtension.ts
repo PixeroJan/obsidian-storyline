@@ -20,13 +20,16 @@ class PointCommentWidget extends WidgetType {
 
     toDOM(): HTMLElement {
         const label = this.author ? `Comment by ${this.author}: ${this.comment}` : `Comment: ${this.comment}`;
-        const marker = document.createElement('span');
-        marker.className = 'sl-comment-marker';
-        marker.dataset.commentId = this.id;
-        marker.setAttribute('aria-label', label);
-        marker.setAttribute('role', 'button');
-        marker.setAttribute('tabindex', '0');
-        marker.title = label;
+        const marker = document.createDocumentFragment().createEl('span', {
+            cls: 'sl-comment-marker',
+            attr: {
+                'data-comment-id': this.id,
+                'aria-label': label,
+                role: 'button',
+                tabindex: '0',
+                title: label,
+            },
+        });
         marker.addEventListener('keydown', (event) => {
             if (event.key !== 'Enter' && event.key !== ' ') return;
             event.preventDefault();
