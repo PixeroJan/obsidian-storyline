@@ -23,6 +23,7 @@ StoryLine transforms your Obsidian vault into a full-featured book planning and 
   - [Stats View](#stats-view)
   - [Navigator View](#navigator-view)
   - [Scene Details Sidebar](#scene-details-sidebar)
+    - [Inline Comments](#inline-comments)
   - [Research Sidebar](#research-sidebar)
 - [Scene Cards](#scene-cards)
 - [Scene Filename Synchronization](#scene-filename-synchronization)
@@ -635,6 +636,14 @@ Click any scene card to open the **Inspector Panel** on the right side. It provi
 - **Setup/Payoff links** — see and manage which scenes set up or pay off this scene.
 - **Time & Order** — story date, story time, chronological order, timeline mode, and timeline strand (see [Reading Order vs Chronological Order](#reading-order-vs-chronological-order) and [Timeline Modes](#timeline-modes)).
 - **Open scene** — click to open the full Markdown file in reading view (frontmatter stays hidden).
+
+### Inline Comments
+
+Comments stay in the scene text and are compatible with Scribe.
+
+- **Add a point comment** — open the **Comments** tab in the Scene Details sidebar and click **Add comment**. The comment is placed at the end of the scene.
+- **Comment on selected text** — select text in a scene editor, right-click, then choose **Insert → Insert comment**. With no text selected, the comment is placed at the cursor as a vertical line marker.
+- **Navigate between text and comments** — click highlighted text or a point marker to open the Comments tab and select its entry. Click a comment in the sidebar to scroll the scene editor to its marker.
 
 ---
 

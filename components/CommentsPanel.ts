@@ -1,4 +1,4 @@
-import { Notice, TFile, setIcon } from 'obsidian';
+import { App, Modal, Notice, TFile, setIcon } from 'obsidian';
 import type SceneCardsPlugin from '../main';
 import type { Scene } from '../models/Scene';
 import { attachTooltip } from './Tooltip';
@@ -15,7 +15,7 @@ interface AttributeSpan {
     quote: string | null;
 }
 
-interface CommentFragment {
+export interface CommentFragment {
     id: string;
     kind: 'range' | 'point';
     comment: string;
@@ -43,21 +43,34 @@ type CommentMutation =
     | { type: 'edit'; comment: string; author: string }
     | { type: 'delete' };
 
+export interface NewComment {
+    comment: string;
+    author: string;
+}
+
 const OPENING_TAG = /<(mark|span)\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
 
 export class CommentsPanelComponent {
     private readonly container: HTMLElement;
     private readonly plugin: SceneCardsPlugin;
     private readonly onEdit: () => void;
+    private readonly onNavigate: (filePath: string, commentId: string) => void;
     private currentScene: Scene | null = null;
     private filter: CommentFilter = 'open';
+    private selectedId: string | null = null;
     private editingId: string | null = null;
     private confirmingDeleteId: string | null = null;
 
-    constructor(container: HTMLElement, plugin: SceneCardsPlugin, onEdit: () => void) {
+    constructor(
+        container: HTMLElement,
+        plugin: SceneCardsPlugin,
+        onEdit: () => void,
+        onNavigate: (filePath: string, commentId: string) => void,
+    ) {
         this.container = container;
         this.plugin = plugin;
         this.onEdit = onEdit;
+        this.onNavigate = onNavigate;
     }
 
     show(scene: Scene): void {
@@ -75,6 +88,18 @@ export class CommentsPanelComponent {
         return this.currentScene;
     }
 
+    selectComment(id: string): void {
+        const scene = this.currentScene;
+        const comment = scene && readScribeComments(scene.body || '').find((entry) => entry.id === id);
+        if (!scene || !comment) return;
+        this.filter = comment.status;
+        this.selectedId = id;
+        this.render();
+        const card = Array.from(this.container.querySelectorAll<HTMLElement>('[data-comment-id]'))
+            .find((element) => element.dataset.commentId === id);
+        card?.scrollIntoView({ block: 'nearest' });
+    }
+
     private render(): void {
         this.container.empty();
         this.container.addClass('sl-comments-panel');
@@ -87,7 +112,15 @@ export class CommentsPanelComponent {
 
         const header = this.container.createDiv('sl-comments-header');
         header.createDiv({ cls: 'sl-comments-title', text: scene.title || 'Untitled' });
-        header.createDiv({ cls: 'sl-comments-count', text: `${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}` });
+        const headerActions = header.createDiv('sl-comments-header-actions');
+        headerActions.createDiv({ cls: 'sl-comments-count', text: `${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}` });
+        const addButton = headerActions.createEl('button', {
+            cls: 'sl-comments-add-button',
+            attr: { type: 'button' },
+        });
+        setIcon(addButton, 'plus');
+        addButton.createSpan({ text: 'Add comment' });
+        addButton.addEventListener('click', () => this.openAddComment(scene));
 
         const filters = this.container.createDiv('sl-comments-filters');
         this.createFilterButton(filters, 'open', `Open ${openCount}`);
@@ -98,7 +131,7 @@ export class CommentsPanelComponent {
             this.container.createDiv({
                 cls: 'sl-comments-empty',
                 text: comments.length === 0
-                    ? 'No Scribe comments in this scene.'
+                    ? 'No comments in this scene.'
                     : `No ${this.filter} comments.`,
             });
             return;
@@ -122,8 +155,50 @@ export class CommentsPanelComponent {
         });
     }
 
+    private openAddComment(scene: Scene): void {
+        new CommentComposerModal(this.plugin.app, (value) => {
+            void this.insertPointComment(scene, value);
+        }).open();
+    }
+
+    private async insertPointComment(scene: Scene, value: NewComment): Promise<void> {
+        const file = this.plugin.app.vault.getAbstractFileByPath(scene.filePath);
+        if (!(file instanceof TFile)) {
+            new Notice('Scene file not found.');
+            return;
+        }
+
+        try {
+            let nextBody = scene.body || '';
+            let changed = false;
+            await this.plugin.app.vault.process(file, (content) => {
+                const bodyStart = findSceneBodyStart(content);
+                const body = content.slice(bodyStart);
+                const separator = body && !body.endsWith('\n') ? '\n' : '';
+                nextBody = `${body}${separator}${createScribeCommentMarkup(value.comment, value.author)}`;
+                changed = nextBody !== body;
+                return changed ? `${content.slice(0, bodyStart)}${nextBody}` : content;
+            });
+
+            if (!changed) return;
+            scene.body = nextBody;
+            this.onEdit();
+            this.render();
+        } catch (error) {
+            console.error('[StoryLine] Failed to add comment:', error);
+            new Notice('Unable to add comment.');
+        }
+    }
+
     private renderComment(container: HTMLElement, scene: Scene, comment: ScribeComment): void {
-        const card = container.createDiv('sl-comment-item');
+        const card = container.createDiv(`sl-comment-item ${this.selectedId === comment.id ? 'is-selected' : ''}`);
+        card.dataset.commentId = comment.id;
+        card.addEventListener('click', (event) => {
+            if ((event.target as HTMLElement).closest('button, input, textarea, select')) return;
+            this.selectedId = comment.id;
+            card.addClass('is-selected');
+            this.onNavigate(scene.filePath, comment.id);
+        });
         const metadata = card.createDiv('sl-comment-item-meta');
         metadata.createSpan({ cls: 'sl-comment-author', text: comment.author || 'Unknown author' });
         metadata.createSpan({ cls: 'sl-comment-kind', text: comment.kind });
@@ -247,6 +322,69 @@ export class CommentsPanelComponent {
     }
 }
 
+export class CommentComposerModal extends Modal {
+    private readonly onSubmit: (value: NewComment) => void;
+
+    constructor(app: App, onSubmit: (value: NewComment) => void) {
+        super(app);
+        this.onSubmit = onSubmit;
+    }
+
+    onOpen(): void {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.addClass('sl-comment-composer');
+        contentEl.createEl('h2', { text: 'Add comment' });
+
+        const commentField = contentEl.createDiv('sl-comment-edit-field');
+        commentField.createEl('label', { text: 'Comment' });
+        const commentInput = commentField.createEl('textarea', { attr: { rows: '4' } });
+        commentInput.setAttr('placeholder', 'Write a comment');
+
+        const authorField = contentEl.createDiv('sl-comment-edit-field');
+        authorField.createEl('label', { text: 'Author (optional)' });
+        const authorInput = authorField.createEl('input', { attr: { type: 'text' } });
+
+        const actions = contentEl.createDiv('sl-comment-composer-actions');
+        const cancel = actions.createEl('button', { text: 'Cancel' });
+        cancel.addEventListener('click', () => this.close());
+        const add = actions.createEl('button', { cls: 'mod-cta', text: 'Add comment' });
+        add.addEventListener('click', () => {
+            const comment = commentInput.value.trim();
+            if (!comment) {
+                commentInput.focus();
+                return;
+            }
+            this.onSubmit({ comment, author: authorInput.value.trim() });
+            this.close();
+        });
+
+        commentInput.focus();
+    }
+
+    onClose(): void {
+        this.contentEl.empty();
+    }
+}
+
+export function createScribeCommentMarkup(comment: string, author: string, selectedText = ''): string {
+    const id = `comment-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    const title = author ? `${author}: ${comment}` : comment;
+    const attributes = [
+        `comment="${escapeHtmlAttribute(comment)}"`,
+        `author="${escapeHtmlAttribute(author)}"`,
+        `data-comment-id="${id}"`,
+        'data-comment-status="open"',
+        `class="${selectedText ? 'sl-comment-highlight' : 'sl-comment-marker'}"`,
+        `data-comment="${escapeHtmlAttribute(comment)}"`,
+        `data-author="${escapeHtmlAttribute(author)}"`,
+        `title="${escapeHtmlAttribute(title)}"`,
+    ].join(' ');
+    return selectedText
+        ? `<mark ${attributes}>${selectedText}</mark>`
+        : `<span ${attributes}></span>`;
+}
+
 function readScribeComments(markdown: string): ScribeComment[] {
     const comments = new Map<string, ScribeComment>();
     for (const fragment of scanCommentFragments(markdown)) {
@@ -269,7 +407,7 @@ function readScribeComments(markdown: string): ScribeComment[] {
     return Array.from(comments.values());
 }
 
-function scanCommentFragments(markdown: string): CommentFragment[] {
+export function scanCommentFragments(markdown: string): CommentFragment[] {
     const codeRanges = findCodeRanges(markdown);
     const fragments: CommentFragment[] = [];
 
@@ -528,7 +666,13 @@ function escapeHtmlAttribute(value: string): string {
         .replace(/>/g, '&gt;');
 }
 
-function findSceneBodyStart(content: string): number {
+export function findCommentSourceOffset(markdown: string, id: string): number {
+    const fragment = scanCommentFragments(markdown).find((entry) => entry.id === id);
+    if (!fragment) return -1;
+    return fragment.kind === 'range' ? fragment.openEnd : fragment.openStart;
+}
+
+export function findSceneBodyStart(content: string): number {
     const frontmatter = /^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(content);
     return frontmatter?.[0].length ?? 0;
 }

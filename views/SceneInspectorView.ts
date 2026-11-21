@@ -127,6 +127,8 @@ export class SceneInspectorView extends ItemView {
         this.tabPanels.comments = commentsPanelEl;
         this.commentsPanel = new CommentsPanelComponent(commentsPanelEl, this.plugin, () => {
             this.lastEditTime = Date.now();
+        }, (filePath, commentId) => {
+            void this.plugin.openCommentInText(filePath, commentId);
         });
 
         // Details tab — wraps the existing InspectorComponent
@@ -372,6 +374,14 @@ export class SceneInspectorView extends ItemView {
         this.commentsPanel?.show(scene);
         this.inspectorComponent?.show(scene);
         this.refreshEmptyState();
+    }
+
+    selectComment(filePath: string, commentId: string): void {
+        const scene = this.sceneManager.getScene(filePath);
+        if (!scene) return;
+        this.showScene(filePath);
+        this.setActiveTab('comments');
+        this.commentsPanel?.selectComment(commentId);
     }
 
     private hasSceneShown(): boolean {

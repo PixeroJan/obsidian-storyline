@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unused-vars -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { ItemView, WorkspaceLeaf, WorkspaceSplit, MarkdownRenderer, TFile, setIcon, Notice, Menu } from 'obsidian';
+import { Editor, ItemView, WorkspaceLeaf, WorkspaceSplit, MarkdownRenderer, TFile, setIcon, Notice, Menu } from 'obsidian';
 import { EditorView, Decoration } from '@codemirror/view';
 import { RangeSetBuilder, StateEffect, Compartment, EditorSelection } from '@codemirror/state';
 import { syntaxTree } from '@codemirror/language';
@@ -14,6 +14,7 @@ import SceneCardsPlugin from '../main';
 import { MANUSCRIPT_VIEW_TYPE } from '../constants';
 import { openStructureLabelModal } from '../components/StructureLabelModal';
 import { getChapterDisplayLabel } from '../utils/actChapter';
+import { findCommentSourceOffset } from '../components/CommentsPanel';
 
 /**
  * Discussion #183 — module-level cursor/scroll snapshot.
@@ -1454,6 +1455,24 @@ export class ManuscriptView extends ItemView {
         }
 
         alignBlock('smooth');
+    }
+
+    async scrollToComment(filePath: string, commentId: string): Promise<boolean> {
+        const block = this.scrollArea?.querySelector(`[data-scene-path="${CSS.escape(filePath)}"]`);
+        if (!block) return false;
+        await this.scrollToScene(filePath);
+
+        const leaf = this.embeddedLeaves.get(filePath);
+        const editor = (leaf?.view as unknown as { editor?: Editor } | undefined)?.editor;
+        if (!editor) return false;
+        const offset = findCommentSourceOffset(editor.getValue(), commentId);
+        if (offset < 0) return false;
+
+        const position = editor.offsetToPos(offset);
+        editor.setCursor(position);
+        editor.scrollIntoView({ from: position, to: position }, true);
+        editor.focus();
+        return true;
     }
 
     // ── Discussion #183 — cursor / scroll position resume ────────────

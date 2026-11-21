@@ -136,20 +136,24 @@ export class RelationshipMap {
             item.classList.add('relationship-map-legend-toggle');
             const isHidden = this.hiddenTypes.has(type);
             if (isHidden) item.classList.add('is-off');
-            const swatch = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            swatch.classList.add('relationship-map-legend-swatch');
-            swatch.setAttribute('viewBox', '0 0 24 8');
-            swatch.setAttribute('aria-hidden', 'true');
-            const sample = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'line');
-            sample.setAttribute('x1', '1');
-            sample.setAttribute('y1', '4');
-            sample.setAttribute('x2', '23');
-            sample.setAttribute('y2', '4');
-            sample.setAttribute('stroke', color);
-            sample.setAttribute('stroke-width', '2');
-            if (EDGE_DASHES[type]) sample.setAttribute('stroke-dasharray', EDGE_DASHES[type]);
-            swatch.appendChild(sample);
-            item.appendChild(swatch);
+            const swatch = item.createSpan({ cls: 'relationship-map-legend-swatch' });
+            const dashPattern = EDGE_DASHES[type]
+                ? EDGE_DASHES[type].split(',').map(Number).filter(Number.isFinite)
+                : [];
+            let dashOffset = 0;
+            const dashStops = dashPattern.map((length, index) => {
+                const start = dashOffset;
+                dashOffset += length;
+                return `${index % 2 === 0 ? color : 'transparent'} ${start}px ${dashOffset}px`;
+            });
+            swatch.setCssStyles({
+                width: '24px',
+                height: '2px',
+                flex: '0 0 24px',
+                background: dashStops.length
+                    ? `repeating-linear-gradient(90deg, ${dashStops.join(', ')})`
+                    : color,
+            });
             item.createSpan({ text: `${type.charAt(0).toUpperCase() + type.slice(1)} (${EDGE_STYLE_LABELS[type]})` });
             item.addEventListener('click', () => {
                 if (this.hiddenTypes.has(type)) {

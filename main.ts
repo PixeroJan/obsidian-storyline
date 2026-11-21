@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, no-useless-escape -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
-import { addIcon, App, ButtonComponent, DropdownComponent, FuzzySuggestModal, ItemView, Modal, Notice, Platform, Plugin, Setting, TFile, TextComponent, ToggleComponent, WorkspaceLeaf, normalizePath, parseYaml, setIcon } from 'obsidian';
+import { addIcon, App, ButtonComponent, DropdownComponent, FuzzySuggestModal, ItemView, MarkdownView, Modal, Notice, Platform, Plugin, Setting, TFile, TextComponent, ToggleComponent, WorkspaceLeaf, normalizePath, parseYaml, setIcon } from 'obsidian';
 import { SceneCardsSettings, SceneCardsSettingTab, DEFAULT_SETTINGS, migrateSectionStateKeys } from './settings';
 import { asRecord, isRecord } from './utils/narrow';
 import type { FilterPreset } from './models/Scene';
@@ -53,6 +53,8 @@ import { makeCustomCodexCategory } from './models/Codex';
 import { QuickAddModal } from './components/QuickAddModal';
 import { SceneFilenameSyncModal } from './components/SceneFilenameSyncModal';
 import { ExportModal } from './components/ExportModal';
+import { CommentComposerModal, createScribeCommentMarkup, findCommentSourceOffset } from './components/CommentsPanel';
+import { createCommentEditorExtension } from './services/CommentEditorExtension';
 import { WritingTracker } from './services/WritingTracker';
 import { SnapshotManager } from './services/SnapshotManager';
 import { ViewSnapshotService } from './services/ViewSnapshotService';
@@ -128,6 +130,7 @@ export default class SceneCardsPlugin extends Plugin {
         registerBuiltinStatusColors(this.settings.statusColors || {});
         this.applyImageSizingVariables();
         this.applyStatusColorVariables();
+        this.registerEditorExtension(createCommentEditorExtension());
 
         // Convert only newly typed ASCII double quotes in Obsidian's editor.
         // Paste and existing text use their original characters.
@@ -858,6 +861,33 @@ export default class SceneCardsPlugin extends Plugin {
             })
         );
 
+        this.registerEvent(
+            this.app.workspace.on('editor-menu', (menu, editor, info) => {
+                const file = info.file;
+                if (!file || !this.sceneManager.getScene(file.path)) return;
+
+                const selectedText = editor.getSelection();
+                const selectionStart = editor.getCursor('from');
+                const selectionEnd = editor.getCursor('to');
+                const cursor = editor.getCursor();
+                menu.addItem((item) => {
+                    item.setTitle('Insert comment')
+                        .setIcon('message-square')
+                        .setSection('insert')
+                        .onClick(() => {
+                            new CommentComposerModal(this.app, ({ comment, author }) => {
+                                const markup = createScribeCommentMarkup(comment, author, selectedText);
+                                if (selectedText) {
+                                    editor.replaceRange(markup, selectionStart, selectionEnd);
+                                } else {
+                                    editor.replaceRange(markup, cursor);
+                                }
+                            }).open();
+                        });
+                });
+            })
+        );
+
         // Opt-in: plain left-click on a StoryLine entity in the file explorer
         // opens its StoryLine view. Modified clicks keep Obsidian's behaviour.
         this.registerDomEvent(activeDocument, 'click', (evt: MouseEvent) => {
@@ -873,6 +903,33 @@ export default class SceneCardsPlugin extends Plugin {
             evt.preventDefault();
             evt.stopPropagation();
             void this.showEntityDetails(file.path);
+        }, true);
+
+        this.registerDomEvent(activeDocument, 'click', (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null;
+            const marker = target?.closest('.sl-comment-highlight[data-comment-id], .sl-comment-marker[data-comment-id]') as HTMLElement | null;
+            if (!marker || marker.closest('.sl-comment-item')) return;
+
+            let file: TFile | null = null;
+            const scenePath = marker.closest<HTMLElement>('[data-scene-path]')?.dataset.scenePath;
+            if (scenePath) {
+                const sceneFile = this.app.vault.getAbstractFileByPath(scenePath);
+                if (sceneFile instanceof TFile) file = sceneFile;
+            }
+            if (!file) {
+                for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
+                    const view = leaf.view;
+                    if (view instanceof MarkdownView && view.file && view.containerEl.contains(marker)) {
+                        file = view.file;
+                        break;
+                    }
+                }
+            }
+
+            const commentId = marker.dataset.commentId;
+            if (file && commentId && this.sceneManager.getScene(file.path)) {
+                void this.focusCommentInSidebar(file.path, commentId);
+            }
         }, true);
 
         // Issue #195 — add "Find & replace in manuscript" to the editor
@@ -2238,6 +2295,45 @@ export default class SceneCardsPlugin extends Plugin {
             await leaf.setViewState({ type: SCENE_INSPECTOR_VIEW_TYPE, active: true });
             workspace.revealLeaf(leaf);
             if (filePath) workspace.trigger('storyline:scene-focus', filePath);
+        }
+    }
+
+    async openCommentInText(filePath: string, commentId: string): Promise<void> {
+        const scene = this.sceneManager.getScene(filePath);
+        if (!scene || findCommentSourceOffset(scene.body || '', commentId) < 0) return;
+
+        for (const leaf of this.app.workspace.getLeavesOfType(MANUSCRIPT_VIEW_TYPE)) {
+            if (!(leaf.view instanceof ManuscriptView)) continue;
+            this.app.workspace.revealLeaf(leaf);
+            if (await leaf.view.scrollToComment(filePath, commentId)) return;
+        }
+
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (!(file instanceof TFile)) return;
+        let leaf = this.app.workspace.getLeavesOfType('markdown').find((candidate) =>
+            candidate.view instanceof MarkdownView && candidate.view.file?.path === filePath
+        );
+        if (!leaf) {
+            leaf = this.app.workspace.getLeaf('tab');
+            await leaf.openFile(file);
+        }
+        if (!(leaf.view instanceof MarkdownView)) return;
+
+        const editor = leaf.view.editor;
+        const offset = findCommentSourceOffset(editor.getValue(), commentId);
+        if (offset < 0) return;
+        const position = editor.offsetToPos(offset);
+        this.app.workspace.setActiveLeaf(leaf, { focus: true });
+        editor.setCursor(position);
+        editor.scrollIntoView({ from: position, to: position }, true);
+        editor.focus();
+    }
+
+    private async focusCommentInSidebar(filePath: string, commentId: string): Promise<void> {
+        await this.openSceneInspector(filePath);
+        const leaf = this.app.workspace.getLeavesOfType(SCENE_INSPECTOR_VIEW_TYPE)[0];
+        if (leaf?.view instanceof SceneInspectorView) {
+            leaf.view.selectComment(filePath, commentId);
         }
     }
 

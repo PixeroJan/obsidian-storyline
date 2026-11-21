@@ -655,7 +655,8 @@ ${body}
     }
 
     private async renderSceneBodyHtml(scene: Scene): Promise<string> {
-        const container = activeDocument.createElement('div');
+        const container = activeDocument.body.createDiv();
+        container.setCssStyles({ position: 'fixed', left: '-10000px', top: '0', width: '1200px' });
         const component = new Component();
         const body = scene.body?.trim() ?? '';
         try {
@@ -664,6 +665,7 @@ ${body}
             return container.innerHTML;
         } finally {
             component.unload();
+            container.remove();
         }
     }
 
@@ -786,9 +788,8 @@ ${body}
     }
 
     private async renderMermaidDiagramPng(source: string, sourcePath: string): Promise<string | null> {
-        const container = activeDocument.createElement('div');
+        const container = activeDocument.body.createDiv();
         container.setCssStyles({ position: 'fixed', left: '-10000px', top: '0', width: '1200px' });
-        activeDocument.body.appendChild(container);
         const component = new Component();
         let svgUrl: string | null = null;
         try {
@@ -817,7 +818,7 @@ ${body}
                 image.src = svgUrl!;
             });
 
-            const canvas = activeDocument.createElement('canvas');
+            const canvas = container.createEl('canvas');
             canvas.width = width;
             canvas.height = height;
             const context = canvas.getContext('2d');

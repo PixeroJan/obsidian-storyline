@@ -13668,6 +13668,20 @@ body.sl-focus-active-global.sl-focus-dim-text .markdown-source-view.mod-cm6 .cm-
     justify-content: space-between;
     gap: 8px;
 }
+.sl-comments-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.sl-comments-add-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: var(--font-ui-small);
+}
+.sl-comments-add-button svg { width: 14px; height: 14px; }
 .sl-comments-title {
     overflow: hidden;
     color: var(--text-normal);
@@ -13718,6 +13732,25 @@ body.sl-focus-active-global.sl-focus-dim-text .markdown-source-view.mod-cm6 .cm-
     border-radius: 6px;
     background: var(--background-primary);
 }
+.sl-comment-item.is-selected {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+.sl-comment-highlight[data-comment-id] { cursor: pointer; }
+.cm-content .sl-comment-highlight[data-comment-id] {
+    border-radius: 2px;
+    background: var(--text-highlight-bg, rgba(255, 215, 0, 0.25));
+}
+.sl-comment-marker[data-comment-id] {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin: 0 3px;
+    border-radius: 1px;
+    background: var(--interactive-accent);
+    vertical-align: text-bottom;
+    cursor: pointer;
+}
 .sl-comment-item-meta {
     display: flex;
     align-items: center;
@@ -13754,6 +13787,12 @@ body.sl-focus-active-global.sl-focus-dim-text .markdown-source-view.mod-cm6 .cm-
     display: flex;
     align-items: center;
     gap: 4px;
+}
+.sl-comment-composer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
 }
 .sl-comment-action {
     width: 28px;
