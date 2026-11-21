@@ -636,6 +636,8 @@ export interface SceneCardsSettings {
     /** Remembered Character overview sort mode */
     characterSortBy: 'name' | 'modified' | 'created' | 'role' | 'manual';
     autoOpenNavigator: boolean;
+    /** Open selected scene details in the right sidebar instead of the current view's inspector. */
+    showSceneDetailsInSidebar: boolean;
     showNotesInKanban: boolean;
     showScenesInCorkboard: boolean;
     plotgridAutoNote: boolean;
@@ -1025,6 +1027,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     researchActiveType: null,
     characterSortBy: 'name',
     autoOpenNavigator: true,
+    showSceneDetailsInSidebar: true,
     showNotesInKanban: false,
     showScenesInCorkboard: true,
     plotgridAutoNote: true,
@@ -1215,6 +1218,16 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                     this.plugin.settings.autoOpenNavigator = value;
                     await this.plugin.saveSettings();
                         }));
+
+        new Setting(generalBody)
+            .setName('Show scene details in right sidebar')
+            .setDesc('When enabled, selecting a scene opens its details in the right sidebar. Turn this off to use the inspector inside the current view.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.showSceneDetailsInSidebar ?? true)
+                .onChange(async (value) => {
+                    this.plugin.settings.showSceneDetailsInSidebar = value;
+                    await this.plugin.saveSettings();
+                }));
 
         new Setting(generalBody)
             .setName('Open entities in StoryLine view from file explorer')

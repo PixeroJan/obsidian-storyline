@@ -2225,17 +2225,19 @@ export default class SceneCardsPlugin extends Plugin {
      * Open the Scene Details inspector in the right sidebar.
      * If already open, just reveal it.
      */
-    async openSceneInspector(): Promise<void> {
+    async openSceneInspector(filePath?: string): Promise<void> {
         const { workspace } = this.app;
         const existing = workspace.getLeavesOfType(SCENE_INSPECTOR_VIEW_TYPE);
         if (existing.length > 0) {
             workspace.revealLeaf(existing[0]);
+            if (filePath) workspace.trigger('storyline:scene-focus', filePath);
             return;
         }
         const leaf = workspace.getRightLeaf(false);
         if (leaf) {
             await leaf.setViewState({ type: SCENE_INSPECTOR_VIEW_TYPE, active: true });
             workspace.revealLeaf(leaf);
+            if (filePath) workspace.trigger('storyline:scene-focus', filePath);
         }
     }
 

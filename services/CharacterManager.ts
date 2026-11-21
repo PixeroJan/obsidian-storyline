@@ -371,6 +371,7 @@ export class CharacterManager {
 
         const character: Character = {
             filePath,
+            entityId: typeof safeFm.entityId === 'string' ? safeFm.entityId : undefined,
             type: 'character',
             name: safeFm.name || basename,
             tagline: safeFm.tagline,

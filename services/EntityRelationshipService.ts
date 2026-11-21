@@ -9,7 +9,7 @@ import { Notice } from 'obsidian';
 export type RelationshipEntity = Character | CodexEntry;
 
 function makeId(): string {
-    return globalThis.crypto.randomUUID();
+    return window.crypto.randomUUID();
 }
 
 function getEntityRelations(entity: RelationshipEntity): CharacterRelation[] {

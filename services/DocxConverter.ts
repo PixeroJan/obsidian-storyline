@@ -1396,7 +1396,19 @@ ${imageRels}</Relationships>`;
                 const customHeight = standardImageMatch[4] ? parseInt(standardImageMatch[4]) : undefined;
 
                 let imageData = null;
-                if (url.startsWith('http://') || url.startsWith('https://')) {
+                const dataUrlMatch = url.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/i);
+                if (dataUrlMatch) {
+                    try {
+                        const binary = window.atob(dataUrlMatch[1]);
+                        const bytes = new Uint8Array(binary.length);
+                        for (let index = 0; index < binary.length; index++) {
+                            bytes[index] = binary.charCodeAt(index);
+                        }
+                        imageData = bytes.buffer;
+                    } catch (error) {
+                        console.error('StoryLine DOCX: Error decoding embedded image:', error);
+                    }
+                } else if (url.startsWith('http://') || url.startsWith('https://')) {
                     try {
                         const response = await requestUrl({ url });
                         if (response.status >= 200 && response.status < 300) imageData = response.arrayBuffer;

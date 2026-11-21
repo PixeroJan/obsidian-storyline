@@ -36,6 +36,9 @@ interface GraphEdge {
     type: RelationshipType;
     label?: string;
     twoWay?: boolean;
+    relationId?: string;
+    relationType?: string;
+    inverseType?: string;
 }
 
 /** Read a CSS custom property from the body, falling back to the provided default */
@@ -64,6 +67,15 @@ const EDGE_DASHES: Record<RelationshipType, string> = {
     other: '4,4',
 };
 
+const EDGE_STYLE_LABELS: Record<RelationshipType, string> = {
+    ally: 'solid',
+    enemy: 'dashed',
+    romantic: 'dotted',
+    family: 'solid',
+    mentor: 'dash-dot',
+    other: 'dashed',
+};
+
 /**
  * Renders an interactive relationship map inside the given container.
  */
@@ -84,6 +96,7 @@ export class RelationshipMap {
     private panStart = { x: 0, y: 0 };
     private zoom = 1;
     private onSelectCharacter?: (name: string) => void;
+    private lastNodeClick: { id: string; timestamp: number } | null = null;
     private resizeObserver: ResizeObserver | null = null;
     private aliasMap: Map<string, string>;
     /** Issue #222 — relationship types currently hidden by the user. */
@@ -103,6 +116,7 @@ export class RelationshipMap {
 
     render(): void {
         this.container.empty();
+        this.lastNodeClick = null;
 
         // Build graph data
         this.buildGraph();
@@ -122,11 +136,21 @@ export class RelationshipMap {
             item.classList.add('relationship-map-legend-toggle');
             const isHidden = this.hiddenTypes.has(type);
             if (isHidden) item.classList.add('is-off');
-            const swatch = item.createSpan({ cls: 'relationship-map-legend-swatch' });
-            swatch.setCssStyles({ backgroundColor: color });
-            if (type === 'enemy') swatch.setCssStyles({ borderStyle: 'dashed' });
-            if (type === 'romantic') swatch.setCssStyles({ borderRadius: '50%' });
-            item.createSpan({ text: type.charAt(0).toUpperCase() + type.slice(1) });
+            const swatch = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            swatch.classList.add('relationship-map-legend-swatch');
+            swatch.setAttribute('viewBox', '0 0 24 8');
+            swatch.setAttribute('aria-hidden', 'true');
+            const sample = activeDocument.createElementNS('http://www.w3.org/2000/svg', 'line');
+            sample.setAttribute('x1', '1');
+            sample.setAttribute('y1', '4');
+            sample.setAttribute('x2', '23');
+            sample.setAttribute('y2', '4');
+            sample.setAttribute('stroke', color);
+            sample.setAttribute('stroke-width', '2');
+            if (EDGE_DASHES[type]) sample.setAttribute('stroke-dasharray', EDGE_DASHES[type]);
+            swatch.appendChild(sample);
+            item.appendChild(swatch);
+            item.createSpan({ text: `${type.charAt(0).toUpperCase() + type.slice(1)} (${EDGE_STYLE_LABELS[type]})` });
             item.addEventListener('click', () => {
                 if (this.hiddenTypes.has(type)) {
                     this.hiddenTypes.delete(type);
@@ -136,6 +160,14 @@ export class RelationshipMap {
                 this.render();
             });
         }
+
+        const directionLegend = this.container.createDiv('relationship-map-direction-legend');
+        const reciprocalKey = directionLegend.createSpan('relationship-map-direction-key');
+        reciprocalKey.createEl('strong', { text: '\u2194' });
+        reciprocalKey.createSpan({ text: ' reverse relationship present' });
+        const oneSidedKey = directionLegend.createSpan('relationship-map-direction-key');
+        oneSidedKey.createEl('strong', { text: '\u2192' });
+        oneSidedKey.createSpan({ text: ' one-way or reverse relationship missing' });
 
         // SVG container
         const wrapper = this.container.createDiv('relationship-map-wrapper');
@@ -251,6 +283,9 @@ export class RelationshipMap {
                         target: target.toLowerCase(),
                         type: baseType,
                         twoWay: relation.twoWay !== false,
+                        relationId: relation.relationId,
+                        relationType: relation.type,
+                        inverseType: relation.inverseType || relation.type,
                     });
                 }
             }
@@ -265,7 +300,25 @@ export class RelationshipMap {
             }
         }
 
-        // Deduplicate two-way edges while keeping opposite one-way edges.
+        // Show reciprocal arrows only when the matching reverse row exists,
+        // rather than inferring it from the source row's twoWay preference.
+        for (const edge of edgeList) {
+            if (!edge.relationType) continue;
+            edge.twoWay = edgeList.some(candidate => {
+                if (candidate === edge
+                    || candidate.source !== edge.target
+                    || candidate.target !== edge.source
+                    || candidate.type !== edge.type
+                    || !candidate.relationType) return false;
+                if (edge.relationId && candidate.relationId) {
+                    return edge.relationId === candidate.relationId;
+                }
+                return candidate.relationType === edge.inverseType
+                    && candidate.inverseType === edge.relationType;
+            });
+        }
+
+        // Deduplicate reciprocal edges while keeping each one-sided direction.
         const edgeSet = new Set<string>();
         const deduped: GraphEdge[] = [];
         for (const e of edgeList) {
@@ -506,10 +559,15 @@ export class RelationshipMap {
 
             // Drag support
             circle.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
                 e.stopPropagation();
                 this.dragging = node;
+                const startX = e.clientX;
+                const startY = e.clientY;
+                let wasDragged = false;
                 const onMove = (me: MouseEvent) => {
                     if (!this.svg) return;
+                    if (Math.hypot(me.clientX - startX, me.clientY - startY) > 5) wasDragged = true;
                     const svgRect = this.svg.getBoundingClientRect();
                     node.x = (me.clientX - svgRect.left - this.panX) / this.zoom;
                     node.y = (me.clientY - svgRect.top - this.panY) / this.zoom;
@@ -519,16 +577,14 @@ export class RelationshipMap {
                     this.dragging = null;
                     window.removeEventListener('mousemove', onMove);
                     window.removeEventListener('mouseup', onUp);
+                    if (wasDragged) {
+                        this.lastNodeClick = null;
+                    } else if (node.hasProfile) {
+                        this.registerNodeClick(node);
+                    }
                 };
                 window.addEventListener('mousemove', onMove);
                 window.addEventListener('mouseup', onUp);
-            });
-
-            // Click to select
-            circle.addEventListener('dblclick', () => {
-                if (this.onSelectCharacter && node.hasProfile) {
-                    this.onSelectCharacter(node.label);
-                }
             });
 
             g.appendChild(circle);
@@ -556,6 +612,16 @@ export class RelationshipMap {
                 g.appendChild(badge);
             }
         }
+    }
+
+    private registerNodeClick(node: GraphNode): void {
+        const now = Date.now();
+        if (this.lastNodeClick?.id === node.id && now - this.lastNodeClick.timestamp <= 450) {
+            this.lastNodeClick = null;
+            this.onSelectCharacter?.(node.label);
+            return;
+        }
+        this.lastNodeClick = { id: node.id, timestamp: now };
     }
 }
  

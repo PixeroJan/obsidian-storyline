@@ -56,6 +56,7 @@ export class PlotgridView extends ItemView {
     private currentFilter: SceneFilter = {};
     private currentSort: SortConfig = { field: 'sequence', direction: 'asc' };
     private dataLoadGeneration = 0;
+    private dataRevision = 0;
     private renderedProjectKey: string | null = null;
     private scrollRestoreGeneration = 0;
     private scrollRestoreFrame: number | null = null;
@@ -148,6 +149,7 @@ export class PlotgridView extends ItemView {
     private async loadData(): Promise<boolean> {
         const projectKey = this.getProjectKey();
         const generation = ++this.dataLoadGeneration;
+        const revision = this.dataRevision;
         try {
             let loaded: PlotGridData | null = null;
             if (this.plugin && typeof this.plugin.loadPlotGrid === 'function') {
@@ -157,6 +159,11 @@ export class PlotgridView extends ItemView {
                 loaded = null;
             }
             if (generation !== this.dataLoadGeneration || !this.isCurrentProject(projectKey)) return false;
+            if (revision !== this.dataRevision
+                || (this.saveDebounce && this.saveProjectKey === projectKey)
+                || !!this.wrapperEl?.querySelector('.plot-grid-cell.editing, input:focus, textarea:focus')) {
+                return false;
+            }
             if (loaded && typeof loaded === 'object') {
                 // Clamp zoom to the supported UI range (30%–200%). Older
                 // installs (or corrupted snapshots) sometimes wrote absurd
@@ -287,6 +294,7 @@ export class PlotgridView extends ItemView {
     }
 
     private scheduleSave() {
+        this.dataRevision++;
         const plugin = this.plugin;
         if (!plugin) return;
         const projectKey = this.getProjectKey();
@@ -1269,7 +1277,7 @@ export class PlotgridView extends ItemView {
                 el.empty();
                 el.appendChild(inp);
                 inp.focus();
-                const commit = () => { col.label = inp.value || col.label; this.scheduleSave(); this.renderGrid(); };
+                const commit = () => { col.label = inp.value || col.label; this.scheduleSave(); this.renderGrid(); this.refreshSelectedCellInspector(); };
                 inp.addEventListener('keydown', (ke) => { if (ke.key === 'Enter') { commit(); } else if (ke.key === 'Escape') { this.renderGrid(); } });
                 inp.addEventListener('blur', () => commit());
             });
@@ -1331,7 +1339,7 @@ export class PlotgridView extends ItemView {
                     const commitRename = () => {
                         const liveCol = this.data.columns[ci];
                         if (liveCol) liveCol.label = inp.value || liveCol.label;
-                        this.scheduleSave(); this.renderGrid(); modal.close();
+                        this.scheduleSave(); this.renderGrid(); this.refreshSelectedCellInspector(); modal.close();
                     };
                     inp.addEventListener('keydown', (ke) => { if (ke.key === 'Enter') commitRename(); });
                     const btn = modal.contentEl.createEl('button', { text: 'OK', cls: 'mod-cta' });
@@ -1454,7 +1462,7 @@ export class PlotgridView extends ItemView {
                 rowEl.appendChild(inp);
                 inp.focus();
                 inp.select();
-                const commit = () => { row.label = inp.value || row.label; this.scheduleSave(); this.renderGrid(); };
+                const commit = () => { row.label = inp.value || row.label; this.scheduleSave(); this.renderGrid(); this.refreshSelectedCellInspector(); };
                 inp.addEventListener('keydown', (ke) => { if (ke.key === 'Enter') { commit(); } else if (ke.key === 'Escape') { this.renderGrid(); } });
                 inp.addEventListener('blur', () => commit());
             });
@@ -1526,7 +1534,7 @@ export class PlotgridView extends ItemView {
                     const commitRename = () => {
                         const liveRow = this.data.rows[ri];
                         if (liveRow) liveRow.label = inp.value || liveRow.label;
-                        this.scheduleSave(); this.renderGrid(); modal.close();
+                        this.scheduleSave(); this.renderGrid(); this.refreshSelectedCellInspector(); modal.close();
                     };
                     inp.addEventListener('keydown', (ke) => { if (ke.key === 'Enter') commitRename(); });
                     const btn = modal.contentEl.createEl('button', { text: 'OK', cls: 'mod-cta' });
@@ -2113,6 +2121,10 @@ export class PlotgridView extends ItemView {
             if (this.wrapperEl?.querySelector('input:focus, textarea:focus')) return;
             const loaded = await this.loadData();
             if (!loaded || !this.isCurrentProject(projectKey)) return;
+            if ((this.saveDebounce && this.saveProjectKey === projectKey)
+                || !!this.wrapperEl?.querySelector('.plot-grid-cell.editing, input:focus, textarea:focus')) {
+                return;
+            }
             // If the view hasn't been opened yet, `wrapperEl` will be null — skip rendering
             if (!this.wrapperEl) return;
             this.renderToolbar();
@@ -2166,6 +2178,17 @@ export class PlotgridView extends ItemView {
                 // visual
                 el.setCssStyles({ boxShadow: 'inset 0 0 0 2px var(--interactive-accent)' });
                 this.applySelectionVisuals();
+    }
+
+    private refreshSelectedCellInspector(): void {
+        if (!this.inspectorEl || this.inspectorEl.style.display === 'none') return;
+        const rowIndex = this.selectedRow;
+        const colIndex = this.selectedCol;
+        if (rowIndex === null || colIndex === null) return;
+        const row = this.data.rows[rowIndex];
+        const col = this.data.columns[colIndex];
+        const cell = row && col ? this.data.cells[`${row.id}-${col.id}`] : undefined;
+        if (cell) this.showCellInspector(rowIndex, colIndex, cell);
     }
 
     private getCellElement(row: number, col: number): HTMLElement | null {
@@ -2838,10 +2861,18 @@ export class PlotgridView extends ItemView {
 
     private enterEditMode(cellEl: HTMLElement, cell: CellData, _contentEl: HTMLElement) {
         this.rowAutosizeGeneration++;
+        const rowIndex = Number(cellEl.dataset.row);
+        const colIndex = Number(cellEl.dataset.col);
+        const row = this.data.rows[rowIndex];
+        const col = this.data.columns[colIndex];
+        const cellKey = row && col ? `${row.id}-${col.id}` : cell.id;
+        const currentCell = this.data.cells[cellKey] ?? cell;
+        this.data.cells[cellKey] = currentCell;
+
         cellEl.classList.add('editing');
         cellEl.empty();
         const ta = cellEl.createEl('textarea');
-        ta.value = cell.content || '';
+        ta.value = currentCell.content || '';
         ta.setCssStyles({
             width: '100%',
             height: '100%',
@@ -2862,9 +2893,8 @@ export class PlotgridView extends ItemView {
         // Remove wrapper focusability while editing so it can't steal focus
         if (this.wrapperEl) this.wrapperEl.tabIndex = -1;
 
-        const hadContentBefore = !!(cell.content && cell.content.trim());
-        const hadLinkedScene = !!cell.linkedSceneId;
-        const rowIndex = Number(cellEl.dataset.row);
+        const hadContentBefore = !!(currentCell.content && currentCell.content.trim());
+        const hadLinkedScene = !!currentCell.linkedSceneId;
 
         let committed = false;
         const commit = () => {
@@ -2872,8 +2902,8 @@ export class PlotgridView extends ItemView {
             committed = true;
             // Restore wrapper focusability
             if (this.wrapperEl) this.wrapperEl.tabIndex = 0;
-            const liveCell = this.data.cells[cell.id] ?? cell;
-            liveCell.content = ta.value;
+            currentCell.content = ta.value;
+            const liveCell = currentCell;
             // Mark as manually edited so sync won't overwrite
             liveCell.manualContent = true;
             // Auto-Note: if toggled on and new non-empty text entered into an unlinked cell
@@ -3589,10 +3619,11 @@ export class PlotgridView extends ItemView {
         // Stable key so we can always resolve the canonical cell in this.data
         const cellKey = `${row?.id}-${col?.id}`;
         const getCell = (): CellData => this.data.cells[cellKey] ?? cell;
+        const currentCell = getCell();
 
         // Resolve linked scene
         const scMgr = this.plugin?.sceneManager as SceneManager | undefined;
-        const linkedScene = (cell.linkedSceneId && scMgr) ? scMgr.getScene(cell.linkedSceneId) : undefined;
+        const linkedScene = (currentCell.linkedSceneId && scMgr) ? scMgr.getScene(currentCell.linkedSceneId) : undefined;
 
         // ── Header ──
         const header = el.createDiv('inspector-header');
@@ -3669,7 +3700,7 @@ export class PlotgridView extends ItemView {
         const textSection = cellBody.createDiv('inspector-section');
         textSection.createSpan({ cls: 'inspector-label', text: 'Content:' });
         const textArea = textSection.createEl('textarea', { cls: 'inspector-cell-textarea' });
-        textArea.value = cell.content || '';
+        textArea.value = currentCell.content || '';
         textArea.rows = 8;
         textArea.setCssStyles({
             width: '100%',
@@ -3686,19 +3717,20 @@ export class PlotgridView extends ItemView {
 
         // ── Scan results container ──
         const scanContainer = cellBody.createDiv('inspector-scan-results');
-        this.updateCellInspectorScan(scanContainer, cell);
+        this.updateCellInspectorScan(scanContainer, currentCell);
 
         // Track initial cell state for auto-note (only create once per empty cell)
-        const inspectorHadContent = !!(cell.content && cell.content.trim());
-        const inspectorHadLinkedScene = !!cell.linkedSceneId;
+        const inspectorHadContent = !!(currentCell.content && currentCell.content.trim());
+        const inspectorHadLinkedScene = !!currentCell.linkedSceneId;
 
         let textSaveTimer: number | null = null;
         textArea.addEventListener('input', () => {
             const liveCell = getCell();
             liveCell.content = textArea.value;
             liveCell.manualContent = true;
-            if (this.selectedRow !== null && this.selectedCol !== null) {
-                const gridCellEl = this.getCellElement(this.selectedRow, this.selectedCol);
+            this.scheduleSave();
+            if (this.selectedRow === rowIndex && this.selectedCol === colIndex) {
+                const gridCellEl = this.getCellElement(rowIndex, colIndex);
                 if (gridCellEl) {
                     const contentDiv = gridCellEl.querySelector('.plot-grid-cell-content') as HTMLElement | null;
                     if (contentDiv) contentDiv.textContent = liveCell.content || '';
@@ -3715,8 +3747,6 @@ export class PlotgridView extends ItemView {
             const liveCell = getCell();
             liveCell.content = textArea.value;
             liveCell.manualContent = true;
-            cell.content = textArea.value;
-            cell.manualContent = true;
             this.updateCellInspectorScan(scanContainer, liveCell);
             // Auto-Note from inspector: if toggled on and new text on a previously empty, unlinked cell
             const hasNewContent = !!(textArea.value && textArea.value.trim());

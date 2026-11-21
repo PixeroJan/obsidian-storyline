@@ -1162,9 +1162,9 @@ export class TimelineView extends ItemView {
         }
 
         // Show inspector for last clicked scene
-        if (this.plugin.isSceneInspectorOpen()) {
+        if (this.plugin.settings.showSceneDetailsInSidebar ?? true) {
             this.inspectorComponent?.hide();
-            this.app.workspace.trigger('storyline:scene-focus', scene.filePath);
+            void this.plugin.openSceneInspector(scene.filePath);
         } else {
             this.inspectorComponent?.show(scene);
         }

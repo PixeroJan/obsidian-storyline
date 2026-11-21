@@ -6,7 +6,7 @@ import { CharacterManager } from './CharacterManager';
 import { LocationManager } from './LocationManager';
 import { SLMarkdownToDocxConverter, SLDocxSettings, SLObsidianFontSettings } from './DocxConverter';
 import { SLPdfSettings } from './PdfConverter';
-import { App, Notice, TFile } from 'obsidian';
+import { App, Component, MarkdownRenderer, Notice, TFile } from 'obsidian';
 import { Scene, resolveStatusCfg } from '../models/Scene';
 import { getRoleDisplay, relationDisplayLabel } from '../models/Character';
 import { StoryLocation } from '../models/Location';
@@ -513,7 +513,7 @@ export class ExportService {
         scenes: Scene[],
         scope: ExportScope,
     ): Promise<string> {
-        const html = this.buildPdfHtml(project, scenes, scope);
+        const html = await this.buildPdfHtml(project, scenes, scope);
 
         // Save HTML file to Exports folder
         const filename = `${project.title} - ${this.getExportLabel(scope)} (${this.timestamp()}).html`;
@@ -542,14 +542,14 @@ export class ExportService {
         return filePath;
     }
 
-    private buildPdfHtml(
+    private async buildPdfHtml(
         project: StoryLineProject,
         scenes: Scene[],
         scope: ExportScope,
-    ): string {
+    ): Promise<string> {
         const title = this.escHtml(project.title);
         const body = scope === 'manuscript'
-            ? this.buildManuscriptHtml(scenes)
+            ? await this.buildManuscriptHtml(scenes)
             : this.buildOutlineHtml(scenes);
 
         return `<!DOCTYPE html>
@@ -568,6 +568,10 @@ export class ExportService {
         margin: 0 auto;
         padding: 20px;
     }
+    img { max-width: 100%; height: auto; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .mermaid { text-align: center; }
+    .mermaid svg { max-width: 100%; height: auto; }
     h1 { font-size: 24pt; margin-bottom: 0.5em; border-bottom: 2px solid #333; padding-bottom: 0.3em; }
     h2 { font-size: 18pt; margin-top: 1.5em; color: #444; }
     h3 { font-size: 14pt; margin-top: 1.2em; color: #555; }
@@ -596,7 +600,7 @@ ${body}
 </html>`;
     }
 
-    private buildManuscriptHtml(scenes: Scene[]): string {
+    private async buildManuscriptHtml(scenes: Scene[]): Promise<string> {
         const parts: string[] = [];
         let currentAct: string | number | undefined;
         let currentChapter: string | number | undefined;
@@ -633,9 +637,7 @@ ${body}
             }
 
             if (scene.body && scene.body.trim()) {
-                // Convert basic markdown blocks to HTML (strip wikilinks + tags, convert formatting)
-                const cleanBody = this.stripObsidianTags(this.stripWikiLinks(scene.body.trim()));
-                parts.push(...this.mdBlocksToHtml(cleanBody));
+                parts.push(await this.renderSceneBodyHtml(scene));
             } else {
                 parts.push('<p class="no-content">No content yet.</p>');
             }
@@ -650,6 +652,188 @@ ${body}
         }
 
         return parts.join('\n');
+    }
+
+    private async renderSceneBodyHtml(scene: Scene): Promise<string> {
+        const container = activeDocument.createElement('div');
+        const component = new Component();
+        const body = scene.body?.trim() ?? '';
+        try {
+            await MarkdownRenderer.render(this.app, body, container, scene.filePath, component);
+            await this.inlineVaultImages(container, scene);
+            return container.innerHTML;
+        } finally {
+            component.unload();
+        }
+    }
+
+    private async inlineVaultImages(container: HTMLElement, scene: Scene): Promise<void> {
+        const references = /!\[\[([^\]]+)\]\]|!\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))/g;
+        const filesByResource = new Map<string, TFile>();
+        for (const match of (scene.body ?? '').matchAll(references)) {
+            const rawTarget = match[1] ? match[1].split('|')[0] : (match[2] || match[3]);
+            const target = rawTarget?.split('#')[0].trim();
+            if (!target || /^(?:[a-z]+:)?\/\//i.test(target) || target.startsWith('data:')) continue;
+            const file = this.app.metadataCache.getFirstLinkpathDest(target, scene.filePath);
+            if (file instanceof TFile) {
+                filesByResource.set(this.normalizeResourceUrl(this.app.vault.getResourcePath(file)), file);
+            }
+        }
+
+        for (const image of Array.from(container.querySelectorAll('img'))) {
+            const source = image.getAttribute('src');
+            if (!source) continue;
+            const file = filesByResource.get(this.normalizeResourceUrl(source));
+            if (!file) continue;
+            try {
+                const bytes = new Uint8Array(await this.app.vault.readBinary(file));
+                let binary = '';
+                for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+                    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+                }
+                image.src = `data:${this.imageMimeType(file.extension)};base64,${window.btoa(binary)}`;
+            } catch (error) {
+                console.warn(`StoryLine export: could not inline image ${file.path}`, error);
+            }
+        }
+    }
+
+    private normalizeResourceUrl(value: string): string {
+        try {
+            const url = new URL(value, activeDocument.location.href);
+            return `${url.protocol}//${url.host}${decodeURIComponent(url.pathname)}`;
+        } catch {
+            return value;
+        }
+    }
+
+    private imageMimeType(extension: string): string {
+        switch (extension.toLowerCase()) {
+            case 'jpg':
+            case 'jpeg': return 'image/jpeg';
+            case 'gif': return 'image/gif';
+            case 'svg': return 'image/svg+xml';
+            case 'webp': return 'image/webp';
+            case 'bmp': return 'image/bmp';
+            case 'avif': return 'image/avif';
+            default: return 'image/png';
+        }
+    }
+
+    private async renderMermaidBlocksForDocx(markdown: string, sourcePath: string): Promise<string> {
+        const pattern = /(^|\n)(```|~~~)[ \t]*mermaid[^\r\n]*\r?\n([\s\S]*?)\r?\n\2[ \t]*(?=\n|$)/gi;
+        const matches = Array.from(markdown.matchAll(pattern));
+        const rendered = await Promise.all(matches.map(async match => ({
+            match,
+            image: await this.renderMermaidDiagramPng(match[3], sourcePath),
+        })));
+        let result = markdown;
+        for (const { match, image } of rendered.reverse()) {
+            if (!image || match.index === undefined) continue;
+            result = result.slice(0, match.index) + match[1] + `![Mermaid diagram](${image})` + result.slice(match.index + match[0].length);
+        }
+        return result;
+    }
+
+    private resolveDocxImageEmbeds(markdown: string, sourcePath: string): string {
+        return markdown.replace(/!\[\[([^\]]+)\]\]/g, (embed, inner: string) => {
+            const separator = inner.indexOf('|');
+            const link = (separator < 0 ? inner : inner.slice(0, separator)).split('#')[0].trim();
+            const file = this.app.metadataCache.getFirstLinkpathDest(link, sourcePath);
+            if (!(file instanceof TFile)) return embed;
+            const options = separator < 0 ? '' : inner.slice(separator);
+            return `![[${file.path}${options}]]`;
+        });
+    }
+
+    private normalizeDocxInlineImages(markdown: string): string {
+        const imagePattern = /!\[\[[^\]]+\]\]|!\[[^\]]*\]\([^)]+\)/g;
+        const output: string[] = [];
+        let fenceMarker = '';
+
+        for (const line of markdown.split('\n')) {
+            const fence = line.trim().match(/^(```|~~~)/);
+            if (fence) {
+                if (!fenceMarker) fenceMarker = fence[1];
+                else if (fence[1] === fenceMarker) fenceMarker = '';
+                output.push(line);
+                continue;
+            }
+            if (fenceMarker || /^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|\|)/.test(line)) {
+                output.push(line);
+                continue;
+            }
+
+            const matches = Array.from(line.matchAll(imagePattern));
+            if (matches.length === 0) {
+                output.push(line);
+                continue;
+            }
+
+            let cursor = 0;
+            for (const match of matches) {
+                const start = match.index ?? cursor;
+                const before = line.slice(cursor, start);
+                if (before.trim()) output.push(before.trim());
+                output.push(match[0]);
+                cursor = start + match[0].length;
+            }
+            const after = line.slice(cursor);
+            if (after.trim()) output.push(after.trim());
+        }
+
+        return output.join('\n');
+    }
+
+    private async renderMermaidDiagramPng(source: string, sourcePath: string): Promise<string | null> {
+        const container = activeDocument.createElement('div');
+        container.setCssStyles({ position: 'fixed', left: '-10000px', top: '0', width: '1200px' });
+        activeDocument.body.appendChild(container);
+        const component = new Component();
+        let svgUrl: string | null = null;
+        try {
+            await MarkdownRenderer.render(this.app, `\`\`\`mermaid\n${source}\n\`\`\``, container, sourcePath, component);
+            const svg = container.querySelector('svg');
+            if (!svg) return null;
+
+            const viewBox = svg.viewBox.baseVal;
+            let width = Number(svg.getAttribute('width')) || viewBox.width || svg.getBoundingClientRect().width || 800;
+            let height = Number(svg.getAttribute('height')) || viewBox.height || svg.getBoundingClientRect().height || 600;
+            if (!viewBox.width || !viewBox.height) {
+                svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            }
+            svg.setAttribute('width', String(width));
+            svg.setAttribute('height', String(height));
+            const scale = Math.min(2, 2400 / width, 2400 / height);
+            width = Math.max(1, Math.round(width * scale));
+            height = Math.max(1, Math.round(height * scale));
+
+            const svgBlob = new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml;charset=utf-8' });
+            svgUrl = URL.createObjectURL(svgBlob);
+            const image = new window.Image();
+            await new Promise<void>((resolve, reject) => {
+                image.onload = () => resolve();
+                image.onerror = () => reject(new Error('Could not rasterize Mermaid diagram'));
+                image.src = svgUrl!;
+            });
+
+            const canvas = activeDocument.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const context = canvas.getContext('2d');
+            if (!context) return null;
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, width, height);
+            context.drawImage(image, 0, 0, width, height);
+            return canvas.toDataURL('image/png');
+        } catch (error) {
+            console.warn('StoryLine DOCX: could not render Mermaid diagram', error);
+            return null;
+        } finally {
+            if (svgUrl) URL.revokeObjectURL(svgUrl);
+            component.unload();
+            container.remove();
+        }
     }
 
     private buildOutlineHtml(scenes: Scene[]): string {
@@ -921,7 +1105,11 @@ ${body}
      *  - `[[Simple]]`         → `Simple`
      */
     private stripWikiLinks(text: string): string {
-        return text.replace(/\[\[([^\]]+)\]\]/g, (_match, inner: string) => {
+        return text.replace(/(!?)\[\[([^\]]+)\]\]/g, (_match, embedPrefix: string, inner: string) => {
+            const embedTarget = inner.split('|')[0].split('#')[0].trim();
+            if (embedPrefix && /\.(?:png|jpe?g|gif|webp|bmp|svg|tiff?)$/i.test(embedTarget)) {
+                return `![[${inner}]]`;
+            }
             if (inner.includes('|')) return inner.split('|').pop()!.trim();
             if (inner.includes('/')) return inner.split('/').pop()!.trim();
             return inner.trim();
@@ -1031,12 +1219,19 @@ ${body}
         lines.push('');
 
         if (scope === 'manuscript') {
-            this.buildManuscriptMd(lines, scenes);
+            const docxScenes = await Promise.all(scenes.map(async (scene) => ({
+                ...scene,
+                body: await this.renderMermaidBlocksForDocx(
+                    this.resolveDocxImageEmbeds(scene.body ?? '', scene.filePath),
+                    scene.filePath,
+                ),
+            })));
+            this.buildManuscriptMd(lines, docxScenes);
         } else {
             this.buildOutlineMd(lines, scenes);
         }
 
-        let markdown = lines.join('\n');
+        let markdown = this.normalizeDocxInlineImages(lines.join('\n'));
 
         // Strip frontmatter if includeMetadata is false (default)
         if (!settings.includeMetadata) {
@@ -1051,9 +1246,16 @@ ${body}
 
         // Create a resource loader for images
         const resourceLoader = async (link: string): Promise<ArrayBuffer | null> => {
-            // Try to resolve as a vault file
-            const targetFile = this.app.metadataCache.getFirstLinkpathDest(link, '');
-            if (!targetFile) return null;
+            let decodedLink = link;
+            try {
+                decodedLink = decodeURIComponent(link);
+            } catch {
+                // Keep the original link when it is not valid URI encoding.
+            }
+            const targetFile = this.app.metadataCache.getFirstLinkpathDest(link, '')
+                ?? this.app.metadataCache.getFirstLinkpathDest(decodedLink, '')
+                ?? this.app.vault.getAbstractFileByPath(decodedLink);
+            if (!(targetFile instanceof TFile)) return null;
             try {
                 return await this.app.vault.readBinary(targetFile);
             } catch {
@@ -1215,7 +1417,7 @@ ${body}
 
         // Uses Electron's <webview>.printToPDF() — Chrome's rendering engine
         // handles all Unicode/fonts natively. Only available on desktop.
-        const html = this.buildPdfPrintHtml(project, scenes, scope, settings);
+        const html = await this.buildPdfPrintHtml(project, scenes, scope, settings);
         const pdfBytes = await this.tryElectronPrintToPdf(html, settings);
 
         if (!pdfBytes) {
@@ -1337,15 +1539,15 @@ ${body}
      * Build a self-contained HTML document tailored for Electron's printToPDF.
      * Uses the PDF settings for font family, font size, line spacing, etc.
      */
-    private buildPdfPrintHtml(
+    private async buildPdfPrintHtml(
         project: StoryLineProject,
         scenes: Scene[],
         scope: ExportScope,
         settings: SLPdfSettings,
-    ): string {
+    ): Promise<string> {
         const title = this.escHtml(project.title);
         const body = scope === 'manuscript'
-            ? this.buildManuscriptHtml(scenes)
+            ? await this.buildManuscriptHtml(scenes)
             : this.buildOutlineHtml(scenes);
 
         // Read font from Obsidian's appearance settings
@@ -1387,6 +1589,10 @@ ${body}
         margin: 0;
         padding: 0;
     }
+    img { max-width: 100%; height: auto; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .mermaid { text-align: center; }
+    .mermaid svg { max-width: 100%; height: auto; }
     h1 { font-size: ${h1Size}pt; margin: 0 0 0.5em 0; border-bottom: 2px solid #333; padding-bottom: 0.3em; }
     h2 { font-size: ${h2Size}pt; margin-top: 1.5em; color: #444; }
     h3 { font-size: ${h3Size}pt; margin-top: 1.2em; color: #555; }

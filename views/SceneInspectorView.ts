@@ -4,6 +4,7 @@ import type SceneCardsPlugin from '../main';
 import { SceneManager } from '../services/SceneManager';
 import { InspectorComponent } from '../components/Inspector';
 import { InfoPanelComponent } from '../components/InfoPanel';
+import { CommentsPanelComponent } from '../components/CommentsPanel';
 import { ResearchView } from './ResearchView';
 import { HelpView } from './HelpView';
 import { ManuscriptView } from './ManuscriptView';
@@ -18,12 +19,13 @@ import {
     NOTES_VIEW_TYPE,
 } from '../constants';
 
-type InspectorTab = 'synopsis' | 'notes' | 'details' | 'research' | 'help';
+type InspectorTab = 'synopsis' | 'notes' | 'comments' | 'details' | 'research' | 'help';
 
 const TAB_DEFS: { id: InspectorTab; label: string; icon: string; popOutType?: string }[] = [
     { id: 'details',  label: 'Details',  icon: 'list',         popOutType: DETAILS_VIEW_TYPE },
     { id: 'synopsis', label: 'Synopsis', icon: 'scroll-text',  popOutType: SYNOPSIS_VIEW_TYPE },
     { id: 'notes',    label: 'Notes',    icon: 'sticky-note',  popOutType: NOTES_VIEW_TYPE },
+    { id: 'comments', label: 'Comments', icon: 'message-square-text' },
     { id: 'research', label: 'Research', icon: 'library-big',  popOutType: RESEARCH_VIEW_TYPE },
     { id: 'help',     label: 'Help',     icon: 'help-circle',  popOutType: HELP_VIEW_TYPE },
 ];
@@ -43,6 +45,7 @@ export class SceneInspectorView extends ItemView {
 
     private synopsisPanel: InfoPanelComponent | null = null;
     private notesPanel: InfoPanelComponent | null = null;
+    private commentsPanel: CommentsPanelComponent | null = null;
     private inspectorComponent: InspectorComponent | null = null;
     private researchView: ResearchView | null = null;
     private helpView: HelpView | null = null;
@@ -51,6 +54,7 @@ export class SceneInspectorView extends ItemView {
     private tabPanels: Record<InspectorTab, HTMLElement | null> = {
         synopsis: null,
         notes: null,
+        comments: null,
         details: null,
         research: null,
         help: null,
@@ -116,6 +120,14 @@ export class SceneInspectorView extends ItemView {
         const notesPanelEl = panelsHost.createDiv('sl-inspector-panel sl-info-panel-host sl-inspector-panel-notes');
         this.tabPanels.notes = notesPanelEl;
         this.notesPanel = new InfoPanelComponent(notesPanelEl, this.plugin, this.sceneManager, 'notes');
+
+        // Scribe comments are inline HTML in the scene body, so this panel
+        // mutates only comment tags and leaves surrounding Markdown intact.
+        const commentsPanelEl = panelsHost.createDiv('sl-inspector-panel');
+        this.tabPanels.comments = commentsPanelEl;
+        this.commentsPanel = new CommentsPanelComponent(commentsPanelEl, this.plugin, () => {
+            this.lastEditTime = Date.now();
+        });
 
         // Details tab — wraps the existing InspectorComponent
         const detailsPanelEl = panelsHost.createDiv('sl-inspector-panel');
@@ -230,6 +242,7 @@ export class SceneInspectorView extends ItemView {
         this.inspectorComponent = null;
         this.synopsisPanel = null;
         this.notesPanel = null;
+        this.commentsPanel = null;
     }
 
     /**
@@ -265,11 +278,11 @@ export class SceneInspectorView extends ItemView {
         });
         const iconEl = btn.createSpan({ cls: 'sl-inspector-tab-icon' });
         setIcon(iconEl, icon);
-        attachTooltip(btn, `${label}  —  right-click to open in own pane`);
+        const def = TAB_DEFS.find(d => d.id === id);
+        attachTooltip(btn, def?.popOutType ? `${label}  —  right-click to open in own pane` : label);
         btn.addEventListener('click', () => this.setActiveTab(id));
 
         // Right-click → "Open in own pane" (uses Obsidian's native Menu).
-        const def = TAB_DEFS.find(d => d.id === id);
         if (def?.popOutType) {
             btn.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
@@ -356,6 +369,7 @@ export class SceneInspectorView extends ItemView {
         if (!scene) return;
         this.synopsisPanel?.show(scene);
         this.notesPanel?.show(scene);
+        this.commentsPanel?.show(scene);
         this.inspectorComponent?.show(scene);
         this.refreshEmptyState();
     }
@@ -366,7 +380,7 @@ export class SceneInspectorView extends ItemView {
 
     private refreshEmptyState(): void {
         if (!this.emptyEl) return;
-        const sceneTabs: InspectorTab[] = ['synopsis', 'notes', 'details'];
+        const sceneTabs: InspectorTab[] = ['synopsis', 'notes', 'comments', 'details'];
         const showEmpty = sceneTabs.includes(this.activeTab) && !this.hasSceneShown();
         this.emptyEl.setCssStyles({ display: showEmpty ? 'block' : 'none' });
     }
@@ -379,6 +393,7 @@ export class SceneInspectorView extends ItemView {
             if (scene) {
                 this.synopsisPanel?.show(scene);
                 this.notesPanel?.show(scene);
+                this.commentsPanel?.show(scene);
                 this.inspectorComponent?.show(scene);
                 this.refreshEmptyState();
                 return;
@@ -394,6 +409,7 @@ export class SceneInspectorView extends ItemView {
                 if (scene) {
                     this.synopsisPanel?.show(scene);
                     this.notesPanel?.show(scene);
+                    this.commentsPanel?.show(scene);
                     this.inspectorComponent?.show(scene);
                     this.refreshEmptyState();
                     return;
@@ -404,6 +420,7 @@ export class SceneInspectorView extends ItemView {
         this.inspectorComponent?.hide();
         this.synopsisPanel?.hide();
         this.notesPanel?.hide();
+        this.commentsPanel?.hide();
         this.refreshEmptyState();
     }
 
@@ -411,6 +428,7 @@ export class SceneInspectorView extends ItemView {
         const current =
             this.synopsisPanel?.getCurrentScene() ||
             this.notesPanel?.getCurrentScene() ||
+            this.commentsPanel?.getCurrentScene() ||
             this.inspectorComponent?.getCurrentScene?.() ||
             null;
         if (!current) return;
@@ -418,6 +436,7 @@ export class SceneInspectorView extends ItemView {
         if (fresh) {
             this.synopsisPanel?.show(fresh);
             this.notesPanel?.show(fresh);
+            this.commentsPanel?.show(fresh);
             this.inspectorComponent?.show(fresh);
         }
     }

@@ -23,6 +23,8 @@ export class InspectorComponent {
     private container: HTMLElement;
     private currentScene: Scene | null = null;
     private markdownRenderComponent: obsidian.Component | null = null;
+    private sceneDraftRenderComponent: obsidian.Component | null = null;
+    private sceneDraftRenderGeneration = 0;
     private notesRenderGeneration = 0;
     private onEdit: (scene: Scene) => void;
     private onDelete: (scene: Scene) => void;
@@ -61,6 +63,12 @@ export class InspectorComponent {
     private clearMarkdownRenderComponent(): void {
         this.markdownRenderComponent?.unload();
         this.markdownRenderComponent = null;
+    }
+
+    private clearSceneDraftRenderComponent(): void {
+        this.sceneDraftRenderGeneration++;
+        this.sceneDraftRenderComponent?.unload();
+        this.sceneDraftRenderComponent = null;
     }
 
     private createMarkdownRenderComponent(): obsidian.Component {
@@ -109,6 +117,7 @@ export class InspectorComponent {
         this.currentScene = null;
         this.notesRenderGeneration++;
         this.clearMarkdownRenderComponent();
+        this.clearSceneDraftRenderComponent();
         this.container.setCssStyles({ display: 'none' });
     }
 
@@ -121,6 +130,7 @@ export class InspectorComponent {
 
         this.notesRenderGeneration++;
         this.clearMarkdownRenderComponent();
+        this.clearSceneDraftRenderComponent();
         this.container.empty();
         this.container.addClass('story-line-inspector');
 
@@ -623,7 +633,13 @@ export class InspectorComponent {
         // ── Scene Draft (body text — editable) ──
         {
             const descSection = this.container.createDiv('inspector-section');
-            descSection.createSpan({ cls: 'inspector-label', text: 'Scene Draft:' });
+            const draftHeader = descSection.createDiv('inspector-draft-header');
+            draftHeader.createSpan({ cls: 'inspector-label', text: 'Scene Draft:' });
+            const previewToggle = draftHeader.createEl('button', {
+                cls: 'clickable-icon inspector-draft-preview-toggle',
+                attr: { type: 'button', title: 'Preview scene draft', 'aria-label': 'Preview scene draft' },
+            });
+            obsidian.setIcon(previewToggle, 'eye');
             const descInput = descSection.createEl('textarea', {
                 cls: 'inspector-description-input',
                 attr: { placeholder: 'Write your scene draft here…', rows: '12' },
@@ -634,6 +650,31 @@ export class InspectorComponent {
                 padding: '6px 8px',
                 resize: 'vertical',
             });
+            const draftPreview = descSection.createDiv('inspector-draft-preview markdown-rendered');
+            draftPreview.setCssStyles({ display: 'none' });
+
+            previewToggle.addEventListener('click', () => {
+                const previewIsVisible = draftPreview.style.display !== 'none';
+                if (previewIsVisible) {
+                    this.clearSceneDraftRenderComponent();
+                    draftPreview.empty();
+                    draftPreview.setCssStyles({ display: 'none' });
+                    descInput.setCssStyles({ display: '' });
+                    previewToggle.title = 'Preview scene draft';
+                    previewToggle.setAttribute('aria-label', 'Preview scene draft');
+                    obsidian.setIcon(previewToggle, 'eye');
+                    descInput.focus();
+                    return;
+                }
+
+                descInput.setCssStyles({ display: 'none' });
+                draftPreview.setCssStyles({ display: 'block' });
+                previewToggle.title = 'Edit scene draft';
+                previewToggle.setAttribute('aria-label', 'Edit scene draft');
+                obsidian.setIcon(previewToggle, 'pencil');
+                void this.renderSceneDraftPreview(draftPreview, descInput.value, scene);
+            });
+
             descInput.addEventListener('change', async () => {
                 const val = descInput.value;
                 await this.sceneManager.updateScene(scene.filePath, { body: val });
@@ -1332,6 +1373,29 @@ export class InspectorComponent {
      * Click to edit (textarea), blur to save & return to preview.
      * Checkboxes are interactive in preview mode.
      */
+    private async renderSceneDraftPreview(container: HTMLElement, source: string, scene: Scene): Promise<void> {
+        this.clearSceneDraftRenderComponent();
+        const generation = this.sceneDraftRenderGeneration;
+        container.empty();
+        if (!source.trim()) {
+            container.createDiv({ cls: 'inspector-draft-preview-empty', text: 'Nothing to preview.' });
+            return;
+        }
+
+        const component = new obsidian.Component();
+        component.load();
+        this.sceneDraftRenderComponent = component;
+        try {
+            await obsidian.MarkdownRenderer.render(this.plugin.app, source, container, scene.filePath, component);
+        } catch (error) {
+            if (generation === this.sceneDraftRenderGeneration) {
+                console.warn('StoryLine: scene draft preview failed to render', error);
+                container.empty();
+                container.createDiv({ cls: 'inspector-draft-preview-empty', text: 'Preview unavailable.' });
+            }
+        }
+    }
+
     private async renderInspectorNotesLive(container: HTMLElement, scene: Scene): Promise<void> {
         const generation = ++this.notesRenderGeneration;
         this.clearMarkdownRenderComponent();
